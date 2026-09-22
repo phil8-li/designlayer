@@ -290,7 +290,7 @@ export const panelsCss = `/* ---------- panels ---------- */
     transform ${t.duration.drawer} ${t.ease},
     visibility 0s;
 }
-html.design-editor-chrome-hidden .de-panel {
+html.designlayer-chrome-hidden .de-panel {
   visibility: hidden;
   /*
    * 60ms behind the toolbar on the way out, level with it on the way back —
@@ -301,8 +301,8 @@ html.design-editor-chrome-hidden .de-panel {
     transform ${t.duration.drawer} ${t.ease} 60ms,
     visibility 0s linear 300ms;
 }
-html.design-editor-chrome-hidden .de-panel--left { transform: translateX(-100%); }
-html.design-editor-chrome-hidden .de-panel--right { transform: translateX(100%); }
+html.designlayer-chrome-hidden .de-panel--left { transform: translateX(-100%); }
+html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 
 .de-panel-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
 .de-panel-body::-webkit-scrollbar { width: 8px; }
@@ -1128,7 +1128,7 @@ html.design-editor-chrome-hidden .de-panel--right { transform: translateX(100%);
  * \`pointer-events: all\` onto every \`<svg>\` in the document — so a plain
  * \`pointer-events: none\` on the wrapper is not enough, the glyph itself becomes
  * the hit target and eats the click that would open the menu. The second rule
- * names \`.de-select-caret svg\` so it outranks \`html.design-editor-inspecting
+ * names \`.de-select-caret svg\` so it outranks \`html.designlayer-inspecting
  * svg\` on specificity (0,2,1 against 0,1,1) instead of relying on which
  * stylesheet happens to be concatenated last.
  */
@@ -1142,7 +1142,7 @@ html.design-editor-chrome-hidden .de-panel--right { transform: translateX(100%);
   color: ${t.color.textDim};
   pointer-events: none;
 }
-[data-design-editor] .de-select-caret svg { pointer-events: none; }
+[data-designlayer] .de-select-caret svg { pointer-events: none; }
 .de-select-shell:hover > .de-select-caret { color: ${t.color.textMuted}; }
 
 /*

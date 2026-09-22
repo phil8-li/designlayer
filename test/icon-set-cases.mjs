@@ -13,7 +13,7 @@
  *
  * The vendored chrome glyphs are icon-cases.mjs. This file is the host's set.
  *
- * Usage: node design-editor/test/icon-set-cases.mjs
+ * Usage: node designlayer/test/icon-set-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -147,7 +147,7 @@ check("the prelude carries the attribute, not the drawings", () => {
   vm.runInNewContext(prelude, browserSandbox)
   // Spread rather than compared directly: the prelude runs in its own vm
   // realm, so its object literals do not share this realm's prototype.
-  assert.deepEqual({ ...browserSandbox.window.__DESIGN_EDITOR_CONFIG__.icons }, {
+  assert.deepEqual({ ...browserSandbox.window.__DESIGNLAYER_CONFIG__.icons }, {
     attribute: "data-instagram-icon",
     available: true,
   })
@@ -158,8 +158,8 @@ check("the prelude carries the attribute, not the drawings", () => {
 })
 
 await checkAsync("GET /icons serves the set over the loopback route", async () => {
-  const { createDesignEditorRoutes } = await import(path.join(PACKAGE_DIR, "server/routes.mjs"))
-  const routes = createDesignEditorRoutes(workspace)
+  const { createDesignLayerRoutes } = await import(path.join(PACKAGE_DIR, "server/routes.mjs"))
+  const routes = createDesignLayerRoutes(workspace)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()
@@ -227,7 +227,7 @@ for (const key of [
 // The bundle reads the injected config once, at import.
 const configSandbox = { window: {} }
 vm.runInNewContext(prelude, configSandbox)
-globalThis.__DESIGN_EDITOR_CONFIG__ = configSandbox.window.__DESIGN_EDITOR_CONFIG__
+globalThis.__DESIGNLAYER_CONFIG__ = configSandbox.window.__DESIGNLAYER_CONFIG__
 
 const { build } = await import("esbuild")
 const bundled = await build({
@@ -313,8 +313,8 @@ check("the layer row reads the icon's name, not `svg` and not its component", ()
 await checkAsync("the set loads once, however many icons are selected", async () => {
   iconRequests = 0
   const [first, second] = await Promise.all([
-    editorModule.loadIconSet("/__design-editor"),
-    editorModule.loadIconSet("/__design-editor"),
+    editorModule.loadIconSet("/__designlayer"),
+    editorModule.loadIconSet("/__designlayer"),
   ])
   assert.equal(iconRequests, 1, "each selection re-fetched 100KB of path data")
   assert.equal(first.length, 152)
@@ -326,12 +326,12 @@ console.log("\nSwapping a variant")
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
 const right = window.document.createElement("aside")
-right.setAttribute("data-design-editor", "")
+right.setAttribute("data-designlayer", "")
 window.document.body.append(right)
 const editor = editorModule.createContext(bridge, {
   overlay: slot(),

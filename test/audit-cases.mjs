@@ -67,7 +67,7 @@
  * one obvious neighbour, the same literal twice in one declaration) without any
  * real design system's values in them.
  *
- * Usage: node design-editor/test/audit-cases.mjs
+ * Usage: node designlayer/test/audit-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -78,7 +78,7 @@ import path from "node:path"
 
 import { resolveConfig } from "../config.mjs"
 import { createDesignLint } from "../server/design-lint.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 
 let passed = 0
 let failed = 0
@@ -1101,7 +1101,7 @@ console.log("\nThe five endpoints the panel reaches all of this through")
 
 /** The routes over a real loopback socket, because the guard reads the socket. */
 async function server(context) {
-  const routes = createDesignEditorRoutes(context.config)
+  const routes = createDesignLayerRoutes(context.config)
   const listener = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

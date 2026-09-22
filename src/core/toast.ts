@@ -53,7 +53,7 @@ import { tokens as t } from "./tokens"
 
 export type ToastKind = "info" | "error"
 
-const HOST_ID = "design-editor-toaster"
+const HOST_ID = "designlayer-toaster"
 
 /**
  * Four seconds for news, six for a failure.

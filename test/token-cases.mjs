@@ -123,8 +123,8 @@ function themeBlock(selector) {
   return declarations
 }
 
-const DARK_BLOCK = themeBlock('\\[data-design-editor\\]\\[data-de-theme="dark"\\]')
-const LIGHT_BLOCK = themeBlock('\\[data-design-editor\\]\\[data-de-theme="light"\\]')
+const DARK_BLOCK = themeBlock('\\[data-designlayer\\]\\[data-de-theme="dark"\\]')
+const LIGHT_BLOCK = themeBlock('\\[data-designlayer\\]\\[data-de-theme="light"\\]')
 
 check("every colour role is a reference, so one stylesheet can carry two themes", () => {
   const roles = Object.entries(chrome.tokens.color)
@@ -327,7 +327,7 @@ check("the dark block still carries the contrast-tuned values it shipped with", 
  * Where the palette is declared, which is the half of this that a selector
  * typo silently breaks.
  *
- * `:root` and not `[data-design-editor]`: that attribute is on every element
+ * `:root` and not `[data-designlayer]`: that attribute is on every element
  * the chrome builds, so declaring the palette on it re-declares it on every
  * descendant and a theme flipped on the root would reach nothing inside it.
  * `:root` is also the only ancestor shared by the four roots this package
@@ -656,7 +656,7 @@ check("a selected control's white glyph is readable on the fill it sits on", () 
 check("the chrome's corners are squircles, and its circles are left alone", () => {
   assert.match(
     chrome.shellCss,
-    /:where\(\[data-design-editor\], \[data-design-editor\] \*\)[\s\S]{0,160}?corner-shape:\s*superellipse\(2\)/,
+    /:where\(\[data-designlayer\], \[data-designlayer\] \*\)[\s\S]{0,160}?corner-shape:\s*superellipse\(2\)/,
     "no chrome-wide `corner-shape` — every corner falls back to a circular arc"
   )
   const optOut = chrome.shellCss.match(/([^{}]*)\{\s*corner-shape:\s*round;\s*\}/)
@@ -819,7 +819,7 @@ check("the browser prelude carries the catalog but no server filesystem paths", 
   assert.equal(prelude.includes("docs/figma-conversion/tokens.figma.json"), false)
   assert.equal(prelude.includes("src/app/globals.css"), false)
 
-  const browserConfig = browserSandbox.window.__DESIGN_EDITOR_CONFIG__
+  const browserConfig = browserSandbox.window.__DESIGNLAYER_CONFIG__
   assert.equal(browserConfig.designSystem.colors.length, 63)
   assert.equal(browserConfig.designSystem.breakpoints.length, 5)
   assert.equal("manifest" in browserConfig.designSystem, false)
@@ -848,7 +848,7 @@ check("CSS and Tailwind aliases resolve to the canonical token", () => {
   })
 })
 
-globalThis.__DESIGN_EDITOR_CONFIG__ = browserSandbox.window.__DESIGN_EDITOR_CONFIG__
+globalThis.__DESIGNLAYER_CONFIG__ = browserSandbox.window.__DESIGNLAYER_CONFIG__
 const helpers = await loadEditorHelpers()
 
 console.log("\nAuthored and computed token matching")
@@ -1309,11 +1309,11 @@ async function withInspector(markup, run) {
   }
 
   const right = window.document.createElement("aside")
-  right.setAttribute("data-design-editor", "")
+  right.setAttribute("data-designlayer", "")
   window.document.body.append(right)
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }

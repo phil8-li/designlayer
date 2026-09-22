@@ -12,7 +12,7 @@
  * on an ambiguous match, on interpolated text — and every decline has to stay
  * a decline, because the alternative is a silent write to the wrong element.
  *
- * Usage: node design-editor/test/angular-cases.mjs
+ * Usage: node designlayer/test/angular-cases.mjs
  */
 
 import assert from "node:assert/strict"

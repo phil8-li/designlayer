@@ -1,5 +1,5 @@
 /**
- * Host configuration for the design editor.
+ * Host configuration for DesignLayer.
  *
  * One resolved object is the single source of truth for every value that used
  * to be a literal in three places at once: the chrome selectors (vendor patch
@@ -24,8 +24,8 @@ import {
 import { resolveIconSetConfig } from "./server/icon-set.mjs"
 
 export const CONFIG_FILE_NAMES = [
-  "design-editor.config.mjs",
-  "design-editor.config.js",
+  "designlayer.config.mjs",
+  "designlayer.config.js",
 ]
 
 /**
@@ -77,8 +77,8 @@ export const DEFAULT_CONFIG = {
   // file by hand, so it has to be the same number tomorrow. `null` turns it off.
   ports: { proxy: "auto", ws: "auto", mcp: 5747 },
   projectRoot: null,
-  stateDir: ".local/design-editor",
-  apiPrefix: "/__design-editor",
+  stateDir: ".local/designlayer",
+  apiPrefix: "/__designlayer",
   chrome: {
     // Elements the editor must never treat as canvas: its own shell, and the
     // host's dev GUI. An empty list is legal — `closest("")` throws, so the
@@ -88,8 +88,8 @@ export const DEFAULT_CONFIG = {
       selector: "",
       fallbackSelector: "",
       chromeSelectors: [],
-      offsetVar: "--design-editor-docked-panel-offset",
-      widthVar: "--design-editor-docked-panel-width",
+      offsetVar: "--designlayer-docked-panel-offset",
+      widthVar: "--designlayer-docked-panel-width",
       minWidth: 260,
       maxWidth: 380,
       gap: 12,
@@ -409,7 +409,7 @@ const DEV_SCRIPT_PREFERENCE = ["dev", "develop", "start", "serve"]
  * has.
  *
  * `"dev"` is the right default for Next and Vite and the wrong one for Angular,
- * whose `ng new` writes `start` and no `dev` at all — so `design-editor --dev`
+ * whose `ng new` writes `start` and no `dev` at all — so `designlayer --dev`
  * on a stock Angular project used to die on `Missing script: dev`, and the fix
  * was a flag the designer had to know to pass. Naming a script the project does
  * not have is not a default, it is a guess, and this is the one place that can
@@ -591,11 +591,11 @@ async function importConfigModule(found) {
   }
 }
 
-/** Loads `design-editor.config.mjs` if the host has one, else pure defaults. */
+/** Loads `designlayer.config.mjs` if the host has one, else pure defaults. */
 export async function loadConfig({ configPath, cwd = process.cwd(), overrides = {} } = {}) {
   const found = configPath ? path.resolve(cwd, configPath) : findConfigFile(cwd)
   if (found && !fs.existsSync(found)) {
-    throw new Error(`Design editor config not found: ${found}`)
+    throw new Error(`DesignLayer config not found: ${found}`)
   }
 
   let raw = {}
@@ -699,7 +699,7 @@ export function browserPrelude(config, runtime = {}) {
   }
 
   return (
-    `window.__DESIGN_EDITOR_CONFIG__=${JSON.stringify(payload)};` +
+    `window.__DESIGNLAYER_CONFIG__=${JSON.stringify(payload)};` +
     `${wsPortPin(runtime.wsPort)}${onboardingDismissal()}`
   )
 }
@@ -745,7 +745,7 @@ function onboardingDismissal() {
 function wsPortPin(wsPort) {
   if (!wsPort) return ""
   return (
-    `window.__DESIGN_EDITOR_WS_PORT__=${wsPort};` +
+    `window.__DESIGNLAYER_WS_PORT__=${wsPort};` +
     `Object.defineProperty(window,"__REACT_REWRITE_WS_PORT__",` +
     `{get:function(){return ${wsPort}},set:function(){},configurable:true});`
   )

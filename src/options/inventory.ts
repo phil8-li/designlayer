@@ -88,7 +88,7 @@ export interface LevaTree {
 export type LevaInventory = ({ available: true } & LevaTree) | { available: false; reason: string }
 
 function levaConfig(): ClientLevaConfig | null {
-  const raw = (globalThis as { __DESIGN_EDITOR_CONFIG__?: unknown }).__DESIGN_EDITOR_CONFIG__
+  const raw = (globalThis as { __DESIGNLAYER_CONFIG__?: unknown }).__DESIGNLAYER_CONFIG__
   if (!raw || typeof raw !== "object") return null
   const controls = (raw as { controls?: unknown }).controls
   if (!controls || typeof controls !== "object") return null
@@ -360,7 +360,7 @@ export function setControlValue(path: string, value: unknown): boolean {
     store.setValueAtPath(path, value, true)
     return true
   } catch (error) {
-    console.warn("[design-editor] leva rejected a value", path, error)
+    console.warn("[designlayer] leva rejected a value", path, error)
     return false
   }
 }
@@ -418,7 +418,7 @@ export function highlightControlTargets(control: LevaControl): ContextualControl
   const targets = targetsForControl(control)
   if (!targets) return null
   window.dispatchEvent(
-    new CustomEvent("design-editor:highlight-elements", {
+    new CustomEvent("designlayer:highlight-elements", {
       detail: targets,
     })
   )

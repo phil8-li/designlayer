@@ -305,7 +305,7 @@ const THEMES = {
  * it, and a designer who picked light and found dark again tomorrow would have
  * to re-pick it every single morning.
  */
-const THEME_KEY = "design-editor:theme"
+const THEME_KEY = "designlayer:theme"
 
 /**
  * The stored choice, or null when there is not one that can be trusted.

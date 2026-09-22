@@ -99,7 +99,7 @@ const INTERESTING_STYLES = [
  * ever asked the React question.
  */
 function reactInfo(element: Element): RewriteElementInfo | null {
-  const bridge = window.__DESIGN_EDITOR_BRIDGE__
+  const bridge = window.__DESIGNLAYER_BRIDGE__
   if (!bridge) return null
   try {
     return bridge.elementInfo(element)

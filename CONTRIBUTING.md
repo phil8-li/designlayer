@@ -1,4 +1,4 @@
-# Contributing to design-editor
+# Contributing to DesignLayer
 
 Thanks for being here. This is a visual editor for a running Next.js dev
 server: it proxies your app, lets you select an element, and writes the change
@@ -14,7 +14,7 @@ By contributing you agree that your work is licensed under the
 You need Node >= 20.19 and nothing else. There is no database, no service, and
 no account.
 
-That floor is the test harness's, not the tool's. `design-editor` itself
+That floor is the test harness's, not the tool's. DesignLayer itself
 supports Node >= 20.9 and package.json says so; `jsdom`, which the suite runs
 the editor UI under, declares `^20.19.0 || ^22.13.0 || >=24.0.0` because it
 reaches a dependency that `require()`s an ES module. On Node 20.9 through
@@ -24,8 +24,8 @@ the suite runs on 20.19, 22 and 24, and a separate job builds and verifies the
 tool on 20.9.
 
 ```sh
-git clone https://github.com/phil8-li/design-editor.git
-cd design-editor
+git clone https://github.com/phil8-li/designlayer.git
+cd designlayer
 npm install
 ```
 
@@ -69,7 +69,7 @@ Two things follow from that:
 
 - **You are not expected to supply a host app.** If your change is green on a
   bare clone, it is green. CI runs exactly what you ran.
-- **Do not point `DESIGN_EDITOR_HOST` at some other app to "un-skip" them.**
+- **Do not point `DESIGNLAYER_HOST` at some other app to "un-skip" them.**
   The numbers those suites pin are one specific app's, so a different app fails
   them on asset counts rather than on any contract you broke. That is the
   known trade for having a real host in the net at all.

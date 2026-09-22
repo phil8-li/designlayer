@@ -264,7 +264,7 @@ function libraryRoutes(libraries, auth, rest, req, res, url, readBody) {
     }
   }
 
-  throw badRequest(`No design-editor route for ${req.method} ${url.pathname}`, 404)
+  throw badRequest(`No designlayer route for ${req.method} ${url.pathname}`, 404)
 }
 
 /**
@@ -314,7 +314,7 @@ function lintRoutes(lint, rest, req, res, url, readBody) {
     }
   }
 
-  throw badRequest(`No design-editor route for ${req.method} ${url.pathname}`, 404)
+  throw badRequest(`No designlayer route for ${req.method} ${url.pathname}`, 404)
 }
 
 function controlTarget(searchParams) {
@@ -371,7 +371,7 @@ function angularRoutes(angular, framework, rest, req, res, url, readBody) {
     })
   }
 
-  throw badRequest(`No design-editor route for ${req.method} ${url.pathname}`, 404)
+  throw badRequest(`No designlayer route for ${req.method} ${url.pathname}`, 404)
 }
 
 /**
@@ -591,11 +591,11 @@ async function route(store, defaults, agent, icons, libraries, auth, lint, varia
     return
   }
 
-  throw badRequest(`No design-editor route for ${req.method} ${pathname}`, 404)
+  throw badRequest(`No designlayer route for ${req.method} ${pathname}`, 404)
 }
 
 /** `config` is the resolved object from `config.mjs`; defaults apply without it. */
-export function createDesignEditorRoutes(config = resolveConfig()) {
+export function createDesignLayerRoutes(config = resolveConfig()) {
   const prefix = config.apiPrefix
   const store = createOptionsStore({ stateDir: config.stateDir })
   const defaults = createControlDefaults(config)
@@ -636,7 +636,7 @@ export function createDesignEditorRoutes(config = resolveConfig()) {
       if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) return false
 
       if (!isLocalRequest(req)) {
-        sendJson(res, 403, { ok: false, message: "Design editor routes are loopback-only" })
+        sendJson(res, 403, { ok: false, message: "DesignLayer routes are loopback-only" })
         return true
       }
 
@@ -650,7 +650,7 @@ export function createDesignEditorRoutes(config = resolveConfig()) {
         }
         sendJson(res, Number(error?.statusCode) || 500, {
           ok: false,
-          message: error?.message ?? "Design editor route failed",
+          message: error?.message ?? "DesignLayer route failed",
           // A refused add carries the sign-in challenge that would unblock it:
           // which wall, which origin, and the audience an identity token needs.
           // Dropping it here would leave the panel with a sentence and no way

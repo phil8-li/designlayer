@@ -8,7 +8,7 @@
 
 import { config } from "./config"
 
-export const CHROME_ATTR = "data-design-editor"
+export const CHROME_ATTR = "data-designlayer"
 
 /**
  * The attribute Agentation marks its portal root with.

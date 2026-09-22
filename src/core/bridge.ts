@@ -131,8 +131,8 @@ export interface RewriteBridge {
 
 declare global {
   interface Window {
-    __DESIGN_EDITOR_BRIDGE__?: RewriteBridge
-    __DESIGN_EDITOR_WS_PORT__?: number
+    __DESIGNLAYER_BRIDGE__?: RewriteBridge
+    __DESIGNLAYER_WS_PORT__?: number
   }
 }
 
@@ -200,20 +200,20 @@ function withEditorToast(bridge: RewriteBridge): RewriteBridge {
 
 /** Resolves once the patched vendor overlay has installed the bridge. */
 export function whenBridgeReady(): Promise<RewriteBridge> {
-  if (window.__DESIGN_EDITOR_BRIDGE__) {
-    return Promise.resolve(withEditorToast(withAngularElementInfo(window.__DESIGN_EDITOR_BRIDGE__)))
+  if (window.__DESIGNLAYER_BRIDGE__) {
+    return Promise.resolve(withEditorToast(withAngularElementInfo(window.__DESIGNLAYER_BRIDGE__)))
   }
 
   return new Promise((resolve, reject) => {
     const started = Date.now()
     const poll = () => {
-      const bridge = window.__DESIGN_EDITOR_BRIDGE__
+      const bridge = window.__DESIGNLAYER_BRIDGE__
       if (bridge) {
         resolve(withEditorToast(withAngularElementInfo(bridge)))
         return
       }
       if (Date.now() - started > BRIDGE_TIMEOUT_MS) {
-        reject(new Error("Design editor bridge never installed"))
+        reject(new Error("DesignLayer bridge never installed"))
         return
       }
       requestAnimationFrame(poll)

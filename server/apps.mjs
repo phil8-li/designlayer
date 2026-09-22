@@ -224,7 +224,7 @@ export function createAppSwitcher({
       }
       if (!chooserUrl) {
         throw refusal(
-          "This editor was not started from the start screen, so there is nothing to switch with. Run `design-editor` with no port to get one.",
+          "This editor was not started from the start screen, so there is nothing to switch with. Run `designlayer` with no port to get one.",
           409
         )
       }

@@ -36,7 +36,7 @@ import {
  * come back to find one list holding both. The app half arrived later with the
  * chooser, and `core/app-scope.ts` is where that argument is written down.
  */
-const STORAGE_PREFIX = "design-editor.annotations."
+const STORAGE_PREFIX = "designlayer.annotations."
 
 /**
  * Deliberately NOT app-scoped, unlike the notes.
@@ -52,7 +52,7 @@ const STORAGE_PREFIX = "design-editor.annotations."
  * all, and it already does not — `load()` refuses it on read, whichever key it
  * arrived under.
  */
-const SETTINGS_KEY = "design-editor.annotation-settings"
+const SETTINGS_KEY = "designlayer.annotation-settings"
 
 /**
  * Notes older than this are dropped on read.
@@ -76,7 +76,7 @@ function announce(): void {
       listener()
     } catch (error) {
       // One panel failing to repaint must not stop the canvas repainting.
-      console.warn("[design-editor] annotation listener failed", error)
+      console.warn("[designlayer] annotation listener failed", error)
     }
   }
 }
@@ -86,7 +86,7 @@ function announceSettings(): void {
     try {
       listener()
     } catch (error) {
-      console.warn("[design-editor] annotation settings listener failed", error)
+      console.warn("[designlayer] annotation settings listener failed", error)
     }
   }
 }
@@ -444,7 +444,7 @@ export function setMarkerLayer(next: MarkerLayer): void {
     try {
       listener()
     } catch (error) {
-      console.warn("[design-editor] marker layer listener failed", error)
+      console.warn("[designlayer] marker layer listener failed", error)
     }
   }
   // The note pins listen on the settings channel and know nothing about this

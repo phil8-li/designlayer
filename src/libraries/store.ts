@@ -233,7 +233,7 @@ export function loadLibraries(apiBase: string): Promise<Library[]> {
       return cache
     })
     .catch((error: unknown) => {
-      console.warn("[design-editor] could not load the added libraries", error)
+      console.warn("[designlayer] could not load the added libraries", error)
       // Not cached, and `loaded` is left alone: the next surface to ask gets a
       // real request rather than the empty list this one settled for.
       inFlight = null
@@ -514,7 +514,7 @@ function fetchGlyphs(apiBase: string, library: Library): Promise<IconVariant[] |
       }))
     )
     .catch((error: unknown) => {
-      console.warn(`[design-editor] could not load ${library.name}'s icons`, error)
+      console.warn(`[designlayer] could not load ${library.name}'s icons`, error)
       return null
     })
 }

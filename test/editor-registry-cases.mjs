@@ -28,7 +28,7 @@
  *
  * ## How this suite avoids taking down the real one
  *
- * `registryDir()` is `~/.local/state/design-editor/editors`, and `listEditors`
+ * `registryDir()` is `~/.local/state/designlayer/editors`, and `listEditors`
  * DELETES from it. That is the point of it, and it makes a naive suite
  * dangerous: the sweep is aimed by a pid, not by a name, so there is no way to
  * ask for the sweep and have it consider only the rows this file wrote. Run
@@ -53,7 +53,7 @@
  * is under test there is which rows come back and in what order, and a real
  * screen would only add a second thing that can fail while proving none of it.
  *
- * Usage: node design-editor/test/editor-registry-cases.mjs
+ * Usage: node designlayer/test/editor-registry-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -93,7 +93,7 @@ const sandboxes = []
  * pointing `listEditors` at the real directory with its sweep armed.
  */
 function sandbox(label) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(TMP, `design-editor-registry-${label}-`)))
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(TMP, `designlayer-registry-${label}-`)))
   sandboxes.push(dir)
   process.env.HOME = dir
   assert.equal(

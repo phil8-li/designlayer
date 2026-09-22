@@ -401,7 +401,7 @@ function buildResolution(): void {
     } catch (error: unknown) {
       // A resolver that throws is a bug in one selector, not a reason to lose
       // every other finding's marker.
-      console.warn("[design-editor] could not resolve a finding to an element", error)
+      console.warn("[designlayer] could not resolve a finding to an element", error)
     }
     resolved.push({ finding, elements })
     for (const element of elements) {
@@ -573,7 +573,7 @@ export function loadLintTools(apiBase: string): Promise<LintTool[]> {
       return tools
     })
     .catch((error: unknown) => {
-      console.warn("[design-editor] could not load the design-system checkers", error)
+      console.warn("[designlayer] could not load the design-system checkers", error)
       // Not cached, and `toolsLoaded` is left alone: the next surface to ask
       // gets a real request rather than the empty list this one settled for.
       toolsInFlight = null

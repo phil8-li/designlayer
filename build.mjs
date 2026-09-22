@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Bundles the design-editor overlay, and the tokens the start screen needs.
+ * Bundles the designlayer overlay, and the tokens the start screen needs.
  *
  * The overlay output is concatenated onto the vendored React Rewrite bundle by
  * the package runtime, so it must be a self-contained IIFE with no imports and
@@ -133,8 +133,8 @@ const shared = {
 
 const TARGETS = [
   {
-    label: "design-editor bundle",
-    outfile: path.join(root, "dist", "design-editor.js"),
+    label: "designlayer bundle",
+    outfile: path.join(root, "dist", "designlayer.js"),
     options: {
       ...shared,
       entryPoints: [path.join(root, "src", "index.ts")],
@@ -196,7 +196,7 @@ if (watch) {
     const ctx = await context({ ...target.options, outfile: target.outfile })
     await ctx.watch()
   }
-  console.log("Watching design-editor sources…")
+  console.log("Watching designlayer sources…")
 } else {
   await run()
 }

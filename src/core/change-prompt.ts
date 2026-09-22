@@ -69,16 +69,16 @@ const ledger: PreviewOnlyChange[] = []
 /**
  * The bucket these changes are filed in. `app-scope` appends the app and the
  * page, so this becomes something like
- * `design-editor.preview-only.http-127-0-0-1-3000:/pricing`.
+ * `designlayer.preview-only.http-127-0-0-1-3000:/pricing`.
  *
  * Named after the entries and not after the tab that shows them. The tab is
  * called Prompts, but a prompt is built on demand from this list and never
  * stored, so a key spelled `change-prompts` would name the derived thing while
- * holding the source one. The shape — `design-editor.`, the feature, then the
+ * holding the source one. The shape — `designlayer.`, the feature, then the
  * scope — is `annotations/store.ts`'s, so the editor's two persisted lists sit
  * next to each other wherever someone goes looking for them.
  */
-const STORAGE_PREFIX = "design-editor.preview-only."
+const STORAGE_PREFIX = "designlayer.preview-only."
 
 let loaded = false
 
@@ -351,7 +351,7 @@ export function buildChangePrompt(changes: PreviewOnlyChange[] = previewOnlyChan
 
   const count = changes.length
   const lines: string[] = [
-    "# Design editor changes to apply by hand",
+    "# DesignLayer changes to apply by hand",
     "",
     `${count} visual ${count === 1 ? "change is" : "changes are"} showing in the browser that Apply to code cannot write. Apply ${count === 1 ? "it" : "them"} in the files below.`,
   ]

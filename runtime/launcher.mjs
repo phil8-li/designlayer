@@ -37,7 +37,7 @@ const VENDOR_WS_PORT = 3457
 const VENDOR_PROXY_PORT = 3456
 
 const CHROME_BUNDLE = fileURLToPath(
-  new URL("../dist/design-editor.js", import.meta.url)
+  new URL("../dist/designlayer.js", import.meta.url)
 )
 
 /**
@@ -201,7 +201,7 @@ export function readChromeBundle() {
     return fs.readFileSync(CHROME_BUNDLE, "utf8")
   } catch {
     console.warn(
-      "[design-editor] chrome bundle missing — run `npm run build` in the package"
+      "[designlayer] chrome bundle missing — run `npm run build` in the package"
     )
     return ""
   }
@@ -248,7 +248,7 @@ export function ensureCurrentChromeBundle() {
 
   const rebuilt = runBuild()
   if (rebuilt.status === 0) {
-    console.warn("[design-editor] dist/ was behind src/ — rebuilt it before serving")
+    console.warn("[designlayer] dist/ was behind src/ — rebuilt it before serving")
     return
   }
 
@@ -258,7 +258,7 @@ export function ensureCurrentChromeBundle() {
   const reason = (rebuilt.stderr || rebuilt.error?.message || "").trim()
   console.warn(
     (reason ? `${reason}\n\n` : "") +
-      "[design-editor] dist/ does not match src/ and could not be rebuilt. The editor\n" +
+      "[designlayer] dist/ does not match src/ and could not be rebuilt. The editor\n" +
       "  in the browser is NOT the source in this tree — it is whatever was built last.\n" +
       "  Run `npm run build` in the package to see your own changes."
   )
@@ -266,11 +266,11 @@ export function ensureCurrentChromeBundle() {
 
 async function loadRoutes(config) {
   try {
-    const { createDesignEditorRoutes } = await import("../server/routes.mjs")
-    return createDesignEditorRoutes(config)
+    const { createDesignLayerRoutes } = await import("../server/routes.mjs")
+    return createDesignLayerRoutes(config)
   } catch (error) {
     console.warn(
-      `[design-editor] routes unavailable — options and AI will be disabled (${error.message})`
+      `[designlayer] routes unavailable — options and AI will be disabled (${error.message})`
     )
     return null
   }
@@ -303,12 +303,12 @@ async function startMcpEndpoint(config, runtime) {
     queue.markEndpointListening()
     runtime.mcpPort = port
     writeEndpointFile(config, runtime)
-    console.log(`[design-editor] MCP http://${LOOPBACK}:${port}/mcp — point your agent at it`)
+    console.log(`[designlayer] MCP http://${LOOPBACK}:${port}/mcp — point your agent at it`)
     return endpoint
   } catch (error) {
     const reason = error?.code === "EADDRINUSE" ? `port ${port} is in use` : error.message
     console.warn(
-      `[design-editor] MCP endpoint not started (${reason}) — "Send to agent" still queues to ${config.apiPrefix}`
+      `[designlayer] MCP endpoint not started (${reason}) — "Send to agent" still queues to ${config.apiPrefix}`
     )
     return null
   }
@@ -411,7 +411,7 @@ function writeEndpointFile(config, runtime) {
     )
   } catch (error) {
     // Port discovery is a convenience for the harness, never a launch blocker.
-    console.warn(`[design-editor] could not write endpoint file (${error.message})`)
+    console.warn(`[designlayer] could not write endpoint file (${error.message})`)
   }
 }
 
@@ -590,7 +590,7 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
         setImmediate(() => {
           const url = `http://${LOOPBACK}:${runtime.proxyPort}`
           console.log(
-            `[design-editor] proxy ${url} — ws ://${LOOPBACK}:${runtime.wsPort} — api ${config.apiPrefix}`
+            `[designlayer] proxy ${url} — ws ://${LOOPBACK}:${runtime.wsPort} — api ${config.apiPrefix}`
           )
           // Started here rather than earlier for one reason: `recordBoundPort`
           // names the ports by counting `http.Server`s, so a third server bound
@@ -686,7 +686,7 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
         // rather than as a dependency someone forgot to install.
         parsed.devDependencies = {
           ...parsed.devDependencies,
-          react: "0.0.0-design-editor-host-shim",
+          react: "0.0.0-designlayer-host-shim",
         }
         return JSON.stringify(parsed)
       } catch {

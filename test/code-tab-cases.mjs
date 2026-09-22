@@ -25,7 +25,7 @@
  * awaited before asserting would pass against an implementation the browser
  * refuses at runtime.
  *
- * Usage: node design-editor/test/code-tab-cases.mjs
+ * Usage: node designlayer/test/code-tab-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -258,7 +258,7 @@ check("a utility splits into its variants, its stem and its value", () => {
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

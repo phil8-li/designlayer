@@ -1,5 +1,5 @@
 /**
- * Selection-model cases for the design editor.
+ * Selection-model cases for DesignLayer.
  *
  * The model is one rule over (hit, scope, modifiers) and every surface has to
  * ask it the same question, so the ways it breaks are quiet ones: nothing
@@ -41,7 +41,7 @@
  * layout, though, and the new rule is a rule about geometry, so the geometry is
  * declared per element — see `BOXES`.
  *
- * Usage: node design-editor/test/selection-cases.mjs
+ * Usage: node designlayer/test/selection-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -594,7 +594,7 @@ console.log("\nLevel 1 — keymap")
   check("text entry and chrome keep their own keys", () => {
     const input = window.document.createElement("input")
     const chrome = window.document.createElement("div")
-    chrome.setAttribute("data-design-editor", "")
+    chrome.setAttribute("data-designlayer", "")
     window.document.body.append(input, chrome)
 
     const dispatched = (target, init) => {
@@ -630,7 +630,7 @@ async function canvasCases(window) {
 
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }

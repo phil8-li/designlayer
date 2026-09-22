@@ -1,5 +1,5 @@
 /**
- * Layers-panel cases for the design editor.
+ * Layers-panel cases for DesignLayer.
  *
  * The panel was reworked to read and behave like open-pencil's layer tree, and
  * three of those things are only testable through the real DOM: which modifier
@@ -11,7 +11,7 @@
  * question, and jsdom has no cascade. It is asserted against the stylesheet
  * text instead, which is where the two variants actually differ.
  *
- * Usage: node design-editor/test/layers-cases.mjs
+ * Usage: node designlayer/test/layers-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -176,7 +176,7 @@ const bridge = {
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

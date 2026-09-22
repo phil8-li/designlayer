@@ -65,7 +65,7 @@
  * enable is a PATCH whose response the store adopts. A catalog assembled from
  * rows the test injected itself would pass while wired to nothing.
  *
- * Usage: node design-editor/test/library-panel-cases.mjs
+ * Usage: node designlayer/test/library-panel-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -89,7 +89,7 @@ async function check(name, fn) {
 
 // ── The world the bundle loads into ────────────────────────────────────────
 
-const API = "/__design-editor"
+const API = "/__designlayer"
 
 /**
  * A host design system with exactly one colour in it.
@@ -106,7 +106,7 @@ const HOST_COLOR = {
   values: { light: "#101319" },
 }
 
-globalThis.__DESIGN_EDITOR_CONFIG__ = {
+globalThis.__DESIGNLAYER_CONFIG__ = {
   apiBase: API,
   designSystem: {
     name: "Host",
@@ -593,7 +593,7 @@ console.log("\nThe instance section")
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

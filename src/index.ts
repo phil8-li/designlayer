@@ -1,5 +1,5 @@
 /**
- * Entry point for the Figma-style design editor overlay.
+ * Entry point for the Figma-style DesignLayer overlay.
  *
  * Loaded by the dev proxy on :3456 after the vendored React Rewrite bundle,
  * which we drive headlessly for fiber -> source resolution and source writes.
@@ -72,7 +72,7 @@ async function boot(): Promise<void> {
   try {
     ;[bridge] = await Promise.all([whenBridgeReady(), whenHostHydrated()])
   } catch (error) {
-    console.warn("[design-editor]", error)
+    console.warn("[designlayer]", error)
     return
   }
 
@@ -133,7 +133,7 @@ async function boot(): Promise<void> {
   installTooltips()
 
   context.refresh()
-  console.info("[design-editor] Figma-style overlay ready")
+  console.info("[designlayer] Figma-style overlay ready")
 }
 
 void boot()

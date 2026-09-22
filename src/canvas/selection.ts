@@ -266,12 +266,12 @@ export function installSelectionFrame(context: EditorContext): void {
       : []
     schedule()
   }
-  window.addEventListener("design-editor:highlight-elements", onHighlight)
+  window.addEventListener("designlayer:highlight-elements", onHighlight)
   schedule()
   window.addEventListener("beforeunload", () => {
     destroyed = true
     unsubscribe()
-    window.removeEventListener("design-editor:highlight-elements", onHighlight)
+    window.removeEventListener("designlayer:highlight-elements", onHighlight)
     if (frame) cancelAnimationFrame(frame)
   })
 }

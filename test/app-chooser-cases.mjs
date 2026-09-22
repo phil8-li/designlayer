@@ -51,7 +51,7 @@
  *
  * ## Why each prologue gets its own module graph
  *
- * `core/config.ts` reads `__DESIGN_EDITOR_CONFIG__` ONCE at module load — right
+ * `core/config.ts` reads `__DESIGNLAYER_CONFIG__` ONCE at module load — right
  * for a page whose prologue cannot change its mind mid-session, useless to a
  * suite that needs the control built both named and nameless. So each config is
  * its own bundle, keyed by a `marker` export so the two differ in TEXT: the
@@ -65,7 +65,7 @@
  * screen's answer, and a real start screen would only add a second thing that
  * can fail while proving nothing about the relay.
  *
- * Usage: node design-editor/test/app-chooser-cases.mjs
+ * Usage: node designlayer/test/app-chooser-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -91,7 +91,7 @@ async function check(name, fn) {
 
 // ── The world the bundle loads into ────────────────────────────────────────
 
-const API = "/__design-editor"
+const API = "/__designlayer"
 const CHOOSER = "http://127.0.0.1:3455/"
 /** The address the prelude knows the app by. The scanner spells it `[::1]`. */
 const CURRENT = "http://127.0.0.1:3000"
@@ -220,7 +220,7 @@ const APPS = [
 const clone = (value) => JSON.parse(JSON.stringify(value))
 
 /** Where the menu banks the last answer, so it can open without waiting. */
-const RUNNING_APPS_CACHE = "design-editor.running-apps"
+const RUNNING_APPS_CACHE = "designlayer.running-apps"
 
 /*
  * Every `createAppSwitcher` below is handed `editors: () => []`.
@@ -324,7 +324,7 @@ const { build } = await import("esbuild")
  * through the real panel is the only version of it worth having.
  */
 async function laneFor(app, chooserUrl, marker) {
-  globalThis.__DESIGN_EDITOR_CONFIG__ = { apiBase: API, chooserUrl, app }
+  globalThis.__DESIGNLAYER_CONFIG__ = { apiBase: API, chooserUrl, app }
   const lane = await build({
     stdin: {
       contents: `
@@ -350,7 +350,7 @@ async function laneFor(app, chooserUrl, marker) {
   const module = await import(
     `data:text/javascript;base64,${Buffer.from(lane.outputFiles[0].text).toString("base64")}`
   )
-  globalThis.__DESIGN_EDITOR_CONFIG__ = undefined
+  globalThis.__DESIGNLAYER_CONFIG__ = undefined
   return module
 }
 
@@ -363,7 +363,7 @@ const ghost = await laneFor({ url: null, name: null }, null, "no-app")
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -871,13 +871,13 @@ await check("a row switches on the first click, with work outstanding or not", a
  */
 await check("the work a switch used to warn about is filed per app, not dropped", () => {
   assert.notEqual(
-    named.appScopedKey("design-editor.annotations."),
-    ghost.appScopedKey("design-editor.annotations."),
+    named.appScopedKey("designlayer.annotations."),
+    ghost.appScopedKey("designlayer.annotations."),
     "two apps share one annotation bucket, so switching would overwrite notes"
   )
   assert.notEqual(
-    named.appScopedKey("design-editor.preview-only."),
-    ghost.appScopedKey("design-editor.preview-only."),
+    named.appScopedKey("designlayer.preview-only."),
+    ghost.appScopedKey("designlayer.preview-only."),
     "two apps share one ledger, so switching would overwrite the change list"
   )
 })
@@ -1242,20 +1242,20 @@ await check("an accepted switch is one POST to the screen's own start route", as
  * a real session finds one, and nothing else in the suite exercises that seam.
  */
 await check("with no screen handed to it, it takes the one the launcher named", () => {
-  const before = process.env.DESIGN_EDITOR_CHOOSER_URL
+  const before = process.env.DESIGNLAYER_CHOOSER_URL
   try {
-    process.env.DESIGN_EDITOR_CHOOSER_URL = "http://127.0.0.1:3455"
+    process.env.DESIGNLAYER_CHOOSER_URL = "http://127.0.0.1:3455"
     assert.equal(createAppSwitcher().chooserUrl, CHOOSER)
     assert.equal(chooserUrlFromEnv(process.env), CHOOSER)
     // Off-machine, and there is now nothing to switch with — which is the same
     // answer as a session that was never started from a screen at all.
-    process.env.DESIGN_EDITOR_CHOOSER_URL = "https://example.com/"
+    process.env.DESIGNLAYER_CHOOSER_URL = "https://example.com/"
     assert.equal(createAppSwitcher().chooserUrl, null)
-    delete process.env.DESIGN_EDITOR_CHOOSER_URL
+    delete process.env.DESIGNLAYER_CHOOSER_URL
     assert.equal(createAppSwitcher().chooserUrl, null)
   } finally {
-    if (before === undefined) delete process.env.DESIGN_EDITOR_CHOOSER_URL
-    else process.env.DESIGN_EDITOR_CHOOSER_URL = before
+    if (before === undefined) delete process.env.DESIGNLAYER_CHOOSER_URL
+    else process.env.DESIGNLAYER_CHOOSER_URL = before
   }
 })
 

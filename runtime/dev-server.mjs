@@ -153,7 +153,7 @@ export async function ensureAppRunning({
   // already up is the whole point of this check.
   const running = await loopbackHostFor(port)
   if (running) {
-    log(`[design-editor] app already running on http://${urlHost(running)}:${port}`)
+    log(`[designlayer] app already running on http://${urlHost(running)}:${port}`)
     return { started: false, stop: () => {}, child: null, host: running }
   }
 
@@ -166,7 +166,7 @@ export async function ensureAppRunning({
   ]
   const forwarded = flags.length ? ["--", ...flags] : []
   const command = `npm run ${script}${forwarded.length ? ` ${forwarded.join(" ")}` : ""}`
-  log(`[design-editor] starting your app: ${command}`)
+  log(`[designlayer] starting your app: ${command}`)
   const child = spawn(npmCommand(), ["run", script, ...forwarded], {
     cwd: projectRoot,
     // Set for every host, flags or not. Create React App takes no flags and
@@ -232,6 +232,6 @@ export async function ensureAppRunning({
     await delay(POLL_MS)
   }
 
-  log(`[design-editor] app ready on http://${urlHost(host)}:${port}`)
+  log(`[designlayer] app ready on http://${urlHost(host)}:${port}`)
   return { started: true, stop, child, host }
 }

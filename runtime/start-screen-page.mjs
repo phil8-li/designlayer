@@ -1,7 +1,7 @@
 /**
  * The start screen document: the product's front door.
  *
- * Until now the only way in was `design-editor --dev 3000` — you had to know
+ * Until now the only way in was `designlayer --dev 3000` — you had to know
  * the port, the project root and the flag before anything appeared. This page
  * is the replacement, and it is served by the start-screen server before the
  * editing proxy exists, so it has to be one self-contained document: inline
@@ -343,7 +343,7 @@ function waitForEditor(script, switching) {
     if (Date.now() - startedAt > ${SLOW_MS}) {
       show(
         el.waitingNote,
-        "Still working. A first compile can take a while — the terminal running design-editor has the app's output."
+        "Still working. A first compile can take a while — the terminal running designlayer has the app's output."
       )
     }
     setTimeout(poll, 500)
@@ -381,13 +381,13 @@ export function startScreenPage() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>design-editor — open an app</title>
+<title>designlayer — open an app</title>
 <style>${startScreenStyle()}</style>
 </head>
 <body>
 <main class="card">
   <header>
-    <p class="brand">design-editor</p>
+    <p class="brand">designlayer</p>
     <p class="lede">Open a running dev server and edit the page straight into its source.</p>
   </header>
 

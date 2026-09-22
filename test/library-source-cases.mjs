@@ -38,7 +38,7 @@
  * are read as text and handed straight to the parsers, which is also what makes
  * them readable as the documentation of what each format is allowed to contain.
  *
- * Usage: node design-editor/test/library-source-cases.mjs
+ * Usage: node designlayer/test/library-source-cases.mjs
  */
 
 import assert from "node:assert/strict"

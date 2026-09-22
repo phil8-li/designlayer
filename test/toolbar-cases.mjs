@@ -8,7 +8,7 @@
  * names them by their rendered text is the cheapest thing that notices one
  * coming back.
  *
- * Usage: node design-editor/test/toolbar-cases.mjs
+ * Usage: node designlayer/test/toolbar-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -116,7 +116,7 @@ const editor = await import(
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   node.className = "de-toolbar"
   window.document.body.append(node)
   return node
@@ -749,7 +749,7 @@ check("clicking a toggle moves its own flag and only its own", () => {
 
 console.log("\nThe theme toggle")
 
-const THEME_KEY = "design-editor:theme"
+const THEME_KEY = "designlayer:theme"
 const documentTheme = () => window.document.documentElement.getAttribute("data-de-theme")
 
 /*
@@ -1053,9 +1053,9 @@ console.log("\nThe collapse")
 
 /** The hidden-state rules, which live in two stylesheets and must agree. */
 const barExit =
-  editor.toolbarCss.match(/html\.design-editor-chrome-hidden \.de-toolbar \{[^}]*\}/s)?.[0] ?? ""
+  editor.toolbarCss.match(/html\.designlayer-chrome-hidden \.de-toolbar \{[^}]*\}/s)?.[0] ?? ""
 const discArrive =
-  editor.launcherCss.match(/html\.design-editor-chrome-hidden \.de-launcher \{[\s\S]*?\n\}/)?.[0] ?? ""
+  editor.launcherCss.match(/html\.designlayer-chrome-hidden \.de-launcher \{[\s\S]*?\n\}/)?.[0] ?? ""
 /*
  * The bar's resting half of the same motion, and a SECOND `.de-toolbar` block
  * rather than four more lines in the geometry rule above it.
@@ -1864,7 +1864,7 @@ console.log("\nThe chooser")
 /**
  * A whole second toolbar, built against a prologue of our choosing.
  *
- * `core/config.ts` reads `__DESIGN_EDITOR_CONFIG__` ONCE at module load. That
+ * `core/config.ts` reads `__DESIGNLAYER_CONFIG__` ONCE at module load. That
  * is right for a page whose prologue cannot change its mind mid-session and
  * useless to a test that needs the bar built both ways, so each answer gets its
  * own module graph: the registry is keyed by the data: URL, so the bundles have
@@ -1878,7 +1878,7 @@ console.log("\nThe chooser")
  * objects, and `config.ts` reads the one the bundle actually runs on.
  */
 async function toolbarWith(chooserUrl, marker) {
-  globalThis.__DESIGN_EDITOR_CONFIG__ = chooserUrl === null ? undefined : { chooserUrl }
+  globalThis.__DESIGNLAYER_CONFIG__ = chooserUrl === null ? undefined : { chooserUrl }
   const lane = await build({
     stdin: {
       contents: `
@@ -1901,7 +1901,7 @@ async function toolbarWith(chooserUrl, marker) {
   const module = await import(
     `data:text/javascript;base64,${Buffer.from(lane.outputFiles[0].text).toString("base64")}`
   )
-  globalThis.__DESIGN_EDITOR_CONFIG__ = undefined
+  globalThis.__DESIGNLAYER_CONFIG__ = undefined
 
   const toasts = []
   const bar = slot()
@@ -2038,16 +2038,16 @@ check("a live chooser behind the session still buys the bar no way out", () => {
   assert.equal(chooser.bar.textContent.trim(), "", "the bar grew text where it draws glyphs")
 })
 
-// The launcher is the gate: `DESIGN_EDITOR_CHOOSER_URL` comes from a supervisor
+// The launcher is the gate: `DESIGNLAYER_CHOOSER_URL` comes from a supervisor
 // on this machine, and what it says ends up as an href in a page that can write
 // source. Loopback and http, or nothing at all.
 check("only a loopback http chooser survives the launcher", () => {
   assert.equal(
-    chooserUrlFromEnv({ DESIGN_EDITOR_CHOOSER_URL: "http://127.0.0.1:3455" }),
+    chooserUrlFromEnv({ DESIGNLAYER_CHOOSER_URL: "http://127.0.0.1:3455" }),
     "http://127.0.0.1:3455/"
   )
   assert.equal(
-    chooserUrlFromEnv({ DESIGN_EDITOR_CHOOSER_URL: "http://localhost:3455/" }),
+    chooserUrlFromEnv({ DESIGNLAYER_CHOOSER_URL: "http://localhost:3455/" }),
     "http://localhost:3455/"
   )
   for (const refused of [
@@ -2060,7 +2060,7 @@ check("only a loopback http chooser survives the launcher", () => {
     "not a url",
     "",
   ]) {
-    assert.equal(chooserUrlFromEnv({ DESIGN_EDITOR_CHOOSER_URL: refused }), null, refused)
+    assert.equal(chooserUrlFromEnv({ DESIGNLAYER_CHOOSER_URL: refused }), null, refused)
   }
   // Started any other way — `node cli.mjs 3000`, or `--dev` — there is no
   // chooser in existence and no default worth inventing.
@@ -2072,7 +2072,7 @@ check("the prelude carries the chooser through, and null when there is none", ()
   const payload = (runtime) => {
     const sandbox = { window: {} }
     vm.runInNewContext(browserPrelude(host, runtime), sandbox)
-    return sandbox.window.__DESIGN_EDITOR_CONFIG__
+    return sandbox.window.__DESIGNLAYER_CONFIG__
   }
   assert.equal(payload({ proxyPort: 4567 }).chooserUrl, null)
   assert.equal(
@@ -2608,7 +2608,7 @@ await moves("a saved corner restores the disc and never the bar", async () => {
   // Well inside the bounds on purpose. A corner saved outside them is pulled
   // back in, which is right and is covered elsewhere — it would just mask what
   // this case is actually asking, which is whether the corner was read at all.
-  window.localStorage.setItem("design-editor:launcher-position", JSON.stringify({ x: 120, y: 300 }))
+  window.localStorage.setItem("designlayer:launcher-position", JSON.stringify({ x: 120, y: 300 }))
   const restored = editor.createLauncher(() => {})
   window.document.body.append(restored.element)
   restored.element.getBoundingClientRect = rectOf(0, 0, 44, 44)
@@ -2622,7 +2622,7 @@ await moves("a saved corner restores the disc and never the bar", async () => {
   assert.deepEqual([bar.style.left, bar.style.top], before, "a saved corner moved the bar as well")
 
   restored.destroy()
-  window.localStorage.removeItem("design-editor:launcher-position")
+  window.localStorage.removeItem("designlayer:launcher-position")
   await frame()
 })
 

@@ -1,5 +1,5 @@
 /**
- * End-to-end UI-change cases for the design editor.
+ * End-to-end UI-change cases for DesignLayer.
  *
  * Level 1 checks the CSS -> Tailwind translation in isolation. Level 2 drives
  * the real engine over its WebSocket protocol against throwaway fixtures. Level
@@ -13,7 +13,7 @@
  * the vendor abandons 3456/3457 the moment either is busy, and a hardcoded port
  * turns every level below 1 into a silent skip.
  *
- * Usage: node design-editor/test/ui-change-cases.mjs [--offline] [--keep] [--config <path>]
+ * Usage: node designlayer/test/ui-change-cases.mjs [--offline] [--keep] [--config <path>]
  */
 
 import assert from "node:assert/strict"

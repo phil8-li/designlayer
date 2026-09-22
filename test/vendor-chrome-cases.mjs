@@ -52,7 +52,7 @@ const editor = await import(
 )
 const { installVendorChromeSuppression, vendorChromeCss } = editor
 
-const STYLE_ID = "design-editor-vendor-suppression"
+const STYLE_ID = "designlayer-vendor-suppression"
 const HOST_ID = "react-rewrite-root"
 
 let failures = 0

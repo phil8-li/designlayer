@@ -17,7 +17,7 @@
  *  - the loopback guard, on the port with no proxy in front of it. This endpoint
  *    can reach the handoff queue, and the queue reaches a coding agent.
  *
- * Usage: node design-editor/test/mcp-handoff-cases.mjs
+ * Usage: node designlayer/test/mcp-handoff-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -234,12 +234,12 @@ await check("a handoff request lands in the queue with its brief intact", async 
 
   const agent = createAgent({
     projectRoot: root,
-    stateDir: nodePath.join(root, ".local", "design-editor"),
+    stateDir: nodePath.join(root, ".local", "designlayer"),
     host: { framework: "angular" },
   })
 
   const reply = await agent.runAgent({
-    prompt: "2 design changes from the design editor",
+    prompt: "2 design changes from DesignLayer",
     origin: "prompts",
     brief: "### src/app/overview.component.html\n- `<button>` — set `box-shadow` to `0 1px 2px`",
     files: ["src/app/overview.component.html"],
@@ -293,7 +293,7 @@ await check("a path the browser names is a label, never something the server ope
 
   const agent = createAgent({
     projectRoot: root,
-    stateDir: nodePath.join(root, ".local", "design-editor"),
+    stateDir: nodePath.join(root, ".local", "designlayer"),
     host: { framework: "react" },
   })
 
@@ -331,7 +331,7 @@ await check("with no endpoint listening, the reply does not promise a delivery",
   handoffQueue().clear()
   const agent = createAgent({
     projectRoot: root,
-    stateDir: nodePath.join(root, ".local", "design-editor"),
+    stateDir: nodePath.join(root, ".local", "designlayer"),
     host: { framework: "react" },
     agent: { transport: "handoff" },
   })
@@ -403,7 +403,7 @@ await check("initialize answers with a protocol version and a session", async ()
   })
   assert.equal(response.status, 200)
   assert.equal(response.body.result.protocolVersion, "2025-06-18", "the client's version, when we speak it")
-  assert.equal(response.body.result.serverInfo.name, "design-editor")
+  assert.equal(response.body.result.serverInfo.name, "designlayer")
   assert.ok(response.body.result.capabilities.tools, "a server with no tools capability is never asked for tools")
   assert.ok(response.sessionId, "the spec wants a session id on the initialize response")
 })
@@ -443,7 +443,7 @@ await check("wait_for_change blocks, then returns what the button pushed", async
   await new Promise((resolve) => setTimeout(resolve, 120))
   queue.push({
     origin: "prompts",
-    prompt: "2 design changes from the design editor",
+    prompt: "2 design changes from DesignLayer",
     brief: "### src/app/overview.html\n- `<button>` — box-shadow: none → 0 1px 2px",
     url: "http://127.0.0.1:3456/overview",
     files: ["src/app/overview.html"],
@@ -754,7 +754,7 @@ const ui = await import(
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -1089,12 +1089,12 @@ await check("Apply to code files what the server refused", async () => {
   const { pathToFileURL } = await import("node:url")
 
   const injected = {
-    apiBase: "/__design-editor",
+    apiBase: "/__designlayer",
     host: { framework: "angular", tailwind: false },
     tailwind: { version: 3, breakpoints: { sm: 640, md: 768, lg: 1024 } },
   }
-  window.__DESIGN_EDITOR_CONFIG__ = injected
-  globalThis.__DESIGN_EDITOR_CONFIG__ = injected
+  window.__DESIGNLAYER_CONFIG__ = injected
+  globalThis.__DESIGNLAYER_CONFIG__ = injected
 
   // The Angular queue refuses an element it cannot name an owner for, so
   // without this the queue stays empty and Apply never runs. Three lines of

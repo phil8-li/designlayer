@@ -719,7 +719,7 @@ export function installAppChooser(context: EditorContext): {
         ])
 
   /** Machine state, not app state: what is running is the same question whichever app is open. */
-  const CACHE_KEY = "design-editor.running-apps"
+  const CACHE_KEY = "designlayer.running-apps"
 
   const readCache = (): AppsResponse | null => {
     const raw = readScoped(CACHE_KEY)

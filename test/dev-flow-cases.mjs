@@ -17,7 +17,7 @@
  *    listeners to pin both halves: a broken app is attachable, a dead port is
  *    still dead.
  *
- * Usage: node design-editor/test/dev-flow-cases.mjs
+ * Usage: node designlayer/test/dev-flow-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -128,7 +128,7 @@ await check("attaches to a port that already answers, and starts nothing", async
       host: "127.0.0.1",
       port,
       // Would fail loudly if it were ever run, which is the point.
-      script: "design-editor-should-not-run-this",
+      script: "designlayer-should-not-run-this",
       log: quiet,
     })
     assert.equal(app.started, false)
@@ -150,7 +150,7 @@ await check("probePort says no when the port is free", async () => {
 console.log("\nStarting")
 
 await check("a dev script that exits is reported as such, not as a timeout", async () => {
-  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "design-editor-dev-"))
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "designlayer-dev-"))
   fs.writeFileSync(
     path.join(fixture, "package.json"),
     JSON.stringify({ name: "fixture", private: true, scripts: { dev: "exit 7" } })

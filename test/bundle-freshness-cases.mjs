@@ -6,12 +6,12 @@
  * source, the reviewed feature is simply absent, and nothing says a word. These
  * cases pin the behaviour that makes that impossible — not how it is detected.
  *
- * The real `dist/design-editor.js` is what the launcher serves, so it is what
+ * The real `dist/designlayer.js` is what the launcher serves, so it is what
  * gets damaged here. It is copied into a temp directory first and put back in a
  * `finally`, and the successful path leaves behind a bundle freshly built from
  * the current source, which is the state the repo wants anyway.
  *
- * Usage: node design-editor/test/bundle-freshness-cases.mjs
+ * Usage: node designlayer/test/bundle-freshness-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -37,7 +37,7 @@ function check(name, fn) {
   }
 }
 
-const BUNDLE = path.join(PACKAGE_DIR, "dist", "design-editor.js")
+const BUNDLE = path.join(PACKAGE_DIR, "dist", "designlayer.js")
 
 /** Everything the launcher would have printed, as one string. */
 function capture(fn) {
@@ -64,8 +64,8 @@ const build = () =>
   )
 
 build()
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "design-editor-bundle-"))
-const current = path.join(scratch, "design-editor.js")
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "designlayer-bundle-"))
+const current = path.join(scratch, "designlayer.js")
 fs.copyFileSync(BUNDLE, current)
 
 try {

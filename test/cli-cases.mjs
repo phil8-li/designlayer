@@ -7,8 +7,8 @@ import path from "node:path"
 import { spawnSync } from "node:child_process"
 
 import { PACKAGE_DIR } from "./host.mjs"
-const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "design-editor-cli-"))
-const installedBin = path.join(fixture, "design-editor")
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "designlayer-cli-"))
+const installedBin = path.join(fixture, "designlayer")
 
 try {
   fs.symlinkSync(path.join(PACKAGE_DIR, "cli.mjs"), installedBin)
@@ -18,7 +18,7 @@ try {
     encoding: "utf8",
   })
   assert.equal(help.status, 0, help.stderr)
-  assert.match(help.stdout, /^Usage: design-editor/m)
+  assert.match(help.stdout, /^Usage: designlayer/m)
 
   const printed = spawnSync(installedBin, ["--print-config"], {
     cwd: fixture,

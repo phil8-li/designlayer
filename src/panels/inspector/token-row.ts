@@ -200,7 +200,7 @@ function resolvedCssValue(element: Element, property: string, variable: string):
   const raw = getComputedStyle(element).getPropertyValue(variable).trim()
   if (!raw) return ""
   const probe = document.createElement("span")
-  probe.setAttribute("data-design-editor", "")
+  probe.setAttribute("data-designlayer", "")
   probe.style.cssText = "position:fixed;visibility:hidden;pointer-events:none"
   probe.style.setProperty(property, raw)
   document.body.append(probe)

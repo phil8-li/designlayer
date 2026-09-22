@@ -45,7 +45,7 @@
  * than posting rows into the list themselves, which would pass against a tab
  * wired to nothing.
  *
- * Usage: node design-editor/test/inspector-tabs-cases.mjs
+ * Usage: node designlayer/test/inspector-tabs-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -110,7 +110,7 @@ for (const key of [
  * the checker list — and `installInspector` boots every tab once, so those two
  * requests happen whether or not a case here is about them. Unstubbed they
  * reach undici, which refuses a relative URL, and the run fills with
- * `TypeError: Failed to parse URL from /__design-editor/libraries` before a
+ * `TypeError: Failed to parse URL from /__designlayer/libraries` before a
  * single assertion is read.
  *
  * Both payloads are the well-formed EMPTY one — `{ libraries: [] }` and
@@ -152,7 +152,7 @@ const editor = await import(
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

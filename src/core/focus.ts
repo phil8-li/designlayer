@@ -40,7 +40,7 @@ interface ModalityFocusOptions extends FocusOptions {
  * shell tears down.
  */
 const MODALITY_ATTR = "data-de-modality"
-const MODALITY_STYLE_ID = "design-editor-focus-modality"
+const MODALITY_STYLE_ID = "designlayer-focus-modality"
 
 let keyboard = false
 

@@ -25,8 +25,8 @@ const DEFAULT_TIMEOUT_MS = 10_000
 
 function isEditorTree(element: Element): boolean {
   return (
-    element.matches("[data-design-editor], #react-rewrite-root, nextjs-portal") ||
-    Boolean(element.closest("[data-design-editor], #react-rewrite-root, nextjs-portal"))
+    element.matches("[data-designlayer], #react-rewrite-root, nextjs-portal") ||
+    Boolean(element.closest("[data-designlayer], #react-rewrite-root, nextjs-portal"))
   )
 }
 

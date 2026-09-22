@@ -21,7 +21,7 @@
  * not parse — and every decline has to stay a decline, because the alternative
  * is deleting something the user was not looking at.
  *
- * Usage: node design-editor/test/delete-cases.mjs
+ * Usage: node designlayer/test/delete-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -34,7 +34,7 @@ import { JSDOM } from "jsdom"
 import { resolveConfig } from "../config.mjs"
 import { createAngularSource } from "../server/angular-source.mjs"
 import { createReactSource } from "../server/react-source.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 import { PACKAGE_DIR } from "./host.mjs"
 
 let passed = 0
@@ -649,7 +649,7 @@ console.log("\nDeleting from a React file")
 console.log("\nThe route both hosts share")
 
 async function serve(config) {
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

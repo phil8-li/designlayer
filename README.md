@@ -1,8 +1,13 @@
-# design-editor
+# DesignLayer
 
-A visual editor for a running React or Angular dev server. It proxies your app,
-lets you select an element in the page, edit its layout, styles and design
-tokens, and writes the change back into the component source.
+**Figma-like editing for a React or Angular app that is already running.**
+
+```sh
+npx designlayer
+```
+
+Select an element in the page, change its layout, styles and design tokens, and
+the edit is written back into the component source.
 
 Nothing in your app imports it, and nothing in it imports your app. It attaches
 from the outside, at the proxy, so adopting it is additive and dropping it
@@ -62,8 +67,8 @@ dependency; its prepare script builds the browser bundle on install.
 1. Clone it beside your app and install the checkout:
 
    ```sh
-   git clone https://github.com/phil8-li/design-editor.git
-   npm i -D ../design-editor
+   git clone https://github.com/phil8-li/designlayer.git
+   npm i -D ../designlayer
    ```
 
    To hand off one immutable artifact instead, run `npm pack` in this package
@@ -75,8 +80,8 @@ dependency; its prepare script builds the browser bundle on install.
    ```json
    {
      "scripts": {
-       "design": "design-editor --dev --open 3000",
-       "verify:design-editor": "design-editor --verify"
+       "design": "designlayer --dev --open 3000",
+       "verify:designlayer": "designlayer --verify"
      }
    }
    ```
@@ -96,13 +101,13 @@ dependency; its prepare script builds the browser bundle on install.
 4. Ignore the state directory:
 
    ```
-   .local/design-editor/
+   .local/designlayer/
    ```
 
 ## Use
 
 ```sh
-npx design-editor
+npx designlayer
 ```
 
 With no arguments it opens a start screen in your browser and asks which app to
@@ -199,7 +204,7 @@ chooser behind it to return to.
 If you already know the port, name it and the start screen is skipped:
 
 ```sh
-npm run design            # design-editor --dev --open 3000
+npm run design            # designlayer --dev --open 3000
 ```
 
 If a dev server is already up on the port, it attaches to that one instead and
@@ -209,11 +214,11 @@ command started.
 Without `--dev` the app has to be running already, and the launcher says so
 rather than failing inside the vendor's health check. Without `--open`, open the
 **proxy** URL it prints — not your dev server. The line to trust is the one
-prefixed `[design-editor]`; the vendored CLI prints a banner just above it that
+prefixed `[designlayer]`; the vendored CLI prints a banner just above it that
 reports the ports it asked for rather than the ones it bound.
 
 ```
-design-editor [appPort] [options]
+designlayer [appPort] [options]
 
   (no arguments)          Open the start screen: pick a running app and its folder
   appPort                 Dev server port (default: app.port, else framework detection)
@@ -257,8 +262,8 @@ moved and resized at once is a single step, not three.
 ## Angular hosts
 
 An Angular app is a first-class host. Nothing has to be configured — not the
-framework, not the dev script, not the port. `npx design-editor` and pick it off
-the start screen, or `design-editor --dev` from the project folder.
+framework, not the dev script, not the port. `npx designlayer` and pick it off
+the start screen, or `designlayer --dev` from the project folder.
 
 What the tool works out for itself, and where each answer comes from:
 
@@ -343,8 +348,8 @@ Optional. With no config file the tool runs against generic defaults for a
 stock Next.js + Tailwind + shadcn/ui app. It does not look for Leva,
 Agentation, or any host dev panel unless the host opts in.
 
-Copy `design-editor/design-editor.config.example.mjs` to
-`design-editor.config.mjs` in your project root and delete everything you do
+Copy `designlayer/designlayer.config.example.mjs` to
+`designlayer.config.mjs` in your project root and delete everything you do
 not need. The file is discovered by walking up from the working directory, and
 all its paths resolve against the directory holding it.
 
@@ -530,7 +535,7 @@ your stylesheet reads them to make room.
 ```css
 /* only if you set chrome.dockedPanel */
 .my-dev-panel {
-  right: calc(var(--design-editor-dev-panel-offset, 0px) + 1rem);
+  right: calc(var(--designlayer-dev-panel-offset, 0px) + 1rem);
 }
 ```
 
@@ -569,7 +574,7 @@ Writes replace only the target literal; unrelated comments and formatting stay
 untouched.
 
 Activating “Show affected” dispatches
-`design-editor:highlight-elements` on `window`. The event detail is
+`designlayer:highlight-elements` on `window`. The event detail is
 `{ path, relationship, selectors, elements }`; a canvas integration may draw
 those elements without coupling the options inventory to canvas state.
 
@@ -675,7 +680,7 @@ rather than on the proxy, because `ports.proxy` is `auto` and this URL goes into
 an agent's config by hand. It prints the URL at startup:
 
 ```
-[design-editor] MCP http://127.0.0.1:5747/mcp — point your agent at it
+[designlayer] MCP http://127.0.0.1:5747/mcp — point your agent at it
 ```
 
 Point the agent at it as a **remote** server, not a local one. A local entry
@@ -684,13 +689,13 @@ would spawn a second copy of this package with no editor attached to it:
 ```jsonc
 // CloudCode: ~/.config/cloudcode/cloudcode.jsonc
 "mcp": {
-  "design-editor": { "type": "remote", "url": "http://127.0.0.1:5747/mcp", "enabled": true }
+  "designlayer": { "type": "remote", "url": "http://127.0.0.1:5747/mcp", "enabled": true }
 }
 ```
 
 ```bash
 # Claude Code
-claude mcp add --transport http design-editor http://127.0.0.1:5747/mcp
+claude mcp add --transport http designlayer http://127.0.0.1:5747/mcp
 ```
 
 Set `ports.mcp` to `null` to turn the endpoint off. A port already in use is a
@@ -788,7 +793,7 @@ about the coding agent on the other end of the handoff, not about this editor.
 
 The host application never imports this package. A normal development server
 and every production build therefore ship zero editor JavaScript; the editor
-bundle is injected only by the separate proxy started with `design-editor`.
+bundle is injected only by the separate proxy started with `designlayer`.
 
 While that proxy is active, selection geometry is tracked only while an element
 is selected, hovered, or highlighted. The shared animation-frame loop stops
@@ -799,7 +804,7 @@ only while Option/Alt measurement is active.
 
 ```sh
 npm test                                        # no host needed
-DESIGN_EDITOR_HOST=../Workspaces npm test       # plus the host-pinned suites
+DESIGNLAYER_HOST=../Workspaces npm test       # plus the host-pinned suites
 npm run test:standalone-next                    # needs a host
 ```
 
@@ -808,7 +813,7 @@ Most of the suite runs against this repository alone. Four suites —
 app's own catalog, breakpoints and icon set, deliberately: they are the net that
 catches a change to the tool silently changing what a real app sees. They find
 that app through `test/host.mjs`, which is the single owner of "where is the
-host": `DESIGN_EDITOR_HOST` if set, otherwise a `Workspaces` checkout beside
+host": `DESIGNLAYER_HOST` if set, otherwise a `Workspaces` checkout beside
 this one. With neither present they print a skip and exit 0, so a bare clone is
 green and a skip never reads as a pass.
 
@@ -846,7 +851,7 @@ Ports and the API prefix come from the launcher's `endpoint.json`.
 ```
 cli.mjs                     argv contract, entry point, and the app supervisor
 config.mjs                  defaults, discovery, resolution, browser prelude, host detection
-build.mjs                   bundles src/ into dist/design-editor.js and dist/tokens.mjs
+build.mjs                   bundles src/ into dist/designlayer.js and dist/tokens.mjs
 runtime/start-screen.mjs    the loopback server behind the no-arguments flow
 runtime/start-screen-page.mjs   its document, and the script that drives it
 runtime/start-screen-style.mjs  its stylesheet, built from the editor's tokens

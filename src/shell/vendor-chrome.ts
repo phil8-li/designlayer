@@ -47,7 +47,7 @@ import { vendorChromeCss } from "../core/css"
 
 /** The vendor's mount point. It sets this id before calling `attachShadow`. */
 const HOST_ID = "react-rewrite-root"
-const STYLE_ID = "design-editor-vendor-suppression"
+const STYLE_ID = "designlayer-vendor-suppression"
 
 type ShadowFactory = (init: ShadowRootInit) => ShadowRoot
 

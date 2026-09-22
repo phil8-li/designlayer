@@ -22,7 +22,7 @@
  * answers on `[::1]` and refuses `127.0.0.1`. A case that pins `--port` and
  * `--host` is pinning those measurements.
  *
- * Usage: node design-editor/test/zero-config-cases.mjs
+ * Usage: node designlayer/test/zero-config-cases.mjs
  */
 
 import assert from "node:assert/strict"

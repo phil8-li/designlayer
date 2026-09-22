@@ -16,7 +16,7 @@ import { editorOwnsInput, getState, setState, subscribe } from "../core/store"
 import { createLauncher } from "./launcher"
 import { mountPanelResize } from "./resize"
 
-const STYLE_ID = "design-editor-shell-style"
+const STYLE_ID = "designlayer-shell-style"
 
 export interface Shell {
   slots: EditorSlots
@@ -54,7 +54,7 @@ function restoreChromeFocus(): () => void {
     /*
      * The annotation toolbar counts as ours, and has to.
      *
-     * It is not `[data-design-editor]` — it is a third-party component with its
+     * It is not `[data-designlayer]` — it is a third-party component with its
      * own portal — but it is a surface this package mounted and expects the
      * designer to operate. Left out of this test it was simply dead: the vendor
      * guard swallowed every click on it, so the picker could not be armed at
@@ -136,7 +136,7 @@ export function mountShell(): Shell {
   }
 
   const overlay = el("div", { class: "de-overlay-layer" })
-  const toolbar = el("div", { class: "de-toolbar", role: "toolbar", "aria-label": "Design editor" })
+  const toolbar = el("div", { class: "de-toolbar", role: "toolbar", "aria-label": "DesignLayer" })
 
   const left = el("div", { class: "de-panel-body" })
   const leftPanel = el("aside", { class: "de-panel de-panel--left", "aria-label": "Layers" }, [left])
@@ -184,7 +184,7 @@ export function mountShell(): Shell {
     launcher.element,
   ])
   document.body.append(root)
-  document.documentElement.classList.add("design-editor-active")
+  document.documentElement.classList.add("designlayer-active")
   // Before the focus guard, not after: the guard forces focus from its own
   // window-capture listener, and it has to read a modality that is already this
   // gesture's rather than the last one's.
@@ -268,7 +268,7 @@ export function mountShell(): Shell {
   // Hidden chrome answers the same as interactive mode here — it is the same
   // claim, that the editor is not standing between the pointer and the app.
   const syncMode = () => {
-    document.documentElement.classList.toggle("design-editor-inspecting", editorOwnsInput())
+    document.documentElement.classList.toggle("designlayer-inspecting", editorOwnsInput())
   }
 
   /*
@@ -284,7 +284,7 @@ export function mountShell(): Shell {
    */
   const syncChrome = () => {
     document.documentElement.classList.toggle(
-      "design-editor-chrome-hidden",
+      "designlayer-chrome-hidden",
       getState().chromeHidden
     )
   }
@@ -340,9 +340,9 @@ export function mountShell(): Shell {
       resize.destroy()
       launcher.destroy()
       root.remove()
-      document.documentElement.classList.remove("design-editor-active")
-      document.documentElement.classList.remove("design-editor-inspecting")
-      document.documentElement.classList.remove("design-editor-chrome-hidden")
+      document.documentElement.classList.remove("designlayer-active")
+      document.documentElement.classList.remove("designlayer-inspecting")
+      document.documentElement.classList.remove("designlayer-chrome-hidden")
       document.documentElement.style.removeProperty("--de-left")
       document.documentElement.style.removeProperty("--de-right")
       document.documentElement.style.removeProperty("--de-top")

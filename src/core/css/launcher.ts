@@ -130,7 +130,7 @@ export const launcherCss = `/* ---------- launcher ---------- */
  * this one case would be a number to keep in agreement with no way to notice
  * when it had stopped being.
  */
-html.design-editor-chrome-hidden .de-launcher {
+html.designlayer-chrome-hidden .de-launcher {
   visibility: visible;
   opacity: 1;
   transform: scale(1);
@@ -148,7 +148,7 @@ html.design-editor-chrome-hidden .de-launcher {
     visibility 0s linear ${ARRIVE_DELAY};
 }
 /* Press feedback has to beat the state rule that owns \`transform\` above. */
-html.design-editor-chrome-hidden .de-launcher:active {
+html.designlayer-chrome-hidden .de-launcher:active {
   transform: scale(0.95);
   transition: transform ${t.duration.fast} ${t.ease};
 }
@@ -161,7 +161,7 @@ html.design-editor-chrome-hidden .de-launcher:active {
  * class because that is the only rule it has to beat — it is the one that owns
  * \`transition\` whenever the button is on screen at all.
  */
-html.design-editor-chrome-hidden .de-launcher--dragging { transition: none; }
+html.designlayer-chrome-hidden .de-launcher--dragging { transition: none; }
 
 /*
  * Reduced motion, and the one thing \`base.ts\` cannot reach.

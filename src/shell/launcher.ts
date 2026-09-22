@@ -47,7 +47,7 @@ import { tokens } from "../core/tokens"
  * See the note on `anchor` for why the shared position deliberately does not
  * join it in storage.
  */
-const STORAGE_KEY = "design-editor:launcher-position"
+const STORAGE_KEY = "designlayer:launcher-position"
 
 /**
  * How far the pointer may travel before the disc's press becomes a drag.
@@ -613,8 +613,8 @@ export function createLauncher(onActivate: () => void): Launcher {
       class: "de-launcher",
       type: "button",
       // Named for what pressing it does, not for what it is. "Launcher" is our
-      // word for it; "Show the design editor" is the user's.
-      "aria-label": "Show the design editor",
+      // word for it; "Show DesignLayer" is the user's.
+      "aria-label": "Show DesignLayer",
     },
     /*
      * The filled pointer, named rather than left to the cascade: this button is

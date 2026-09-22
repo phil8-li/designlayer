@@ -20,7 +20,7 @@
  *
  * Every editor already writes an endpoint file naming its pid, its proxy port
  * and the project it was pointed at. The problem is only that it writes it
- * INSIDE that project (`<project>/.local/design-editor/endpoint.json`), so an
+ * INSIDE that project (`<project>/.local/designlayer/endpoint.json`), so an
  * editor can read its own and nobody else's.
  *
  * Scanning ports instead was the obvious alternative and it is wrong here.
@@ -52,7 +52,7 @@ import path from "node:path"
  * project root the way the endpoint file does.
  */
 export function registryDir() {
-  return path.join(os.homedir(), ".local", "state", "design-editor", "editors")
+  return path.join(os.homedir(), ".local", "state", "designlayer", "editors")
 }
 
 /** One file per editor, named for the port it answers on, which is unique by construction. */

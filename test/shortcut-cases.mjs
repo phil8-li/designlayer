@@ -18,7 +18,7 @@
  *     right; the wire from a key press to a mode change runs through a registry
  *     and a capture listener, and that is the half that rots.
  *
- * Usage: node design-editor/test/shortcut-cases.mjs
+ * Usage: node designlayer/test/shortcut-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -328,7 +328,7 @@ const bridge = {
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

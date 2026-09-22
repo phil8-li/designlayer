@@ -23,7 +23,7 @@
  *    way to design a second app was to kill the process. A second choice being
  *    accepted is the point of the supervisor, so it is pinned here.
  *
- * Usage: node design-editor/test/start-screen-cases.mjs
+ * Usage: node designlayer/test/start-screen-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -60,7 +60,7 @@ async function check(name, fn) {
 
 const temporary = []
 function fixture(prefix) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `design-editor-${prefix}-`)))
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `designlayer-${prefix}-`)))
   temporary.push(dir)
   return dir
 }
@@ -202,7 +202,7 @@ await check("a project describes itself completely", () => {
 })
 
 await check("a directory that is not there still answers every field", () => {
-  const project = describeProject(path.join(os.tmpdir(), "design-editor-does-not-exist"))
+  const project = describeProject(path.join(os.tmpdir(), "designlayer-does-not-exist"))
   for (const key of [
     "path",
     "name",

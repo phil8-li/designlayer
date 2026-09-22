@@ -100,7 +100,7 @@ function toolDefinitions() {
       name: "wait_for_change",
       title: "Wait for a design change",
       description:
-        "Block until the designer presses Send to agent in the design editor, then return the " +
+        "Block until the designer presses Send to agent in DesignLayer, then return the " +
         "pending changes with their brief, source files and selected element. Returns immediately " +
         "if changes are already waiting. On timeout it returns `{timeout: true}` and nothing else " +
         "— that is not an error, it means the designer has not clicked yet. " +
@@ -272,7 +272,7 @@ async function handleMessage(message, { queue, serverInfo, signal, onSession }) 
         capabilities: { tools: { listChanged: false } },
         serverInfo,
         instructions:
-          "The design editor is open in a browser. When the designer presses Send to agent, " +
+          "DesignLayer is open in a browser. When the designer presses Send to agent, " +
           "wait_for_change returns the change. Work the loop: wait_for_change, apply, " +
           "resolve_change, wait_for_change again.",
       },
@@ -349,7 +349,7 @@ function sendJson(res, statusCode, payload, extraHeaders = {}) {
  *   implementation of it is how the two come to disagree.
  */
 export function createMcpEndpoint({ queue, isLocalRequest, version = "0.1.0", path: mcpPath = "/mcp" }) {
-  const serverInfo = { name: "design-editor", title: "Design editor", version }
+  const serverInfo = { name: "designlayer", title: "DesignLayer", version }
   const sessions = new Set()
 
   /**
@@ -379,7 +379,7 @@ export function createMcpEndpoint({ queue, isLocalRequest, version = "0.1.0", pa
       sendJson(res, 403, {
         jsonrpc: "2.0",
         id: null,
-        error: { code: JSONRPC_INVALID_REQUEST, message: "The design editor MCP endpoint is loopback-only" },
+        error: { code: JSONRPC_INVALID_REQUEST, message: "DesignLayer MCP endpoint is loopback-only" },
       })
       return true
     }
@@ -563,13 +563,13 @@ export function createMcpEndpoint({ queue, isLocalRequest, version = "0.1.0", pa
     // share the page's origin on the proxy. A server built with it inherits
     // that wrapper, and this one would then serve the whole file-writing API on
     // a port the README publishes as a fixed number. Measured before the fix:
-    // `POST 127.0.0.1:5747/__design-editor/source/remove` answered 200.
+    // `POST 127.0.0.1:5747/__designlayer/source/remove` answered 200.
     //
     // The constructor is not patched, so this server serves exactly one path.
     const server = new http.Server((req, res) => {
       if (tryHandle(req, res)) return
       res.writeHead(404, { "content-type": "application/json" })
-      res.end(JSON.stringify({ error: `No design-editor MCP route for ${req.method} ${req.url}` }))
+      res.end(JSON.stringify({ error: `No designlayer MCP route for ${req.method} ${req.url}` }))
     })
     return new Promise((resolve, reject) => {
       const onListenError = (error) => reject(error)

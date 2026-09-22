@@ -1027,10 +1027,10 @@ console.log("\nRoom to draw in")
  * one line, and either one going missing brings the whole class of bug back.
  */
 check("the chrome resets the UA's button padding, and at zero specificity", () => {
-  const reset = shellCss.match(/:where\(\[data-design-editor\] button\)\s*\{([^}]*)\}/)
+  const reset = shellCss.match(/:where\(\[data-designlayer\] button\)\s*\{([^}]*)\}/)
   assert.ok(
     reset,
-    "no `:where([data-design-editor] button)` reset — an icon button's content " +
+    "no `:where([data-designlayer] button)` reset — an icon button's content " +
       "box is 12px narrower than the square it pins, and its glyph gets squashed"
   )
   assert.match(reset[1], /padding:\s*0\s*;/, "the button reset no longer zeroes padding")
@@ -1038,13 +1038,13 @@ check("the chrome resets the UA's button padding, and at zero specificity", () =
   // which would not remove the UA's padding, it would strip the deliberate
   // padding off every text button in the chrome.
   assert.ok(
-    !/(^|\n)\[data-design-editor\] button\s*\{/.test(shellCss),
+    !/(^|\n)\[data-designlayer\] button\s*\{/.test(shellCss),
     "the button padding reset is unwrapped, so it overrules the rules it should lose to"
   )
 })
 
 check("a glyph that cannot fit its button overflows instead of shrinking", () => {
-  const rule = shellCss.match(/\[data-design-editor\] svg\s*\{([^}]*)\}/)
+  const rule = shellCss.match(/\[data-designlayer\] svg\s*\{([^}]*)\}/)
   assert.ok(rule, "no base rule for the chrome's `<svg>` elements")
   // Every icon button here is a flex container, so the glyph is a flex item and
   // will be shrunk to fit a content box that is too small — silently, still

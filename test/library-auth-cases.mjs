@@ -47,7 +47,7 @@
  * and the OAuth client id is invented. Nothing here names a real site, and
  * nothing here is a credential anybody holds.
  *
- * Usage: node design-editor/test/library-auth-cases.mjs
+ * Usage: node designlayer/test/library-auth-cases.mjs
  */
 
 import assert from "node:assert/strict"

@@ -31,7 +31,7 @@
  * subject. `annotation-cases.mjs` owns the stores and the brief underneath
  * them; nothing there renders a row.
  *
- * Usage: node design-editor/test/stranded-write-cases.mjs
+ * Usage: node designlayer/test/stranded-write-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -443,7 +443,7 @@ await check("SW-07 re-editing a stranded property is one row, first from and lat
  */
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -770,7 +770,7 @@ let evaluations = 0
  * ledger from memory without ever consulting storage.
  */
 async function startEditor(appUrl) {
-  globalThis.__DESIGN_EDITOR_CONFIG__ = { app: { url: appUrl, name: null } }
+  globalThis.__DESIGNLAYER_CONFIG__ = { app: { url: appUrl, name: null } }
   evaluations += 1
   const source = `${ledgerBundle.outputFiles[0].text}\n//${evaluations}`
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
@@ -805,7 +805,7 @@ await check("SW-15 a change recorded before a reload is still in the ledger afte
 
   // The key the work is filed under, spelled out once: the prefix this module
   // owns, then the app, then the page.
-  const stored = window.localStorage.getItem("design-editor.preview-only.http-127-0-0-1-3000:/")
+  const stored = window.localStorage.getItem("designlayer.preview-only.http-127-0-0-1-3000:/")
   assert.ok(stored, "the ledger was persisted under a key nothing will ask for")
   assert.deepEqual(JSON.parse(stored), [SWAP])
 })

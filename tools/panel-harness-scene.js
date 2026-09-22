@@ -79,7 +79,7 @@ function seedOutbox(target) {
  * A page to select in.
  *
  * Deliberately built with `document.createElement` rather than `el()`: `el()`
- * stamps `data-design-editor`, which is what every rule in `shellCss` is scoped
+ * stamps `data-designlayer`, which is what every rule in `shellCss` is scoped
  * under, so a fixture built with it would be styled as chrome and would also be
  * skipped by the editor's own hit filtering.
  *
@@ -245,7 +245,7 @@ export function mount(options = {}) {
   const theme = options.theme === "light" ? "light" : "dark"
 
   const style = document.createElement("style")
-  style.id = "design-editor-harness-style"
+  style.id = "designlayer-harness-style"
   style.textContent = shellCss
   document.head.append(style)
 

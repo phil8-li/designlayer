@@ -20,7 +20,7 @@ try {
   ;({ tokens } = await import("../dist/tokens.mjs"))
 } catch (error) {
   if (error.code !== "ERR_MODULE_NOT_FOUND") throw error
-  throw new Error("design-editor: the token bundle is missing — run `npm run build` in the package")
+  throw new Error("designlayer: the token bundle is missing — run `npm run build` in the package")
 }
 
 const { color, radius, shadow, font, type, ease, duration } = tokens

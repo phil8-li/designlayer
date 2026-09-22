@@ -86,7 +86,7 @@ window.HTMLElement.prototype.focus = function record(options) {
 
 const chromeButton = () => {
   const node = window.document.createElement("button")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -153,19 +153,19 @@ await check("nothing to focus is not an error", () => {
 })
 
 await check("the live rule covers the control that was already focused", () => {
-  const style = window.document.getElementById("design-editor-focus-modality")
+  const style = window.document.getElementById("designlayer-focus-modality")
   assert.notEqual(style, null, "the modality stylesheet never went in")
   // Keyed on the attribute AND on our chrome marker: an `!important` outline
   // reset that reached the app under edit would erase ITS focus rings too.
   assert.match(style.textContent, /\[data-de-modality="pointer"\]/)
-  assert.match(style.textContent, /\[data-design-editor\]:focus-visible/)
+  assert.match(style.textContent, /\[data-designlayer\]:focus-visible/)
   assert.match(style.textContent, /outline: none !important/)
 })
 
 await check("standing the editor down takes both halves with it", () => {
   release()
   assert.equal(modality(), null, "the modality attribute outlived the editor")
-  assert.equal(window.document.getElementById("design-editor-focus-modality"), null)
+  assert.equal(window.document.getElementById("designlayer-focus-modality"), null)
   press("Tab")
   assert.equal(modality(), null, "a torn-down editor is still listening for keys")
 })

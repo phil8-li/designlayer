@@ -47,19 +47,19 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  * drawings, and the editor does not get to re-weight them because a row is
  * selected.
  */
-[data-design-editor] svg[data-de-glyph] {
+[data-designlayer] svg[data-de-glyph] {
   transition: stroke-width 120ms ease;
 }
 
-[data-design-editor][aria-pressed="true"] svg[data-de-glyph],
-[data-design-editor][aria-selected="true"] svg[data-de-glyph],
-[data-design-editor] [aria-pressed="true"] svg[data-de-glyph],
-[data-design-editor] [aria-selected="true"] svg[data-de-glyph] {
+[data-designlayer][aria-pressed="true"] svg[data-de-glyph],
+[data-designlayer][aria-selected="true"] svg[data-de-glyph],
+[data-designlayer] [aria-pressed="true"] svg[data-de-glyph],
+[data-designlayer] [aria-selected="true"] svg[data-de-glyph] {
   stroke-width: calc(var(--de-icon-stroke, 2) + 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-design-editor] svg[data-de-glyph] { transition: none; }
+  [data-designlayer] svg[data-de-glyph] { transition: none; }
 }
 
 `

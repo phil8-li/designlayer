@@ -67,11 +67,11 @@ import {
  * note row are different objects and one shared event would light a note pin
  * from a finding's id.
  *
- *   `design-editor:lint-hover`         panel -> canvas  `{ id: string | null }`
+ *   `designlayer:lint-hover`         panel -> canvas  `{ id: string | null }`
  *     The pointer is on that finding's row, or has left every row. The badge
  *     carrying that finding takes `MARKER_ACTIVE`.
  *
- *   `design-editor:lint-marker-hover`  canvas -> panel  `{ id, ids }`
+ *   `designlayer:lint-marker-hover`  canvas -> panel  `{ id, ids }`
  *     The mirror. `id` is the finding the badge speaks for — the worst one on
  *     that element — and `ids` is every finding it covers, because one badge
  *     can stand for several rows and a panel that lit only one of them would be
@@ -82,8 +82,8 @@ import {
  * annotation seam gives: a listener that only ever hears "now this one" is how
  * a highlight gets stuck on a row nobody is on.
  */
-const HOVER_EVENT = "design-editor:lint-hover"
-const MARKER_HOVER_EVENT = "design-editor:lint-marker-hover"
+const HOVER_EVENT = "designlayer:lint-hover"
+const MARKER_HOVER_EVENT = "designlayer:lint-marker-hover"
 
 /** The badge the panel is pointing at. The look belongs to `css/lint-markers`. */
 const MARKER_ACTIVE = "de-lint-marker--active"

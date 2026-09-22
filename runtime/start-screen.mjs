@@ -1,7 +1,7 @@
 /**
  * The start screen's HTTP server, and the handoff back to cli.mjs.
  *
- * Until now the only way in was `design-editor --dev 3000`, so the port, the
+ * Until now the only way in was `designlayer --dev 3000`, so the port, the
  * project root and the dev script all had to be known before anything was on
  * screen. This server is the other order: bind on loopback first, let the page
  * ask what is running and what is on disk, and end with one validated choice.
@@ -41,7 +41,7 @@ const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"])
  * to switch apps, so it has to be one they can guess: 3455 sits directly under
  * the proxy's 3456 and the edit socket's 3457.
  *
- * Preferred, not required. Something else on 3455 — a second design-editor, or
+ * Preferred, not required. Something else on 3455 — a second designlayer, or
  * an unrelated server — is no reason to refuse to start, so the OS picks
  * instead and the banner says where it landed.
  */
@@ -397,7 +397,7 @@ export async function createStartScreen({
       readyPath = appPath
       editing = null
       stopped = null
-      log(`[design-editor] editing ${choice.appUrl}${appPath} from ${choice.projectRoot}`)
+      log(`[designlayer] editing ${choice.appUrl}${appPath} from ${choice.projectRoot}`)
       const round = pending
       pending = openRound()
       round.resolve(choice)

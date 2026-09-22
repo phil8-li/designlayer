@@ -1337,7 +1337,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
           renderSignIns()
         })
         .catch((error: unknown) => {
-          console.warn("[design-editor] could not list the library sign-ins", error)
+          console.warn("[designlayer] could not list the library sign-ins", error)
         })
     }
     render()

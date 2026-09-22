@@ -1,5 +1,5 @@
 /**
- * Shared contracts for the Figma-style design editor overlay.
+ * Shared contracts for the Figma-style DesignLayer overlay.
  *
  * Every lane (canvas, panels, options, ai) talks through these types so the
  * modules stay disjoint: nothing imports another lane's internals.

@@ -11,7 +11,7 @@
  * transformer. A queued operation that never becomes a diff is the same bug
  * wearing a green test.
  *
- * Usage: node design-editor/test/apply-source-cases.mjs
+ * Usage: node designlayer/test/apply-source-cases.mjs
  */
 
 import assert from "node:assert/strict"

@@ -180,8 +180,8 @@ const EDIT_NOTE = "Reopen this note on the page to rewrite it."
  * ever hears "now this one" is how a highlight gets stuck on a row the pointer
  * left minutes ago.
  */
-const HOVER_EVENT = "design-editor:annotation-hover"
-const EDIT_EVENT = "design-editor:annotation-edit"
+const HOVER_EVENT = "designlayer:annotation-hover"
+const EDIT_EVENT = "designlayer:annotation-edit"
 
 /**
  * The mirror, coming back the other way: the pointer is on a PIN.
@@ -190,7 +190,7 @@ const EDIT_EVENT = "design-editor:annotation-edit"
  * leaning on CSS `:hover`. A pin hovered on the page has to light its row in a
  * panel the pointer is nowhere near, and no selector can express that.
  */
-const MARKER_HOVER_EVENT = "design-editor:marker-hover"
+const MARKER_HOVER_EVENT = "designlayer:marker-hover"
 
 /** The row carries its record's id so the mirror can find it without a map. */
 const ITEM_ID = "data-item"
@@ -631,7 +631,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         // The outbox IS the request; this line is the subject, not the ask.
         // Phrasing it as an instruction ("please change…") would have the agent
         // re-derive intent it has already been handed in `brief`.
-        prompt: `${outboxSummary(items)} from the design editor`,
+        prompt: `${outboxSummary(items)} from DesignLayer`,
         brief: buildAnnotationBrief(items),
         origin: "prompts",
         files: filesInOutbox(items),

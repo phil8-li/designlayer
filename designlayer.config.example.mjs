@@ -1,5 +1,5 @@
 /**
- * Copy to `design-editor.config.mjs` in your project root.
+ * Copy to `designlayer.config.mjs` in your project root.
  *
  * Every key is optional. The tool runs with no config file at all; a key is
  * worth setting only where your app differs from the defaults below, which
@@ -28,11 +28,11 @@ const config = {
 
   // Where the editor keeps saved option sets, agent handoffs, and the
   // endpoint file. Add it to .gitignore.
-  stateDir: ".local/design-editor",
+  stateDir: ".local/designlayer",
 
   // Route prefix for the editor's own endpoints, served on the proxy origin.
   // Change it only if it collides with one of your app's routes.
-  apiPrefix: "/__design-editor",
+  apiPrefix: "/__designlayer",
 
   // Optional canonical token manifest. Keep `manifest` null for a generic
   // install. CSS sources let the editor connect authored custom properties and
@@ -123,8 +123,8 @@ const config = {
       selector: "[data-my-dev-panel]",
       fallbackSelector: "",
       chromeSelectors: ["[data-my-dev-panel]"],
-      offsetVar: "--design-editor-dev-panel-offset",
-      widthVar: "--design-editor-dev-panel-width",
+      offsetVar: "--designlayer-dev-panel-offset",
+      widthVar: "--designlayer-dev-panel-width",
       minWidth: 260,
       maxWidth: 380,
       gap: 12,

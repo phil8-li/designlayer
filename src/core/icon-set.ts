@@ -79,7 +79,7 @@ function hostIconSet(apiBase: string): Promise<IconVariant[]> {
       return cache
     })
     .catch((error) => {
-      console.warn("[design-editor] could not load the icon set", error)
+      console.warn("[designlayer] could not load the icon set", error)
       // Not cached: a dev server that was still starting should be asked again.
       inFlight = null
       return []

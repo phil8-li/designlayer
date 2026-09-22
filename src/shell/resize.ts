@@ -132,7 +132,7 @@ const FOLD = { duration: 0.24, ease: [0.32, 0.72, 0, 1] } as const
  * the same guard: `localStorage` does not return null when an origin's storage
  * is blocked, it THROWS on property access, and this runs during boot.
  */
-const STORAGE_KEY = "design-editor:panel-widths"
+const STORAGE_KEY = "designlayer:panel-widths"
 
 type Widths = Partial<Record<PanelSide, number>>
 

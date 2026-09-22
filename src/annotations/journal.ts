@@ -84,7 +84,7 @@ function announce(): void {
       listener()
     } catch (error) {
       // One panel failing to repaint must not stop the next one repainting.
-      console.warn("[design-editor] edit journal listener failed", error)
+      console.warn("[designlayer] edit journal listener failed", error)
     }
   }
 }
@@ -102,7 +102,7 @@ function announce(): void {
 function componentNameOf(element: Element): string | null {
   if (isAngularHost()) return owningComponentName(element)?.replace(/^_+/, "") ?? null
   try {
-    return window.__DESIGN_EDITOR_BRIDGE__?.elementInfo(element)?.componentName || null
+    return window.__DESIGNLAYER_BRIDGE__?.elementInfo(element)?.componentName || null
   } catch {
     // The vendor's fiber walk throws on a node React never mounted.
     return null

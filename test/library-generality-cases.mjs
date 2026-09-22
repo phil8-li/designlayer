@@ -51,7 +51,7 @@
  * repository, and the shapes — a mid-name type word, an alias chain, a
  * var-with-fallback — are perfectly reproducible from scratch.
  *
- * Usage: node design-editor/test/library-generality-cases.mjs
+ * Usage: node designlayer/test/library-generality-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -97,17 +97,17 @@ function check(name, fn) {
  *
  * Which would cost exactly the coverage that matters, since those are the
  * systems a narrowing would narrow towards — so the private half is supplied
- * from outside the repo instead of dropped. Set `DESIGN_EDITOR_VENDOR_WORDS` to
+ * from outside the repo instead of dropped. Set `DESIGNLAYER_VENDOR_WORDS` to
  * a comma-separated list and the scan runs against both halves:
  *
- *   DESIGN_EDITOR_VENDOR_WORDS=acme-sys,acme-ref node test/library-generality-cases.mjs
+ *   DESIGNLAYER_VENDOR_WORDS=acme-sys,acme-ref node test/library-generality-cases.mjs
  *
  * Lower-cased and trimmed here, because `vendorHits` matches against a
  * lower-cased line and a stray capital would simply never fire.
  */
 const PUBLIC_VENDOR_WORDS = ["md-sys", "mat-", "chakra", "mui"]
 
-const PRIVATE_VENDOR_WORDS = (process.env.DESIGN_EDITOR_VENDOR_WORDS ?? "")
+const PRIVATE_VENDOR_WORDS = (process.env.DESIGNLAYER_VENDOR_WORDS ?? "")
   .split(",")
   .map((word) => word.trim().toLowerCase())
   .filter(Boolean)
@@ -227,7 +227,7 @@ check("the matcher reads a vendor spelling however it is embedded", () => {
  *
  * The systems this feature was measured against are not public and their token
  * namespaces are not in this file, so what is checked here is the MECHANISM
- * that carries them: an entry supplied through `DESIGN_EDITOR_VENDOR_WORDS`
+ * that carries them: an entry supplied through `DESIGNLAYER_VENDOR_WORDS`
  * matches on exactly the same terms as a committed one. The two shapes below
  * are the ones a private namespace tends to have and no public entry covers —
  * a multi-part hyphenated prefix, and a name that ends in a version digit.

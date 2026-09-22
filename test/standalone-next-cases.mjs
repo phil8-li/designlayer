@@ -11,7 +11,7 @@ import { WebSocket } from "ws"
 import { PACKAGE_DIR, requireHostConfig } from "./host.mjs"
 
 const { root: HOST_ROOT } = requireHostConfig("standalone-next-cases")
-const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "design-editor-next-")))
+const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "designlayer-next-")))
 const processes = new Set()
 
 function write(relativePath, contents) {
@@ -131,7 +131,7 @@ async function verifyRouter(name, sourceFile) {
   let editor
   try {
     await waitFor(`http://127.0.0.1:${appPort}`)
-    editor = start(path.join(fixture, "node_modules", ".bin", "design-editor"), [
+    editor = start(path.join(fixture, "node_modules", ".bin", "designlayer"), [
       String(appPort), "--host", "127.0.0.1", "--proxy-port", String(proxyPort),
       "--ws-port", String(wsPort), "--no-open",
     ])
@@ -140,8 +140,8 @@ async function verifyRouter(name, sourceFile) {
     const proxyHtml = await proxy.text()
     assert.doesNotMatch(hostHtml, /__react-rewrite\/overlay\.js/)
     assert.match(proxyHtml, /__react-rewrite\/overlay\.js/)
-    assert.equal((await fetch(`http://127.0.0.1:${appPort}/__design-editor/options`)).status, 404)
-    assert.equal((await fetch(`http://127.0.0.1:${proxyPort}/__design-editor/options`)).status, 200)
+    assert.equal((await fetch(`http://127.0.0.1:${appPort}/__designlayer/options`)).status, 404)
+    assert.equal((await fetch(`http://127.0.0.1:${proxyPort}/__designlayer/options`)).status, 200)
 
     const file = path.join(fixture, sourceFile)
     const original = fs.readFileSync(file, "utf8")
@@ -166,10 +166,10 @@ try {
   ]))
   const tarball = path.join(fixture, packed[0].filename)
   write("package.json", JSON.stringify({
-    name: "standalone-next-design-editor-fixture",
+    name: "standalone-next-designlayer-fixture",
     private: true,
     dependencies: {
-      "design-editor": `file:${tarball}`,
+      "designlayer": `file:${tarball}`,
       "@tailwindcss/postcss": packageVersion("@tailwindcss/postcss"),
       "@types/node": packageVersion("@types/node"),
       "@types/react": packageVersion("@types/react"),

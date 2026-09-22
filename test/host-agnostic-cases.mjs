@@ -54,7 +54,7 @@ async function checkAsync(name, fn) {
 }
 
 async function loadFixtureHost(dir) {
-  const configPath = path.join(FIXTURES, dir, "design-editor.config.mjs")
+  const configPath = path.join(FIXTURES, dir, "designlayer.config.mjs")
   const config = await loadConfig({ configPath })
   return { dir, config, catalog: config.designSystem.catalog }
 }
@@ -62,14 +62,14 @@ async function loadFixtureHost(dir) {
 /**
  * The editor's browser half, loaded as THIS host sees it.
  *
- * `src/core/config.ts` reads `window.__DESIGN_EDITOR_CONFIG__` once at module
+ * `src/core/config.ts` reads `window.__DESIGNLAYER_CONFIG__` once at module
  * load, exactly as it does behind the proxy, so a second host needs a second
  * module instance. The `__host` export makes each bundle's text unique and
  * therefore its data: URL a distinct module rather than a cache hit.
  */
 async function loadEditorFor(host) {
   const prelude = browserPrelude(host.config, { proxyPort: 4567 })
-  globalThis.__DESIGN_EDITOR_CONFIG__ = JSON.parse(
+  globalThis.__DESIGNLAYER_CONFIG__ = JSON.parse(
     prelude.slice(prelude.indexOf("=") + 1, prelude.lastIndexOf(";"))
   )
   const { build } = await import("esbuild")
@@ -115,11 +115,11 @@ async function withInspector(helpers, markup, run) {
   }
 
   const right = window.document.createElement("aside")
-  right.setAttribute("data-design-editor", "")
+  right.setAttribute("data-designlayer", "")
   window.document.body.append(right)
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }
@@ -380,7 +380,7 @@ check("a v3 host can declare its scale instead of pointing at a config file", ()
       },
       tailwind: { version: 3 },
     },
-    { configPath: path.join(FIXTURES, "relay-v3", "design-editor.config.mjs") }
+    { configPath: path.join(FIXTURES, "relay-v3", "designlayer.config.mjs") }
   ).designSystem.catalog
   assert.deepEqual(
     declared.aliases.tailwind.map((alias) => `${alias.namespace}:${alias.name}`).sort(),
@@ -427,14 +427,14 @@ check("a manifest and an adapter together are refused rather than silently ranke
           cssSources: [],
         },
       },
-      { configPath: path.join(FIXTURES, "relay-v3", "design-editor.config.mjs") }
+      { configPath: path.join(FIXTURES, "relay-v3", "designlayer.config.mjs") }
     ),
     /manifest or an adapter, not both/
   )
   assert.throws(
     () => resolveConfig(
       { designSystem: { manifest: null, adapter: () => "nope", cssSources: [] } },
-      { configPath: path.join(FIXTURES, "relay-v3", "design-editor.config.mjs") }
+      { configPath: path.join(FIXTURES, "relay-v3", "designlayer.config.mjs") }
     ),
     /adapter must return an object/
   )
@@ -482,13 +482,13 @@ check("the config's declaration overrides the manifest's", () => {
         trackingUnit: "em",
       },
     },
-    { configPath: path.join(FIXTURES, "aurora-v4", "design-editor.config.mjs") }
+    { configPath: path.join(FIXTURES, "aurora-v4", "designlayer.config.mjs") }
   ).designSystem.catalog
   assert.equal(overridden.trackingUnit, "em")
   assert.throws(
     () => resolveConfig(
       { designSystem: { manifest: null, cssSources: [], trackingUnit: "rem" } },
-      { configPath: path.join(FIXTURES, "aurora-v4", "design-editor.config.mjs") }
+      { configPath: path.join(FIXTURES, "aurora-v4", "designlayer.config.mjs") }
     ),
     /must be one of em, px/
   )

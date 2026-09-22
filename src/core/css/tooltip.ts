@@ -33,7 +33,7 @@
  *
  * The cost is one rule, at the bottom of this file. `css/base.ts` clamps the
  * chrome's durations under `prefers-reduced-motion` with a selector that reads
- * `[data-design-editor] *` — DESCENDANTS of a chrome element. The card carries
+ * `[data-designlayer] *` — DESCENDANTS of a chrome element. The card carries
  * the chrome attribute itself but its parent is `<body>`, so it is a chrome
  * ROOT and the blanket rule does not reach it. The clamp is restated there
  * rather than worked around, at the same 0.01ms, so the two cannot disagree

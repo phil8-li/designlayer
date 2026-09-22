@@ -59,20 +59,20 @@ const BLEED = 32
  * They are ONE note seen twice, so they have to light up together — a list of
  * six rows beside six pins is unreadable unless pointing at either half says
  * which half of the pair the other is. The seam is three events on `window`,
- * the same one `design-editor:highlight-elements` already uses between the
+ * the same one `designlayer:highlight-elements` already uses between the
  * options panel and the canvas, and for the same reason: the two surfaces are
  * mounted independently, neither owns the other, and an import either way
  * would make the marker layer unusable without the panel or vice versa.
  *
- *   `design-editor:annotation-hover`  panel -> canvas  `{ id: string | null }`
+ *   `designlayer:annotation-hover`  panel -> canvas  `{ id: string | null }`
  *     The pointer is on that row, or has left every row (`null`). The matching
  *     pin takes `MARKER_ACTIVE`; the stylesheet owns what that looks like.
  *
- *   `design-editor:marker-hover`      canvas -> panel  `{ id: string | null }`
+ *   `designlayer:marker-hover`      canvas -> panel  `{ id: string | null }`
  *     The mirror of it. The pointer is on that pin, or has left it (`null`),
  *     and the panel lights the matching row.
  *
- *   `design-editor:annotation-edit`   panel -> canvas  `{ id: string }`
+ *   `designlayer:annotation-edit`   panel -> canvas  `{ id: string }`
  *     Re-open that note's composer over the page, prefilled, saving back to
  *     the SAME note rather than writing a second one.
  *
@@ -80,9 +80,9 @@ const BLEED = 32
  * two halves have to be handled by one code path: a listener that only ever
  * hears "now this one" is how a highlight gets stuck on a row nobody is on.
  */
-const HOVER_EVENT = "design-editor:annotation-hover"
-const MARKER_HOVER_EVENT = "design-editor:marker-hover"
-const EDIT_EVENT = "design-editor:annotation-edit"
+const HOVER_EVENT = "designlayer:annotation-hover"
+const MARKER_HOVER_EVENT = "designlayer:marker-hover"
+const EDIT_EVENT = "designlayer:annotation-edit"
 
 /** The pin the panel is pointing at. The look belongs to `css/annotations`. */
 const MARKER_ACTIVE = "de-ann-marker--active"
@@ -167,7 +167,7 @@ export function installAnnotations(context: EditorContext): void {
    * regularly chrome, and `isCanvasElement` rejects it along with `html` and
    * `body`. That rejection is also the guard against the infinite regress —
    * every node this module creates goes through `el()`, which marks it
-   * `data-design-editor`, so a pin can never become the target of a note.
+   * `data-designlayer`, so a pin can never become the target of a note.
    */
   const elementAt = (x: number, y: number): Element | null => {
     for (const node of document.elementsFromPoint(x, y)) {

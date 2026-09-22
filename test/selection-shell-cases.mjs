@@ -100,7 +100,7 @@ const editorModule = await import(
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -340,7 +340,7 @@ await check("interactive mode hands the gesture to the app, and only then", () =
   window.document.addEventListener(
     "pointerdown",
     (event) => {
-      if (event.target instanceof window.Element && event.target.closest("[data-design-editor]")) return
+      if (event.target instanceof window.Element && event.target.closest("[data-designlayer]")) return
       event.stopPropagation()
     },
     true
@@ -412,20 +412,20 @@ await check("the toggle's pressed state and the panel never disagree", () => {
  * it — and the live proof is the CFT pass over a real icon.
  */
 await check("inspecting mode makes the app's unclickable glyphs hit-testable", () => {
-  const rule = editorModule.shellCss.match(/html\.design-editor-inspecting svg \{[^}]*\}/)
+  const rule = editorModule.shellCss.match(/html\.designlayer-inspecting svg \{[^}]*\}/)
   assert.notEqual(rule, null, "no rule re-arms `<svg>` hit-testing while inspecting")
   assert.match(rule[0], /pointer-events:\s*all/)
 
   editorModule.setState({ interactive: false })
-  assert.equal(document.documentElement.classList.contains("design-editor-inspecting"), true)
+  assert.equal(document.documentElement.classList.contains("designlayer-inspecting"), true)
   editorModule.setState({ interactive: true })
   assert.equal(
-    document.documentElement.classList.contains("design-editor-inspecting"),
+    document.documentElement.classList.contains("designlayer-inspecting"),
     false,
     "interactive mode did not hand the app back its own hit behaviour"
   )
   editorModule.setState({ interactive: false })
-  assert.equal(document.documentElement.classList.contains("design-editor-inspecting"), true)
+  assert.equal(document.documentElement.classList.contains("designlayer-inspecting"), true)
 })
 
 await check("no control anywhere in the shell draws the hand tool", () => {
@@ -450,7 +450,7 @@ await check("hiding the editor drops the app's inset without closing the panels"
   const openInset = html.style.getPropertyValue("--de-left")
 
   editorModule.setState({ chromeHidden: true })
-  assert.equal(html.classList.contains("design-editor-chrome-hidden"), true)
+  assert.equal(html.classList.contains("designlayer-chrome-hidden"), true)
   assert.equal(html.style.getPropertyValue("--de-left"), "0px")
   assert.equal(html.style.getPropertyValue("--de-right"), "0px")
   // Not closed — parked. The panel a designer had open is the panel they get
@@ -459,7 +459,7 @@ await check("hiding the editor drops the app's inset without closing the panels"
   assert.equal(panel("right").hidden, false, "hiding the chrome closed the inspector")
 
   editorModule.setState({ chromeHidden: false })
-  assert.equal(html.classList.contains("design-editor-chrome-hidden"), false)
+  assert.equal(html.classList.contains("designlayer-chrome-hidden"), false)
   assert.equal(html.style.getPropertyValue("--de-left"), openInset)
 })
 
@@ -470,7 +470,7 @@ await check("hidden chrome hands the pointer back, exactly as interactive mode d
   editorModule.setState({ chromeHidden: true })
   assert.equal(editorModule.editorOwnsInput(), false, "a hidden editor is still eating clicks")
   assert.equal(
-    window.document.documentElement.classList.contains("design-editor-inspecting"),
+    window.document.documentElement.classList.contains("designlayer-inspecting"),
     false
   )
 
@@ -719,7 +719,7 @@ await check("a drag moves the launcher, remembers where, and is not a click", as
   assert.equal(fab.style.top, "200px")
   assert.equal(fab.style.right, "auto", "the corner anchor is still in force")
   assert.equal(
-    window.localStorage.getItem("design-editor:launcher-position"),
+    window.localStorage.getItem("designlayer:launcher-position"),
     JSON.stringify({ x: 160, y: 200 })
   )
 
@@ -807,7 +807,7 @@ await check("a launcher dragged past the edge stops dead at it, under the hand",
  */
 await check("standing down animates the chrome's own box — never the app's layout", () => {
   const css = editorModule.shellCss
-  const rules = css.match(/html\.design-editor-chrome-hidden[^{]*\{[^}]*\}/g) ?? []
+  const rules = css.match(/html\.designlayer-chrome-hidden[^{]*\{[^}]*\}/g) ?? []
   assert.ok(rules.length >= 4, `only ${rules.length} rules drive the hidden state`)
   /** The properties the page is laid out by. Transitioned by nothing, ever. */
   const appLayout = /transition:[^;]*\b(padding|margin|inset|left|top|right|bottom)\b/
@@ -821,11 +821,11 @@ await check("standing down animates the chrome's own box — never the app's lay
     )
     assert.doesNotMatch(rule, ownBox, `a hidden-state rule animates its own box:\n${rule}`)
   }
-  assert.match(css, /html\.design-editor-chrome-hidden \.de-panel--left \{[^}]*translateX/)
-  assert.match(css, /html\.design-editor-chrome-hidden \.de-panel--right \{[^}]*translateX/)
+  assert.match(css, /html\.designlayer-chrome-hidden \.de-panel--left \{[^}]*translateX/)
+  assert.match(css, /html\.designlayer-chrome-hidden \.de-panel--right \{[^}]*translateX/)
   // The parked panel has to be inert, not merely off-screen: a fixed element at
   // -100% is still tabbable, and Tab would walk into a panel nobody can see.
-  assert.match(css, /html\.design-editor-chrome-hidden \.de-panel \{[^}]*visibility: hidden/)
+  assert.match(css, /html\.designlayer-chrome-hidden \.de-panel \{[^}]*visibility: hidden/)
 })
 
 /*
@@ -875,7 +875,7 @@ await check("standing down animates the chrome's own box — never the app's lay
  * still held to is the one thing the third failure mode turns on.
  *
  * Both rules are matched at the START of a line, and that is not cosmetics.
- * `html.design-editor-chrome-hidden .de-toolbar {` also occurs indented inside
+ * `html.designlayer-chrome-hidden .de-toolbar {` also occurs indented inside
  * the reduced-motion block in `css/base.ts`, and an unanchored match found that
  * one instead — a two-declaration fade that satisfies every ban below while
  * saying nothing about the rule that actually hides the bar. The base rule was
@@ -885,7 +885,7 @@ await check("standing down animates the chrome's own box — never the app's lay
  */
 await check("the bar fades where it stands — never to an edge, never on transform", () => {
   const css = editorModule.shellCss
-  const hidden = css.match(/\nhtml\.design-editor-chrome-hidden \.de-toolbar \{[^}]*\}/)?.[0] ?? ""
+  const hidden = css.match(/\nhtml\.designlayer-chrome-hidden \.de-toolbar \{[^}]*\}/)?.[0] ?? ""
   assert.ok(hidden, "no rule hides the toolbar at all")
   assert.match(hidden, /opacity: 0/, "the bar never hands its pixels over")
   // The fade is a transition, not a disappearance. Without this the bans below

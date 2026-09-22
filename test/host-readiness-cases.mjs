@@ -36,7 +36,7 @@ const readiness = await import(
 assert.equal(readiness.hasHydratedReactHost(), false)
 
 const editorRoot = document.createElement("div")
-editorRoot.setAttribute("data-design-editor", "")
+editorRoot.setAttribute("data-designlayer", "")
 Object.defineProperty(editorRoot, "__reactFiber$editor", { value: {} })
 document.body.prepend(editorRoot)
 assert.equal(readiness.hasHydratedReactHost(), false)

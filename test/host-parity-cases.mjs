@@ -18,7 +18,7 @@
  *  - What differs is only ever what MUST differ. The panel is one product; the
  *    host decides how an edit is spelled, not which controls exist.
  *
- * Usage: node design-editor/test/host-parity-cases.mjs
+ * Usage: node designlayer/test/host-parity-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -115,7 +115,7 @@ const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), "de-parity-"))
 /**
  * The editor bundle, built once per host config.
  *
- * `src/core/config.ts` reads `window.__DESIGN_EDITOR_CONFIG__` at MODULE LOAD
+ * `src/core/config.ts` reads `window.__DESIGNLAYER_CONFIG__` at MODULE LOAD
  * and freezes the answer — deliberately, so two call sites can never disagree
  * mid-session. That means a host cannot be swapped at runtime, and a parity
  * test has to load the bundle twice. Doing it any other way would be testing a
@@ -123,7 +123,7 @@ const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), "de-parity-"))
  */
 async function editorFor(hostConfig) {
   const injected = {
-    apiBase: "/__design-editor",
+    apiBase: "/__designlayer",
     host: hostConfig,
     tailwind: { version: 3, breakpoints: { sm: 640, md: 768, lg: 1024 } },
   }
@@ -132,8 +132,8 @@ async function editorFor(hostConfig) {
   // different objects — setting only the jsdom one left every host running on
   // the built-in fallback, which is React with Tailwind. The test then agreed
   // with itself about two panels that were secretly the same panel.
-  window.__DESIGN_EDITOR_CONFIG__ = injected
-  globalThis.__DESIGN_EDITOR_CONFIG__ = injected
+  window.__DESIGNLAYER_CONFIG__ = injected
+  globalThis.__DESIGNLAYER_CONFIG__ = injected
 
   const bundled = await build({
     stdin: {
@@ -415,11 +415,11 @@ console.log("\nThe handover is written in the host's own vocabulary")
     handoffQueue().clear()
     const agent = createAgent({
       projectRoot: root,
-      stateDir: path.join(root, ".local", "design-editor"),
+      stateDir: path.join(root, ".local", "designlayer"),
       host: { framework },
     })
     const reply = await agent.runAgent({
-      prompt: "1 note and 1 edit from the design editor",
+      prompt: "1 note and 1 edit from DesignLayer",
       origin: "prompts",
       brief: "### src/overview\n- `<button>` — set `box-shadow` to `0 1px 2px`",
       files: ["src/overview"],

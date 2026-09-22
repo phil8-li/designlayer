@@ -1,18 +1,18 @@
 {
-  "name": "design-editor",
+  "name": "designlayer",
   "version": "0.1.0",
   "private": true,
-  "description": "A standalone visual editor for running React and Angular development servers.",
+  "description": "Figma-like editing for a React or Angular app that is already running.",
   "license": "MIT",
   "author": "Haoyang Li",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/phil8-li/design-editor.git"
+    "url": "git+https://github.com/phil8-li/designlayer.git"
   },
   "bugs": {
-    "url": "https://github.com/phil8-li/design-editor/issues"
+    "url": "https://github.com/phil8-li/designlayer/issues"
   },
-  "homepage": "https://github.com/phil8-li/design-editor#readme",
+  "homepage": "https://github.com/phil8-li/designlayer#readme",
   "keywords": [
     "nextjs",
     "angular",
@@ -27,7 +27,7 @@
   ],
   "type": "module",
   "bin": {
-    "design-editor": "./cli.mjs"
+    "designlayer": "./cli.mjs"
   },
   "exports": {
     "./config": "./config.mjs"
@@ -38,7 +38,7 @@
     "build.mjs",
     "cli.mjs",
     "config.mjs",
-    "design-editor.config.example.mjs",
+    "designlayer.config.example.mjs",
     "dist/",
     "runtime/",
     "server/",

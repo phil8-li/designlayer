@@ -66,7 +66,7 @@ const ROW = t.size.panelInset + PILL_HEIGHT + t.size.panelInset
 /**
  * Inspecting mode's `svg` override, held back at the toolbar's edge.
  *
- * `css/base.ts` forces `html.design-editor-inspecting svg { pointer-events:
+ * `css/base.ts` forces `html.designlayer-inspecting svg { pointer-events:
  * all }` onto EVERY `<svg>` in the document, so that an outline icon in the app
  * can be aimed at and selected through its hollow centre. It is the right rule
  * for the app; it is wrong inside a toolbar that collapses its control row by
@@ -92,7 +92,7 @@ const ROW = t.size.panelInset + PILL_HEIGHT + t.size.panelInset
  * thing a click is aimed at, and a click on one still reaches the button.
  */
 const SVG_HIT_TEST = `
-html.design-editor-inspecting [data-agentation-root] svg { pointer-events: none; }
+html.designlayer-inspecting [data-agentation-root] svg { pointer-events: none; }
 `
 
 /**

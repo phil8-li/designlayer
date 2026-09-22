@@ -177,26 +177,26 @@ check("the browser prelude carries the documented flag to the inspector", () => 
   vm.runInNewContext(browserPrelude(workspace, { proxyPort: 4567 }), sandbox)
   // Spread first: the prelude runs in a vm realm, so its arrays fail a strict
   // deepEqual on prototype identity alone, with a diff that shows no difference.
-  const breakpoints = [...sandbox.window.__DESIGN_EDITOR_CONFIG__.designSystem.breakpoints]
+  const breakpoints = [...sandbox.window.__DESIGNLAYER_CONFIG__.designSystem.breakpoints]
   assert.deepEqual(
     breakpoints.map((token) => [token.name, token.documented]),
     [["sm", false], ["md", true], ["lg", true], ["xl", true], ["2xl", true]]
   )
   assert.ok(breakpoints.find((token) => token.name === "xl").usage.includes("right panel"))
-  const browserConfig = sandbox.window.__DESIGN_EDITOR_CONFIG__
+  const browserConfig = sandbox.window.__DESIGNLAYER_CONFIG__
   assert.equal(browserConfig.designSystem.containerBreakpoints.length, 13)
   assert.equal(browserConfig.designSystem.responsiveMeasures.length, 3)
 })
 
 console.log("\nResponsive classes")
 
-// The bundle reads `window.__DESIGN_EDITOR_CONFIG__` once at import, so the host
+// The bundle reads `window.__DESIGNLAYER_CONFIG__` once at import, so the host
 // catalog has to be in place BEFORE the import. Set it afterwards and the panel
 // would render against the generic fallback, where no step is documented and
 // the whole point of the section — the sentence a designer reads — is absent.
 const injected = { window: {} }
 vm.runInNewContext(browserPrelude(workspace, { proxyPort: 4567 }), injected)
-globalThis.__DESIGN_EDITOR_CONFIG__ = injected.window.__DESIGN_EDITOR_CONFIG__
+globalThis.__DESIGNLAYER_CONFIG__ = injected.window.__DESIGNLAYER_CONFIG__
 
 const helpers = await loadEditorHelpers()
 
@@ -310,11 +310,11 @@ await checkAsync("breakpoint controls are named and keep the caret across their 
 
   const target = window.document.getElementById("target")
   const right = window.document.createElement("aside")
-  right.setAttribute("data-design-editor", "")
+  right.setAttribute("data-designlayer", "")
   window.document.body.append(right)
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }

@@ -250,15 +250,15 @@ const SPARSE = {
 /**
  * The editor's browser half, as a project with THIS catalog sees it.
  *
- * `src/core/config.ts` reads `globalThis.__DESIGN_EDITOR_CONFIG__` once at
+ * `src/core/config.ts` reads `globalThis.__DESIGNLAYER_CONFIG__` once at
  * module load, exactly as it does behind the proxy, so a second catalog needs a
  * second module instance. The `__fixture` export makes each bundle's text
  * unique and therefore its `data:` URL a distinct module rather than a cache
  * hit — the same trick `host-agnostic-cases.mjs` uses for its three hosts.
  */
 async function loadEditor(fixture, designSystem) {
-  globalThis.__DESIGN_EDITOR_CONFIG__ = {
-    apiBase: "/__design-editor",
+  globalThis.__DESIGNLAYER_CONFIG__ = {
+    apiBase: "/__designlayer",
     designSystem,
     // A host that names its glyphs, so `iconSection` has something to key on.
     icons: { attribute: "data-fx-icon", available: true },
@@ -324,11 +324,11 @@ async function withPanel(helpers, markup, run, { expanded = [] } = {}) {
   }
 
   const right = window.document.createElement("aside")
-  right.setAttribute("data-design-editor", "")
+  right.setAttribute("data-designlayer", "")
   window.document.body.append(right)
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }

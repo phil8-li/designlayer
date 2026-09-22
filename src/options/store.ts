@@ -139,7 +139,7 @@ function createStore(editor: EditorContext): OptionsStore {
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       setState({ optionSets: (await response.json()) as Record<string, ElementOptionSet> })
     } catch (error) {
-      console.warn("[design-editor] could not load saved options", error)
+      console.warn("[designlayer] could not load saved options", error)
     }
   }
 

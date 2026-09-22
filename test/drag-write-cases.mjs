@@ -17,7 +17,7 @@
  * agent to change `translate(50px, 20px)` into `translate(50px, 20px)`. Every
  * assertion on a "from" below is guarding that.
  *
- * Usage: node design-editor/test/drag-write-cases.mjs
+ * Usage: node designlayer/test/drag-write-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -143,7 +143,7 @@ const app = window.document.getElementById("app")
 // a resize purely off this attribute.
 const handle = window.document.createElement("div")
 handle.dataset.handle = "se"
-handle.setAttribute("data-design-editor", "")
+handle.setAttribute("data-designlayer", "")
 window.document.body.append(handle)
 
 function mount(html) {

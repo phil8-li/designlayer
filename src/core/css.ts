@@ -1,7 +1,7 @@
 /**
  * The shell stylesheet.
  *
- * Scoped under `[data-design-editor]` so it can never leak into the app being
+ * Scoped under `[data-designlayer]` so it can never leak into the app being
  * edited, and the app's own cascade can never reach in.
  */
 
@@ -110,7 +110,7 @@ export const shellCss =
    * may reorder in front of it.
    *
    * It also restates the reduced-motion clamp that `base.ts` applies to
-   * `[data-design-editor] *`, deliberately, because the card is not inside that
+   * `[data-designlayer] *`, deliberately, because the card is not inside that
    * subtree.
    */
   tooltipCss

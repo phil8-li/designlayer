@@ -51,7 +51,7 @@
  * The fixtures are invented — a small React app and a smaller Angular one,
  * written for this file.
  *
- * Usage: node design-editor/test/component-usage-cases.mjs
+ * Usage: node designlayer/test/component-usage-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -62,7 +62,7 @@ import path from "node:path"
 
 import { resolveConfig } from "../config.mjs"
 import { createComponentUsage } from "../server/component-usage.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 
 let passed = 0
 let failed = 0
@@ -504,7 +504,7 @@ console.log("\nThe endpoint the inspector asks through")
 
 /** The routes over a real loopback socket, because the guard reads the socket. */
 async function server(config) {
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const listener = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

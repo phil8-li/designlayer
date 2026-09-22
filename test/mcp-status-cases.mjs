@@ -23,7 +23,7 @@ import http from "node:http"
 import { resolveConfig } from "../config.mjs"
 import { createHandoffQueue } from "../server/handoff.mjs"
 import { createMcpEndpoint } from "../server/mcp.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 
 let passed = 0
 let failed = 0
@@ -179,7 +179,7 @@ await new Promise((resolve) => server.close(resolve))
  * Everything above this line exercises the queue and the endpoint directly, and
  * every case passed while the feature was completely broken in the browser.
  *
- * `GET /__design-editor/mcp/status` read a free `config` that does not exist in
+ * `GET /__designlayer/mcp/status` read a free `config` that does not exist in
  * the handler's scope — `route()` takes its dependencies as arguments — so the
  * route threw a ReferenceError and answered 500 to every request it ever
  * received. The three facts this suite pins so carefully never reached the
@@ -194,7 +194,7 @@ console.log("\nThe route the panel reads it through")
 /** The routes over a real loopback socket, because the guard reads the socket. */
 async function statusRoute(ports) {
   const config = resolveConfig({ ports })
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const listener = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

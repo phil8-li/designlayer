@@ -74,7 +74,7 @@
  * exercise the SHAPES the real ones have without being anybody's real design
  * system.
  *
- * Usage: node design-editor/test/design-system-tab-cases.mjs
+ * Usage: node designlayer/test/design-system-tab-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -98,9 +98,9 @@ async function check(name, fn) {
 
 // ── The world the bundle loads into ────────────────────────────────────────
 
-const API = "/__design-editor"
+const API = "/__designlayer"
 
-globalThis.__DESIGN_EDITOR_CONFIG__ = {
+globalThis.__DESIGNLAYER_CONFIG__ = {
   apiBase: API,
   designSystem: {
     name: "Host",
@@ -525,7 +525,7 @@ async function settle(turns = 6) {
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

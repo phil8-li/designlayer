@@ -71,7 +71,7 @@ export const AUDIT = `(() => {
   const found = new Map()
   const spilled = new Map()
   for (const el of document.querySelectorAll("*")) {
-    if (!el.closest("[data-design-editor], .de-app-menu, .de-options-root, .de-root, .de-token-pop")) continue
+    if (!el.closest("[data-designlayer], .de-app-menu, .de-options-root, .de-root, .de-token-pop")) continue
     if (!rounded(el)) continue
 
     let host = el.parentElement

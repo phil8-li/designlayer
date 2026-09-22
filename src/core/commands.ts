@@ -76,7 +76,7 @@ export function runCommand(id: CommandId): boolean {
   try {
     run()
   } catch (error) {
-    console.warn(`[design-editor] command ${id} failed`, error)
+    console.warn(`[designlayer] command ${id} failed`, error)
   }
   return true
 }

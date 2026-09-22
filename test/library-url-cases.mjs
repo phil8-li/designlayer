@@ -39,7 +39,7 @@
  * persistence: a URL that could not be READ is installed anyway, carrying its
  * sentence, and a URL that could not be SEEN AT ALL is refused outright.
  *
- * Usage: node design-editor/test/library-url-cases.mjs
+ * Usage: node designlayer/test/library-url-cases.mjs
  */
 
 import assert from "node:assert/strict"

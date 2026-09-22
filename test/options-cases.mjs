@@ -8,7 +8,7 @@
  * failure this guards against is precisely the normaliser silently dropping a
  * field the client added.
  *
- * Usage: node design-editor/test/options-cases.mjs
+ * Usage: node designlayer/test/options-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -108,7 +108,7 @@ async function inventoryCases() {
   globalThis.Element = dom.window.Element
   globalThis.HTMLElement = dom.window.HTMLElement
   globalThis.CustomEvent = dom.window.CustomEvent
-  globalThis.__DESIGN_EDITOR_CONFIG__ = {
+  globalThis.__DESIGNLAYER_CONFIG__ = {
     controls: {
       leva: {
         storeGlobal: "__STORE",
@@ -210,7 +210,7 @@ async function inventoryCases() {
     dom.window.__STORE = stubStore(SAMPLE, SAMPLE_VISIBLE)
     const control = inventory.readInventory().sections[0].folders[0].controls[0]
     let detail = null
-    dom.window.addEventListener("design-editor:highlight-elements", (event) => {
+    dom.window.addEventListener("designlayer:highlight-elements", (event) => {
       detail = event.detail
     }, { once: true })
     const resolved = inventory.highlightControlTargets(control)
@@ -318,7 +318,7 @@ async function sourceDefaultCases() {
   const { createControlDefaults } = await import(
     path.join(PACKAGE_DIR, "server/control-defaults.mjs")
   )
-  const { createDesignEditorRoutes } = await import(
+  const { createDesignLayerRoutes } = await import(
     path.join(PACKAGE_DIR, "server/routes.mjs")
   )
   const fixtureDir = path.join(PACKAGE_DIR, "test/.control-default-fixture")
@@ -357,7 +357,7 @@ async function sourceDefaultCases() {
   })
 
   check("a relative projectRoot resolves from the config file, not process cwd", () => {
-    const configPath = path.join(PACKAGE_DIR, ".local", "configs", "design-editor.config.mjs")
+    const configPath = path.join(PACKAGE_DIR, ".local", "configs", "designlayer.config.mjs")
     const resolved = resolveConfig(
       { projectRoot: "../.." },
       { configPath, cwd: path.join(PACKAGE_DIR, "unrelated-cwd") }
@@ -436,7 +436,7 @@ async function sourceDefaultCases() {
   })
 
   await checkAsync("loopback routes expose GET, PUT, and DELETE against the configured literal", async () => {
-    const routes = createDesignEditorRoutes(config)
+    const routes = createDesignLayerRoutes(config)
     const server = http.createServer((request, response) => {
       if (routes.handle(request, response)) return
       response.writeHead(404).end()
@@ -483,7 +483,7 @@ async function sourceDefaultCases() {
   })
 
   await checkAsync("refuses a source-root symlink that resolves outside the project", async () => {
-    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "design-editor-outside-"))
+    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "designlayer-outside-"))
     const outsideFile = path.join(outsideDir, "defaults.ts")
     const linkedFile = path.join(fixtureDir, "linked-defaults.ts")
     try {

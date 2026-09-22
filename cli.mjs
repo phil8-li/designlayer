@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * `design-editor [appPort] [--config <path>] [--proxy-port N] [--ws-port N]`
+ * `designlayer [appPort] [--config <path>] [--proxy-port N] [--ws-port N]`
  *
  * Every flag is consumed here. The vendored CLI parses `process.argv` at module
  * scope with commander and aborts on anything it does not declare, so argv is
@@ -28,14 +28,14 @@ import { openBrowser } from "./runtime/open-browser.mjs"
 import { createStartScreen } from "./runtime/start-screen.mjs"
 import { patchOverlay } from "./runtime/vendor-patch.mjs"
 
-const USAGE = `Usage: design-editor [appPort] [options]
+const USAGE = `Usage: designlayer [appPort] [options]
 
   (no arguments)          Open the start screen: pick a running app and its folder
   appPort                 Dev server port (default: config app.port, else framework detection)
   --start / --no-start    Force or skip the start screen (default: when no port is known)
   --dev                   Start the app's dev server too, and attach when it is up
   --dev-script <name>     npm script --dev runs (default: config app.devScript, "dev")
-  --config <path>         Config file (default: nearest design-editor.config.mjs above cwd)
+  --config <path>         Config file (default: nearest designlayer.config.mjs above cwd)
   --project-root <path>   Project the config loads against (default: the current folder)
   --start-screen-port <n> Port for the start screen (default: 3455, else any free port)
   --proxy-port <n>        Port for the editing proxy the browser loads
@@ -178,7 +178,7 @@ export async function main(argv = process.argv.slice(2)) {
     const overlay = resolveVendor(config).overlay
     const inProject = overlay.startsWith(`${config.projectRoot}${path.sep}`)
     console.log(`Checked: ${inProject ? path.relative(config.projectRoot, overlay) : overlay}`)
-    console.log(`Config: ${config.configPath ?? "defaults (no design-editor.config.mjs found)"}`)
+    console.log(`Config: ${config.configPath ?? "defaults (no designlayer.config.mjs found)"}`)
     console.log(`Patched bundle: ${source.length} -> ${patched.length} bytes`)
     return
   }
@@ -255,7 +255,7 @@ export async function main(argv = process.argv.slice(2)) {
       // and proxying nothing, and a silent correction is impossible to debug
       // when some later thing goes wrong for an unrelated reason.
       console.log(
-        `[design-editor] your app is on http://${urlHost(found)}:${appPort} — attaching there`
+        `[designlayer] your app is on http://${urlHost(found)}:${appPort} — attaching there`
       )
     }
     appHost = found
@@ -300,7 +300,7 @@ async function supervise(options) {
   // own, so nothing takes it down on the way out unless this line does.
   holdUntilExit(() => running?.child.kill("SIGTERM"))
 
-  console.log(`[design-editor] open ${screen.url} to choose an app`)
+  console.log(`[designlayer] open ${screen.url} to choose an app`)
   if (options.open !== false) openBrowser(screen.url)
 
   for (;;) {
@@ -350,7 +350,7 @@ function farewell(choice, code, signal) {
   const name = choice.packageName ?? path.basename(choice.projectRoot)
   if (signal) return `The editor for ${name} was stopped (${signal}). Choose an app to start again.`
   if (code === 0) return `The editor for ${name} closed. Choose an app to start again.`
-  return `The editor for ${name} stopped with code ${code}. Its output is in the terminal running design-editor.`
+  return `The editor for ${name} stopped with code ${code}. Its output is in the terminal running designlayer.`
 }
 
 function startEditor(options, choice, screen) {
@@ -360,7 +360,7 @@ function startEditor(options, choice, screen) {
     // fourth stream is the IPC channel `onReady` answers on.
     stdio: ["inherit", "inherit", "inherit", "ipc"],
     // Deliberately no `cwd`. See `--project-root`.
-    env: { ...process.env, DESIGN_EDITOR_CHOOSER_URL: screen.url },
+    env: { ...process.env, DESIGNLAYER_CHOOSER_URL: screen.url },
   })
 
   const running = { child, replaced: false }
@@ -371,7 +371,7 @@ function startEditor(options, choice, screen) {
       projectRoot: choice.projectRoot,
       packageName: choice.packageName,
     })
-    console.log(`[design-editor] editing at ${message.url} — ${screen.url} to switch apps`)
+    console.log(`[designlayer] editing at ${message.url} — ${screen.url} to switch apps`)
   })
 
   // A child that dies on its own — a crash, a port clash, a project the vendor
@@ -382,7 +382,7 @@ function startEditor(options, choice, screen) {
       if (!running.replaced) {
         const reason = farewell(choice, code, signal)
         screen.reportStopped(reason)
-        console.log(`[design-editor] ${reason}`)
+        console.log(`[designlayer] ${reason}`)
       }
       resolve()
     })
@@ -431,7 +431,7 @@ if (isDirectRun()) {
   try {
     await main()
   } catch (error) {
-    console.error(`\n  design-editor: ${error.message}\n`)
+    console.error(`\n  designlayer: ${error.message}\n`)
     process.exit(1)
   }
 }

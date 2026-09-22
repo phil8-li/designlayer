@@ -82,7 +82,7 @@ async function bundleScene() {
     entryPoints: [path.join(ROOT, "tools", "panel-harness-scene.js")],
     bundle: true,
     format: "iife",
-    globalName: "DesignEditorHarness",
+    globalName: "DesignLayerHarness",
     platform: "browser",
     target: ["chrome110"],
     tsconfig: path.join(ROOT, "tsconfig.json"),
@@ -102,7 +102,7 @@ function pageHtml(sceneCode) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>design-editor — inspector Design tab</title>
+<title>designlayer — inspector Design tab</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; }
   body { background: #f6f7f9; }
@@ -114,10 +114,10 @@ function pageHtml(sceneCode) {
   // ?theme=light opens the light variant directly, so the page is useful on its
   // own and not only under Playwright.
   var requested = new URLSearchParams(location.search).get("theme") === "light" ? "light" : "dark";
-  var harness = DesignEditorHarness.mount({ theme: requested });
+  var harness = DesignLayerHarness.mount({ theme: requested });
   window.__panelHarness = {
     handle: harness,
-    measure: function () { return DesignEditorHarness.measure(harness.panel); },
+    measure: function () { return DesignLayerHarness.measure(harness.panel); },
   };
   // The inspector renders on a rAF after the selection lands, so the flag the
   // driver waits on is set a frame later — not when mount() returns.

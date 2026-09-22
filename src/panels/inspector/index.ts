@@ -489,7 +489,7 @@ export function installInspector(editor: EditorContext): void {
       try {
         node = section(context)
       } catch (error) {
-        console.warn("[design-editor] inspector section failed", error)
+        console.warn("[designlayer] inspector section failed", error)
       }
       if (node) host.append(node)
     }

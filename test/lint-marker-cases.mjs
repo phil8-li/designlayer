@@ -63,7 +63,7 @@
  * notes' end, which is the seam a user actually moves. A test that set the flags
  * itself would pass against two layers wired to nothing.
  *
- * Usage: node design-editor/test/lint-marker-cases.mjs
+ * Usage: node designlayer/test/lint-marker-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -87,9 +87,9 @@ async function check(name, fn) {
 
 // ── The world the bundle loads into ────────────────────────────────────────
 
-const API = "/__design-editor"
+const API = "/__designlayer"
 
-globalThis.__DESIGN_EDITOR_CONFIG__ = {
+globalThis.__DESIGNLAYER_CONFIG__ = {
   apiBase: API,
   designSystem: {
     name: "Host",
@@ -421,7 +421,7 @@ async function settle(turns = 6) {
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }

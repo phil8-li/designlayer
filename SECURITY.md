@@ -2,7 +2,7 @@
 
 ## What this tool is
 
-`design-editor` is a development tool. It starts a loopback proxy in front of
+DesignLayer is a development tool. It starts a loopback proxy in front of
 your dev server and writes edits back into your component source, which means
 it has write access to the project it is pointed at. It is not hardened for
 any other use, and it should never run in production, in CI against real
@@ -34,7 +34,7 @@ Report privately, not in a public issue.
 
 Use GitHub's private reporting — **Security → Advisories → Report a
 vulnerability** on
-<https://github.com/phil8-li/design-editor/security/advisories/new>. That opens
+<https://github.com/phil8-li/designlayer/security/advisories/new>. That opens
 a channel only the maintainers can read, and it lets a fix and an advisory ship
 together.
 

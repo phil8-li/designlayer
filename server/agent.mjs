@@ -96,12 +96,12 @@ async function writeHandoff(config, prompt, request) {
   // It used to hold only the subject line and a description of the selected
   // element, which was survivable while an "Ask AI" box was the surface that
   // filed these: its prompt WAS the whole intent. The outbox is not like that
-  // — its prompt is "3 notes and 2 edits from the design editor" and every word
+  // — its prompt is "3 notes and 2 edits from DesignLayer" and every word
   // of substance is in `brief`. Leaving it out left a file on disk recording a
   // count and "No element was selected.", which is not a record of anything.
   const brief = typeof request?.brief === "string" ? request.brief.trim() : ""
   const body = [
-    `# Design editor request`,
+    `# DesignLayer request`,
     "",
     `Captured ${new Date().toISOString()}`,
     "",

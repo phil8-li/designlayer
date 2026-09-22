@@ -68,7 +68,7 @@ export interface EditorContext {
   refresh(): void
   onRefresh(fn: () => void): () => void
   toast(message: string, kind?: "info" | "error"): void
-  /** Base URL for design-editor server routes, e.g. `/__design-editor`. */
+  /** Base URL for designlayer server routes, e.g. `/__designlayer`. */
   apiBase: string
 }
 

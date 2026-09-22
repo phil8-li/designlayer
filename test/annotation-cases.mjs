@@ -46,7 +46,7 @@
  * way. Telling an Angular developer to open a React component names a file that
  * was never going to exist, and reads as a brief about a different application.
  *
- * Usage: node design-editor/test/annotation-cases.mjs
+ * Usage: node designlayer/test/annotation-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -165,7 +165,7 @@ const COMPONENTS = {
   BUTTON: { componentName: "SaveButton", stack: [{ componentName: "Toolbar" }] },
   P: { componentName: "Lede", stack: [{ componentName: "Panel" }] },
 }
-window.__DESIGN_EDITOR_BRIDGE__ = {
+window.__DESIGNLAYER_BRIDGE__ = {
   elementInfo: (element) => COMPONENTS[element?.tagName] ?? null,
 }
 
@@ -229,7 +229,7 @@ const bundled = await build({
  * One build, two files, one import each.
  *
  * The TEXT is identical — nothing host-specific is compiled in. What differs is
- * `src/core/config.ts`, which reads `__DESIGN_EDITOR_CONFIG__` at MODULE LOAD
+ * `src/core/config.ts`, which reads `__DESIGNLAYER_CONFIG__` at MODULE LOAD
  * and freezes the answer so two call sites can never disagree mid-session. Node
  * keys its module cache on the URL, so two loads of one URL would be one module
  * and the second host would silently run under the first host's frozen config —
@@ -243,11 +243,11 @@ const bundled = await build({
  * processes on the machine.
  */
 async function loadEditor(name, framework, app = { url: null, name: null }) {
-  const injected = { apiBase: "/__design-editor", app, host: { framework, tailwind: true } }
+  const injected = { apiBase: "/__designlayer", app, host: { framework, tailwind: true } }
   // On BOTH globals: the launcher writes it onto the page's `window`, and
   // `config.ts` reads `globalThis`, which under Node is a different object.
-  window.__DESIGN_EDITOR_CONFIG__ = injected
-  globalThis.__DESIGN_EDITOR_CONFIG__ = injected
+  window.__DESIGNLAYER_CONFIG__ = injected
+  globalThis.__DESIGNLAYER_CONFIG__ = injected
 
   const file = path.join(bundleDir, `${name}.mjs`)
   fs.writeFileSync(file, bundled.outputFiles[0].text)
@@ -294,8 +294,8 @@ const lede = $("#lede")
  * resolved — one shared bucket, which is the `--dev` case and the case every
  * lane here runs under except the two in "Switching apps" below.
  */
-const STORAGE_KEY = "design-editor.annotations.app:/"
-const SETTINGS_KEY = "design-editor.annotation-settings"
+const STORAGE_KEY = "designlayer.annotations.app:/"
+const SETTINGS_KEY = "designlayer.annotation-settings"
 
 /**
  * Both stores are module state and both outlive a case, so a case that did not
@@ -517,10 +517,10 @@ check("deleting a note is the only way off the list", () => {
 const shop = await loadEditor("app-shop", "react", { url: "http://127.0.0.1:3000", name: "shop-web" })
 const docs = await loadEditor("app-docs", "react", { url: "http://127.0.0.1:4200", name: "docs-site" })
 
-const SHOP_KEY = "design-editor.annotations.http-127-0-0-1-3000:/"
-const DOCS_KEY = "design-editor.annotations.http-127-0-0-1-4200:/"
+const SHOP_KEY = "designlayer.annotations.http-127-0-0-1-3000:/"
+const DOCS_KEY = "designlayer.annotations.http-127-0-0-1-4200:/"
 /** What every build before the app chooser wrote to: the path and nothing else. */
-const LEGACY_KEY = "design-editor.annotations./"
+const LEGACY_KEY = "designlayer.annotations./"
 
 /** The same note `note()` makes, on a lane of the case's choosing. */
 function noteOn(lane, element, comment) {
@@ -1088,7 +1088,7 @@ const slots = {
   right: window.document.createElement("div"),
 }
 for (const slot of Object.values(slots)) {
-  slot.setAttribute("data-design-editor", "")
+  slot.setAttribute("data-designlayer", "")
   window.document.body.append(slot)
 }
 /**
@@ -1268,7 +1268,7 @@ await checkAsync("re-attaching never binds a note to the editor's own chrome", a
   // A selector that now matches a panel rather than the page. A marker that
   // anchored itself to the editor would follow the panel around and annotate
   // the annotator.
-  note.target.selector = "[data-design-editor]"
+  note.target.selector = "[data-designlayer]"
   await settle()
   assert.equal(note.element, null, "the marker re-attached itself to the editor")
 })
@@ -2036,7 +2036,7 @@ check("hovering a row names its note, and leaving it names nothing", () => {
   const row = noteRows()[0]
 
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () => hover(row, "mouseenter")),
+    heardOn("designlayer:annotation-hover", () => hover(row, "mouseenter")),
     [{ id: pinned.id }],
     "hovering a row told the canvas nothing, so the pin never lights"
   )
@@ -2045,7 +2045,7 @@ check("hovering a row names its note, and leaving it names nothing", () => {
   // `null` rather than silence. A canvas that only ever hears "now this one"
   // leaves the last pin lit long after the pointer has gone.
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () => hover(row, "mouseleave")),
+    heardOn("designlayer:annotation-hover", () => hover(row, "mouseleave")),
     [{ id: null }]
   )
   assert.ok(!row.classList.contains("de-ann-item--hover"))
@@ -2064,7 +2064,7 @@ check("an edit row names itself too, so the previous pin does not stay lit", () 
   })
 
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () => hover(editRows()[0], "mouseenter")),
+    heardOn("designlayer:annotation-hover", () => hover(editRows()[0], "mouseenter")),
     [{ id: made.id }],
     "moving from a note onto an edit left the note's pin lit"
   )
@@ -2089,7 +2089,7 @@ check("a keyboard user reaches the row actions, and lights the pin doing it", ()
   // The reveal is `:hover`/`:focus-within` in the stylesheet, so focus has to
   // light the row for the same reason the pointer does.
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () =>
+    heardOn("designlayer:annotation-hover", () =>
       actions[0].dispatchEvent(new window.FocusEvent("focusin", { bubbles: true }))
     ),
     [{ id: pinned.id }]
@@ -2099,7 +2099,7 @@ check("a keyboard user reaches the row actions, and lights the pin doing it", ()
   // Tabbing between this row's own buttons is not leaving the row. Reporting it
   // would blink the pin once per keypress.
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () =>
+    heardOn("designlayer:annotation-hover", () =>
       actions[0].dispatchEvent(
         new window.FocusEvent("focusout", { bubbles: true, relatedTarget: actions[1] })
       )
@@ -2109,7 +2109,7 @@ check("a keyboard user reaches the row actions, and lights the pin doing it", ()
   )
 
   assert.deepEqual(
-    heardOn("design-editor:annotation-hover", () =>
+    heardOn("designlayer:annotation-hover", () =>
       actions[actions.length - 1].dispatchEvent(
         new window.FocusEvent("focusout", { bubbles: true, relatedTarget: eyeButton() })
       )
@@ -2132,7 +2132,7 @@ check("edit asks the canvas to reopen the note, and only a note offers it", () =
   assert.equal(edit.getAttribute("data-de-tip"), edit.getAttribute("aria-label"))
   assert.equal(edit.getAttribute("title"), null, "the OS tooltip is back over the styled one")
   assert.deepEqual(
-    heardOn("design-editor:annotation-edit", () => press(edit)),
+    heardOn("designlayer:annotation-edit", () => press(edit)),
     [{ id: pinned.id }],
     "the edit button opened nothing"
   )
@@ -2162,7 +2162,7 @@ check("a pin hovered on the page lights its row, and no other", () => {
   const rows = noteRows()
 
   const mirror = (id) =>
-    window.dispatchEvent(new window.CustomEvent("design-editor:marker-hover", { detail: { id } }))
+    window.dispatchEvent(new window.CustomEvent("designlayer:marker-hover", { detail: { id } }))
 
   mirror(first.id)
   assert.deepEqual(

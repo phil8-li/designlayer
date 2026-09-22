@@ -38,7 +38,7 @@
  * so the fixture removes that difference and the traversal cases below assert
  * the guard on its own terms.
  *
- * Usage: node design-editor/test/library-store-cases.mjs
+ * Usage: node designlayer/test/library-store-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -49,7 +49,7 @@ import path from "node:path"
 
 import { resolveConfig } from "../config.mjs"
 import { createLibraryStore } from "../server/libraries.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 
 import { PACKAGE_DIR } from "./host.mjs"
 
@@ -102,7 +102,7 @@ async function project() {
   await write("README.md", "# Temp host\n")
   await write("node_modules/@vendor/ui/theme.css", THEME)
   await write("dist/bundle.css", THEME)
-  await write(".local/design-editor/scratch.css", THEME)
+  await write(".local/designlayer/scratch.css", THEME)
 
   const config = resolveConfig({ projectRoot: root }, { cwd: root })
   return {
@@ -372,7 +372,7 @@ await withProject("every kind is found, ranked, and nothing vendored is", async 
   for (const skipped of [
     "node_modules/@vendor/ui/theme.css",
     "dist/bundle.css",
-    ".local/design-editor/scratch.css",
+    ".local/designlayer/scratch.css",
     "package.json",
     "tsconfig.json",
   ]) {
@@ -439,7 +439,7 @@ console.log("\nThe six endpoints the browser reaches all of this through")
  */
 await checkAsync("every library endpoint answers over loopback", async () => {
   const { config, cleanup } = await project()
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()
@@ -501,7 +501,7 @@ await checkAsync("every library endpoint answers over loopback", async () => {
 
 await checkAsync("an unknown library is a 404 and a malformed id is a 400", async () => {
   const { config, cleanup } = await project()
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

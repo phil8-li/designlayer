@@ -15,7 +15,7 @@
  * is "" in the running app until that is restored; a fixture with an explicit
  * path is the only way to prove the rest of the chain works today.
  *
- * Usage: node design-editor/test/variant-cases.mjs
+ * Usage: node designlayer/test/variant-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -64,7 +64,7 @@ const { DEFAULT_VARIANT_RECOGNIZERS, parseVariantDeclarations, createVariantCata
   path.join(PACKAGE_DIR, "server", "variants.mjs")
 )
 const { resolveConfig } = await import(path.join(PACKAGE_DIR, "config.mjs"))
-const { createDesignEditorRoutes } = await import(path.join(PACKAGE_DIR, "server", "routes.mjs"))
+const { createDesignLayerRoutes } = await import(path.join(PACKAGE_DIR, "server", "routes.mjs"))
 
 const { build } = await import("esbuild")
 const bundled = await build({
@@ -196,7 +196,7 @@ check("a file outside the editable source roots is refused, not read", () => {
 })
 
 await checkAsync("the route serves loopback and refuses a foreign or null Origin", async () => {
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()
@@ -309,7 +309,7 @@ const bridge = {
 }
 const writer = client.createWriter(bridge)
 
-const API_BASE = "/__design-editor"
+const API_BASE = "/__designlayer"
 const SOURCE = {
   filePath: FIXTURE_RELATIVE,
   lineNumber: 37,

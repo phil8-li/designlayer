@@ -24,7 +24,7 @@ test/.icon-set-fixture/
 # Regenerate, never commit.
 .icon-lab/
 
-# Which remote machine `launch/Design Editor.command` opens the editor against.
+# Which remote machine `launch/DesignLayer.command` opens the editor against.
 # One line naming somebody's dev box — theirs, not this repository's, and the
 # launcher refuses to run rather than falling back to a hostname baked in here.
 launch/.env

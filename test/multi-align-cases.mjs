@@ -21,7 +21,7 @@
  * same six marks, same order, a different `aria-label` so `position-cases.mjs`
  * keeps finding the strip it is about.
  *
- * Usage: node design-editor/test/multi-align-cases.mjs
+ * Usage: node designlayer/test/multi-align-cases.mjs
  */
 
 import assert from "node:assert/strict"

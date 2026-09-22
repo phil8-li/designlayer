@@ -55,7 +55,7 @@
  * under `os.tmpdir()` and deleted afterwards. Nothing is copied from any real
  * design system.
  *
- * Usage: node design-editor/test/insert-cases.mjs
+ * Usage: node designlayer/test/insert-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -66,7 +66,7 @@ import path from "node:path"
 import { JSDOM } from "jsdom"
 
 import { resolveConfig } from "../config.mjs"
-import { createDesignEditorRoutes } from "../server/routes.mjs"
+import { createDesignLayerRoutes } from "../server/routes.mjs"
 
 import { PACKAGE_DIR } from "./host.mjs"
 
@@ -124,8 +124,8 @@ globalThis.DOMMatrixReadOnly = class {
   }
 }
 
-globalThis.__DESIGN_EDITOR_CONFIG__ = {
-  apiBase: "/__design-editor",
+globalThis.__DESIGNLAYER_CONFIG__ = {
+  apiBase: "/__designlayer",
   designSystem: {
     name: "Host",
     trackingUnit: "em",
@@ -267,7 +267,7 @@ const EMPTY = container("display:block;padding:8px", [20, 1100, 160, 120], [])
 
 /** The editor's own chrome, which a drop must never resolve into. */
 const CHROME = window.document.createElement("div")
-CHROME.setAttribute("data-design-editor", "")
+CHROME.setAttribute("data-designlayer", "")
 setRect(CHROME, [600, 0, 260, 800])
 const CHROME_INNER = window.document.createElement("button")
 CHROME_INNER.textContent = "Insert instance"
@@ -393,7 +393,7 @@ console.log("\nDragging a card onto the page")
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
@@ -445,7 +445,7 @@ const PLACEABLE = {
 }
 
 const CARD = window.document.createElement("button")
-CARD.setAttribute("data-design-editor", "")
+CARD.setAttribute("data-designlayer", "")
 CARD.setAttribute("data-de-asset", "card")
 setRect(CARD, [620, 200, 220, 96])
 CHROME.append(CARD)
@@ -656,7 +656,7 @@ function reactProject() {
 }
 
 async function serve(config) {
-  const routes = createDesignEditorRoutes(config)
+  const routes = createDesignLayerRoutes(config)
   const server = http.createServer((request, response) => {
     if (routes.handle(request, response)) return
     response.writeHead(404).end()

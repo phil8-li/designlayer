@@ -56,7 +56,7 @@ function preludePayload(raw = {}) {
 /**
  * The browser half of the config, as a page behind the proxy really loads it.
  *
- * `src/core/config.ts` reads `window.__DESIGN_EDITOR_CONFIG__` once at module
+ * `src/core/config.ts` reads `window.__DESIGNLAYER_CONFIG__` once at module
  * scope, so a second payload needs a second module instance — hence the unique
  * `__marker` export, which is what makes each data: URL a distinct module
  * rather than a cache hit. Borrowed from `host-agnostic-cases.mjs`, where the
@@ -64,7 +64,7 @@ function preludePayload(raw = {}) {
  */
 let marker = 0
 async function readConfigIn(payload) {
-  globalThis.__DESIGN_EDITOR_CONFIG__ = payload
+  globalThis.__DESIGNLAYER_CONFIG__ = payload
   const { build } = await import("esbuild")
   const bundled = await build({
     stdin: {
@@ -252,12 +252,12 @@ check("inspecting mode's svg override is still the rule being outranked", () => 
   // Either way this is the line that has to be looked at.
   assert.match(
     read("src/core/css/base.ts"),
-    /html\.design-editor-inspecting svg \{\s*pointer-events: all;/,
+    /html\.designlayer-inspecting svg \{\s*pointer-events: all;/,
     "base.ts no longer forces pointer-events on svg — re-check css/agentation.ts"
   )
   assert.match(
     read("src/core/css/agentation.ts"),
-    /html\.design-editor-inspecting \[data-agentation-root\] svg \{ pointer-events: none; \}/,
+    /html\.designlayer-inspecting \[data-agentation-root\] svg \{ pointer-events: none; \}/,
     "the counter-rule no longer names the mode, so it no longer outranks base.ts"
   )
 })

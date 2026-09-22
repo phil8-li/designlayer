@@ -73,7 +73,7 @@
  * Nothing about the canvas is decided here. The panel writes `markersShown` in
  * the store and the marker layer reads it; the two layers' mutual exclusion is
  * the marker layer's business, driven by that one boolean. Row and badge light
- * each other up through `design-editor:lint-hover` and its mirror, the same
+ * each other up through `designlayer:lint-hover` and its mirror, the same
  * window-event seam the annotation layer uses, for the same reason: neither
  * surface should have to import the other to exist.
  */
@@ -113,15 +113,15 @@ import { displayLiteral, hintFor, ruleTitle, swatchFor } from "./plain"
  * The two halves of the row/badge hover pair, named exactly as the marker
  * contract names them.
  *
- * `design-editor:lint-hover`        panel  -> canvas  `{ id: string | null }`
- * `design-editor:lint-marker-hover` canvas -> panel   `{ id: string | null }`
+ * `designlayer:lint-hover`        panel  -> canvas  `{ id: string | null }`
+ * `designlayer:lint-marker-hover` canvas -> panel   `{ id: string | null }`
  *
  * `null` is a value in the pair rather than a second event, because the two
  * halves have to be handled by one code path — a listener that only ever hears
  * "now this one" is how a highlight gets stuck on a row nobody is pointing at.
  */
-const HOVER_EVENT = "design-editor:lint-hover"
-const MARKER_HOVER_EVENT = "design-editor:lint-marker-hover"
+const HOVER_EVENT = "designlayer:lint-hover"
+const MARKER_HOVER_EVENT = "designlayer:lint-marker-hover"
 
 /** The row the canvas is pointing at. The look belongs to `css/lint.ts`. */
 const ROW_ACTIVE = "de-lint-row--active"

@@ -43,8 +43,8 @@ import { agentationCss } from "../core/css/agentation"
 import { CHROME_ATTR, el } from "../core/dom"
 import { editorMode, setMode, type EditorMode } from "../core/store"
 
-const HOST_ID = "design-editor-agentation"
-const STYLE_ID = "design-editor-agentation-style"
+const HOST_ID = "designlayer-agentation"
+const STYLE_ID = "designlayer-agentation-style"
 
 /**
  * The stylesheet Agentation appends to `<head>` while its picker is armed, and
@@ -106,7 +106,7 @@ export function installAgentation(): void {
       // are already looking when they want it — anywhere else in the chrome
       // would be a permanent slot for a string that is read about twice.
       onSessionCreated: (sessionId: string) => {
-        console.info(`[design-editor] agentation session ${sessionId}`)
+        console.info(`[designlayer] agentation session ${sessionId}`)
       },
     })
   )

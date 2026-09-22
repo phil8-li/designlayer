@@ -127,7 +127,7 @@ const editor = await import(
 )
 
 const { tokens } = editor
-const STORAGE_KEY = "design-editor:panel-widths"
+const STORAGE_KEY = "designlayer:panel-widths"
 
 let failures = 0
 async function check(name, run) {

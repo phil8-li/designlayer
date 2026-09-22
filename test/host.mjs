@@ -13,11 +13,11 @@
  * rather than each recomputing a relative path — the moment two of them spell
  * the guess differently, three suites run and the fourth silently does not.
  *
- * Resolution order: DESIGN_EDITOR_HOST, then the sibling checkout. When neither
+ * Resolution order: DESIGNLAYER_HOST, then the sibling checkout. When neither
  * is there the suite prints why it is skipping and exits 0, so `npm test` still
  * passes in a bare clone and nobody reads a skip as a pass.
  *
- * The pinned numbers are the Workspaces app's, so pointing DESIGN_EDITOR_HOST at
+ * The pinned numbers are the Workspaces app's, so pointing DESIGNLAYER_HOST at
  * a different app makes those four suites fail on the counts rather than on the
  * contract. That is the trade for having a real host in the net at all.
  */
@@ -33,9 +33,9 @@ export const PACKAGE_DIR = fileURLToPath(new URL("..", import.meta.url))
 const SIBLING_HOST = path.join(path.dirname(PACKAGE_DIR), "Workspaces")
 
 export function hostRoot() {
-  const configured = process.env.DESIGN_EDITOR_HOST
+  const configured = process.env.DESIGNLAYER_HOST
   const candidate = configured ? path.resolve(configured) : SIBLING_HOST
-  return fs.existsSync(path.join(candidate, "design-editor.config.mjs")) ? candidate : null
+  return fs.existsSync(path.join(candidate, "designlayer.config.mjs")) ? candidate : null
 }
 
 /**
@@ -50,13 +50,13 @@ export function requireHostConfig(suite) {
   if (!root) {
     console.log(
       `\n${suite}: SKIPPED — no host app found.\n` +
-        `  Looked for design-editor.config.mjs in ${SIBLING_HOST}\n` +
-        "  Set DESIGN_EDITOR_HOST=/path/to/the/app to run it.\n" +
+        `  Looked for designlayer.config.mjs in ${SIBLING_HOST}\n` +
+        "  Set DESIGNLAYER_HOST=/path/to/the/app to run it.\n" +
         "  The host-agnostic contract is proved without a host, in host-agnostic-cases.mjs."
     )
     process.exit(0)
   }
-  return { root, configPath: path.join(root, "design-editor.config.mjs") }
+  return { root, configPath: path.join(root, "designlayer.config.mjs") }
 }
 
 /**

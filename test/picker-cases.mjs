@@ -5,7 +5,7 @@
  * The catalog and the matching underneath live in token-cases.mjs. Everything
  * here is about what a designer sees and can do with a pointer or a keyboard.
  *
- * Usage: node design-editor/test/picker-cases.mjs
+ * Usage: node designlayer/test/picker-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -69,7 +69,7 @@ async function loadEditorHelpers() {
 const workspace = await loadConfig(requireHostConfig("picker-cases"))
 const browserSandbox = { window: {} }
 vm.runInNewContext(browserPrelude(workspace, { proxyPort: 4567 }), browserSandbox)
-globalThis.__DESIGN_EDITOR_CONFIG__ = browserSandbox.window.__DESIGN_EDITOR_CONFIG__
+globalThis.__DESIGNLAYER_CONFIG__ = browserSandbox.window.__DESIGNLAYER_CONFIG__
 const helpers = await loadEditorHelpers()
 
 /** Mounts the real inspector over a fixture, the way token-cases.mjs does. */
@@ -93,11 +93,11 @@ async function withInspector(markup, run) {
   }
 
   const right = window.document.createElement("aside")
-  right.setAttribute("data-design-editor", "")
+  right.setAttribute("data-designlayer", "")
   window.document.body.append(right)
   const slot = () => {
     const node = window.document.createElement("div")
-    node.setAttribute("data-design-editor", "")
+    node.setAttribute("data-designlayer", "")
     window.document.body.append(node)
     return node
   }
@@ -308,18 +308,18 @@ check("the selected row's ink is the accent's counterpart, never white", () => {
 
 // The other half of that fact: flipping a surface's ink is worth nothing if the
 // children cannot hear it. `el()` stamps CHROME_ATTR on every node it builds —
-// 1604 of them against 4 roots in a live session — so a bare `[data-design-editor]
+// 1604 of them against 4 roots in a live session — so a bare `[data-designlayer]
 // { color }` re-declares the shell's white on every descendant, and a matching
 // declaration beats an inherited value at any specificity. That is what drew a
 // white check mark on the dark-inked selected row, at 1.9:1.
 check("the shell declares ink at its roots, not on every node it stamps", () => {
-  const blanket = /\[data-design-editor\] \{([^}]*)\}/.exec(helpers.baseCss)
+  const blanket = /\[data-designlayer\] \{([^}]*)\}/.exec(helpers.baseCss)
   assert.ok(blanket, "the shell reset went missing")
   assert.ok(
     !/(^|[;\s])color:/.test(blanket[1]),
     "the reset declares color on every stamped element, which switches inheritance off for the whole chrome"
   )
-  const scoped = /\[data-design-editor\]:where\(:not\(\[data-design-editor\] \*\)\) \{([^}]*)\}/.exec(
+  const scoped = /\[data-designlayer\]:where\(:not\(\[data-designlayer\] \*\)\) \{([^}]*)\}/.exec(
     helpers.baseCss
   )
   assert.ok(scoped, "no root-scoped rule declares the shell's ink")

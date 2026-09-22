@@ -2,7 +2,7 @@
  * The browser half of the host contract.
  *
  * `config.mjs` resolves one object on the server and injects it ahead of this
- * bundle as `window.__DESIGN_EDITOR_CONFIG__`. Everything host-specific — which
+ * bundle as `window.__DESIGNLAYER_CONFIG__`. Everything host-specific — which
  * elements are dev chrome, which CSS custom properties a docked panel reads,
  * which colour words and spacing steps the host's Tailwind build actually
  * ships — arrives through here, so porting the editor to another Next app is a
@@ -11,7 +11,7 @@
  * The defaults below are not a second source of truth: they are what this file
  * falls back to when the bundle is loaded without its prologue (a unit test, or
  * a stale `dist/` served directly). They mirror the generic server defaults;
- * host integrations belong in design-editor.config.mjs.
+ * host integrations belong in designlayer.config.mjs.
  */
 
 export interface DockedPanelConfig {
@@ -120,7 +120,7 @@ export interface DesignSystemCatalog {
   }
 }
 
-export interface DesignEditorConfig {
+export interface DesignLayerConfig {
   apiBase: string
   /**
    * The chooser screen this editor was started from, or null when it was not
@@ -241,8 +241,8 @@ function emptyDesignSystem(
   }
 }
 
-const FALLBACK: DesignEditorConfig = {
-  apiBase: "/__design-editor",
+const FALLBACK: DesignLayerConfig = {
+  apiBase: "/__designlayer",
   chooserUrl: null,
   app: { url: null, name: null },
   // Off when the prelude said nothing. Every other fallback in this object
@@ -253,8 +253,8 @@ const FALLBACK: DesignEditorConfig = {
   chrome: {
     trustedSelector: "",
     dockedPanel: {
-      offsetVar: "--design-editor-docked-panel-offset",
-      widthVar: "--design-editor-docked-panel-width",
+      offsetVar: "--designlayer-docked-panel-offset",
+      widthVar: "--designlayer-docked-panel-width",
     },
   },
   tailwind: {
@@ -399,9 +399,9 @@ function readHost(value: unknown): HostConfig {
   }
 }
 
-function read(): DesignEditorConfig {
-  const raw: unknown = (globalThis as { __DESIGN_EDITOR_CONFIG__?: unknown })
-    .__DESIGN_EDITOR_CONFIG__
+function read(): DesignLayerConfig {
+  const raw: unknown = (globalThis as { __DESIGNLAYER_CONFIG__?: unknown })
+    .__DESIGNLAYER_CONFIG__
   if (!isRecord(raw)) return FALLBACK
 
   const chrome = isRecord(raw.chrome) ? raw.chrome : {}
@@ -479,4 +479,4 @@ function readAgentation(value: unknown): AgentationConfig {
  * cannot change its mind mid-session, so re-reading would only add a chance of
  * two call sites disagreeing.
  */
-export const config: DesignEditorConfig = read()
+export const config: DesignLayerConfig = read()

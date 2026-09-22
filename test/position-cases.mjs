@@ -15,7 +15,7 @@
  *  - the frame stays a readout. The moment X becomes an `<input>` it is
  *    promising a write there is no property to make.
  *
- * Usage: node design-editor/test/position-cases.mjs
+ * Usage: node designlayer/test/position-cases.mjs
  */
 
 import assert from "node:assert/strict"

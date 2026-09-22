@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click this in Finder to open the design editor against a REMOTE dev box.
+# Double-click this in Finder to open DesignLayer against a REMOTE dev box.
 #
 # It lands you on the PROJECT CHOOSER, which lists the prototypes running on
 # that machine and lets you pick one — and switch to another later without
@@ -22,13 +22,13 @@
 # the environment instead, and the only one with no sensible default is refused
 # rather than guessed.
 #
-#   DESIGN_EDITOR_REMOTE_HOST   required. Anything `ssh` accepts: `devbox`,
+#   DESIGNLAYER_REMOTE_HOST   required. Anything `ssh` accepts: `devbox`,
 #                               `user@10.0.0.4`, or a Host alias from
 #                               ~/.ssh/config — which is the better place for
 #                               the user, port, key and any ProxyCommand.
-#   DESIGN_EDITOR_REMOTE_PATH   where design-editor is checked out over there.
-#                               Default: ~/src/design-editor
-#   DESIGN_EDITOR_SSH_PROXY     a ProxyCommand, for a network that needs one to
+#   DESIGNLAYER_REMOTE_PATH   where designlayer is checked out over there.
+#                               Default: ~/src/designlayer
+#   DESIGNLAYER_SSH_PROXY     a ProxyCommand, for a network that needs one to
 #                               reach the host at all. Usually unset, because
 #                               ~/.ssh/config is where this belongs.
 #
@@ -45,8 +45,8 @@ cd "$(dirname "$0")/.." || exit 1
 # works for anyone running this from a terminal that already has it.
 [ -f "launch/.env" ] && . "launch/.env"
 
-REMOTE_HOST="${DESIGN_EDITOR_REMOTE_HOST:-}"
-REMOTE_PATH="${DESIGN_EDITOR_REMOTE_PATH:-\$HOME/src/design-editor}"
+REMOTE_HOST="${DESIGNLAYER_REMOTE_HOST:-}"
+REMOTE_PATH="${DESIGNLAYER_REMOTE_PATH:-\$HOME/src/designlayer}"
 
 # The chooser, and the two ports it hands to whichever editor you start from it.
 # All three are forwarded up front, because pressing Start sends your tab
@@ -58,7 +58,7 @@ WS=3457
 SSH_OPTS=(-o ConnectTimeout=20)
 # Appended only when asked for. An empty ProxyCommand is not the same as none —
 # ssh treats it as a command to run, and every connection fails.
-[ -n "${DESIGN_EDITOR_SSH_PROXY:-}" ] && SSH_OPTS+=(-o ProxyCommand="$DESIGN_EDITOR_SSH_PROXY")
+[ -n "${DESIGNLAYER_SSH_PROXY:-}" ] && SSH_OPTS+=(-o ProxyCommand="$DESIGNLAYER_SSH_PROXY")
 
 say() { printf "\n\033[1m%s\033[0m\n" "$1"; }
 die() { printf "\n\033[31m%s\033[0m\n\n" "$1"; echo "Press any key to close."; read -r -n 1; exit 1; }
@@ -71,7 +71,7 @@ if [ -z "$REMOTE_HOST" ]; then
   This launcher opens the editor against a dev machine you reach over SSH.
   Tell it which one, once:
 
-      echo 'DESIGN_EDITOR_REMOTE_HOST=my-devbox' > launch/.env
+      echo 'DESIGNLAYER_REMOTE_HOST=my-devbox' > launch/.env
 
   Anything ssh accepts works — a Host alias from ~/.ssh/config is the best of
   them, because the user, port, key and any ProxyCommand belong there rather
@@ -99,7 +99,7 @@ Almost always one of three things:
   • Your SSH credentials expired, or your key wants a touch. Run
     \`ssh $REMOTE_HOST\` in a terminal and see what it asks for.
   • You are off the network that host is on, or its jump host is down.
-  • The name is wrong. It comes from DESIGN_EDITOR_REMOTE_HOST, which
+  • The name is wrong. It comes from DESIGNLAYER_REMOTE_HOST, which
     launch/.env is the usual place to set.
 
 Then double-click this again.
@@ -124,14 +124,14 @@ say "2/4  Starting the chooser on $REMOTE_HOST…"
 # than another trip through here.
 #
 # The previous run is found BY PORT, not by a command-line pattern.
-# `pkill -f design-editor/cli.mjs` looks right and is a trap: that string also
+# `pkill -f designlayer/cli.mjs` looks right and is a trap: that string also
 # appears in the ssh command being sent, so pkill matches the shell running it
 # and kills itself. The symptom is exit 255 with no output, which reads like the
 # connection dropped.
 #
 # A non-login ssh command gets a thin PATH, so a node installed under $HOME is
 # not on it. `.local/bin` and a version manager's shim directory are the two
-# places it usually is; add your own with DESIGN_EDITOR_REMOTE_PATH's neighbour
+# places it usually is; add your own with DESIGNLAYER_REMOTE_PATH's neighbour
 # in launch/.env if node lives somewhere else on that machine.
 ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "
   export PATH=\$HOME/.local/bin:\$HOME/.local/opt/node-current/bin:\$PATH
@@ -141,16 +141,16 @@ ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "
   done
   sleep 2
   cd \$HOME || exit 1
-  rm -f /tmp/design-editor.log
+  rm -f /tmp/designlayer.log
   setsid nohup node $REMOTE_PATH/cli.mjs --no-open \
     --start-screen-port $CHOOSER --proxy-port $PROXY --ws-port $WS \
-    > /tmp/design-editor.log 2>&1 < /dev/null &
+    > /tmp/designlayer.log 2>&1 < /dev/null &
   echo started
 " || die "Could not start the chooser. See the message above."
 
 say "3/4  Waiting for it to come up…"
 for _ in $(seq 1 40); do
-  if ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "grep -q 'to choose an app' /tmp/design-editor.log 2>/dev/null"; then
+  if ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" "grep -q 'to choose an app' /tmp/designlayer.log 2>/dev/null"; then
     READY=1; break
   fi
   printf "."
@@ -158,7 +158,7 @@ for _ in $(seq 1 40); do
 done
 echo
 if [ "${READY:-0}" != "1" ]; then
-  ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" 'tail -20 /tmp/design-editor.log' 2>/dev/null
+  ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" 'tail -20 /tmp/designlayer.log' 2>/dev/null
   die "The chooser did not come up. Its output is above."
 fi
 

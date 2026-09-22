@@ -79,7 +79,7 @@ export const optionsCss = `/* ---------- options / variants ---------- */
    off the bottom edge — not rhythm inside it, so they stay literals while the
    spacing in the window moves onto the scale. The 20 below is the two of them
    added up, and has to keep tracking them. */
-[data-design-editor].de-options-root {
+[data-designlayer].de-options-root {
   position: fixed;
   left: calc(var(--de-left) + 10px);
   bottom: 10px;

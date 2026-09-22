@@ -68,7 +68,7 @@ export const vendorChromeCss = `${VENDOR_CHROME.join(",\n")} { display: none !im
 /*
  * Where the palette is DECLARED, and why it is not on the editor root alone.
  *
- * The obvious selector is `[data-design-editor]`, and it is wrong twice over.
+ * The obvious selector is `[data-designlayer]`, and it is wrong twice over.
  *
  * ONE: `el()` stamps that attribute on everything it builds — 1604 elements in
  * a live session — so declaring the palette on the bare attribute re-declares
@@ -98,11 +98,11 @@ export const vendorChromeCss = `${VENDOR_CHROME.join(",\n")} { display: none !im
  */
 export const paletteCss = `/* ---------- palette ---------- */
 :root,
-[data-design-editor][data-de-theme="dark"] {
+[data-designlayer][data-de-theme="dark"] {
 ${themeDeclarations("dark")}
 }
 :root[data-de-theme="light"],
-[data-design-editor][data-de-theme="light"] {
+[data-designlayer][data-de-theme="light"] {
 ${themeDeclarations("light")}
 }
 `
@@ -135,7 +135,7 @@ ${VENDOR_CHROME.map((selector) => `#react-rewrite-root ${selector}`).join(",\n")
  * is that the app's own \`position: fixed\` chrome is viewport-anchored and does
  * not move with the inset; that is inherent to any non-transform inset.
  */
-html.design-editor-active {
+html.designlayer-active {
   box-sizing: border-box;
   padding: var(--de-top) var(--de-right) 0 var(--de-left);
 }
@@ -159,12 +159,12 @@ html.design-editor-active {
  * its own hit behaviour unchanged. The chrome's own glyphs are swept up too and
  * do not care: a click on one still bubbles to the button that owns it.
  */
-html.design-editor-inspecting svg {
+html.designlayer-inspecting svg {
   pointer-events: all;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-design-editor] *, [data-design-editor] *::before, [data-design-editor] *::after {
+  [data-designlayer] *, [data-designlayer] *::before, [data-designlayer] *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
@@ -195,15 +195,15 @@ html.design-editor-inspecting svg {
   .de-panel, .de-launcher { transform: none !important; }
   .de-toolbar { transform: translateX(-50%) !important; }
   .de-launcher { opacity: 0; }
-  html.design-editor-chrome-hidden .de-panel,
-  html.design-editor-chrome-hidden .de-toolbar {
+  html.designlayer-chrome-hidden .de-panel,
+  html.designlayer-chrome-hidden .de-toolbar {
     opacity: 0;
     transition: opacity ${t.duration.fast} linear, visibility 0s linear ${t.duration.fast} !important;
   }
-  html.design-editor-chrome-hidden .de-launcher { opacity: 1; }
+  html.designlayer-chrome-hidden .de-launcher { opacity: 1; }
 }
 
-[data-design-editor] {
+[data-designlayer] {
   box-sizing: border-box;
   font-family: ${t.font.ui};
   font-size: ${t.type.body};
@@ -225,10 +225,10 @@ html.design-editor-inspecting svg {
  * on the surface, and the bug was that no child could hear it. \`:where()\` keeps
  * the specificity at (0,1,0), unchanged from the rule this splits.
  */
-[data-design-editor]:where(:not([data-design-editor] *)) {
+[data-designlayer]:where(:not([data-designlayer] *)) {
   color: ${t.color.text};
 }
-[data-design-editor] *, [data-design-editor] *::before, [data-design-editor] *::after {
+[data-designlayer] *, [data-designlayer] *::before, [data-designlayer] *::after {
   box-sizing: border-box;
 }
 /*
@@ -250,8 +250,8 @@ html.design-editor-inspecting svg {
  * in the chrome must be the thing everything else beats, or opting one control
  * out becomes an \`!important\`.
  */
-:where([data-design-editor], [data-design-editor] *),
-:where([data-design-editor] *::before, [data-design-editor] *::after) {
+:where([data-designlayer], [data-designlayer] *),
+:where([data-designlayer] *::before, [data-designlayer] *::after) {
   corner-shape: ${t.cornerShape};
 }
 /*
@@ -309,13 +309,13 @@ html.design-editor-inspecting svg {
  * a control that genuinely wants padding says so — which every text button in
  * the chrome already does, because the UA's 6px was never enough for one.
  *
- * Wrapped in \`:where()\` so it weighs nothing. \`[data-design-editor] button\` is
+ * Wrapped in \`:where()\` so it weighs nothing. \`[data-designlayer] button\` is
  * (0,1,1) — heavier than the (0,1,0) of every \`.de-\` class in this stylesheet
  * — so as a plain selector this would not remove the UA's padding, it would
  * overrule the deliberate padding on every text button in the chrome. A reset
  * has to be the thing everything else beats.
  */
-:where([data-design-editor] button) { padding: 0; }
+:where([data-designlayer] button) { padding: 0; }
 /* Glyphs are decorative and live inside buttons. Leaving them hit-testable
    makes \`event.target\` an <svg> on half the clicks in the chrome, and every
    handler that reads a dataset off the target then reads undefined. */
@@ -333,7 +333,7 @@ html.design-editor-inspecting svg {
  * button is seen by the first person who looks at the screen; an icon quietly
  * rendered at a quarter width is not, because it still looks like an icon.
  */
-[data-design-editor] svg { pointer-events: none; display: block; flex: none; }
+[data-designlayer] svg { pointer-events: none; display: block; flex: none; }
 
 .de-root {
   position: fixed;

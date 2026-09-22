@@ -226,7 +226,7 @@ export const toolbarCss = `/* ---------- toolbar ---------- */
     opacity ${DEPART} ${t.ease},
     visibility 0s;
 }
-html.design-editor-chrome-hidden .de-toolbar {
+html.designlayer-chrome-hidden .de-toolbar {
   visibility: hidden;
   opacity: 0;
   /*

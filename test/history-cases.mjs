@@ -8,7 +8,7 @@
  * vendor also has an undo stack, and these cases exist partly to say why it is
  * not the one in use — it is pop-only and nothing here ever pushed to it.
  *
- * Usage: node design-editor/test/history-cases.mjs
+ * Usage: node designlayer/test/history-cases.mjs
  */
 
 import assert from "node:assert/strict"
@@ -297,7 +297,7 @@ console.log("\nThe toolbar")
 
 const slot = () => {
   const node = window.document.createElement("div")
-  node.setAttribute("data-design-editor", "")
+  node.setAttribute("data-designlayer", "")
   window.document.body.append(node)
   return node
 }
