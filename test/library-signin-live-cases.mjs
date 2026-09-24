@@ -22,8 +22,14 @@
  * could never run.
  * Everything between the wall and the stored credential is exercised for real.
  *
- * Skipped, loudly, when no Chrome-family browser exists — a machine without one
- * cannot run this flow at all, and `available()` is the thing the panel asks.
+ * Skipped, loudly, on a machine that cannot run the flow at all — and that is
+ * two questions rather than one. Whether a Chrome-family browser exists is what
+ * `available()` asks and what the panel's offer depends on. Whether a WINDOW
+ * can be opened is separate, and it is the one a Linux CI runner answers no to:
+ * the flow's capturing pass is deliberately not headless, because the point of
+ * it is that a person signs in, so on a box with no display Chrome never comes
+ * up and the run reads as "The browser did not open" — a true sentence about
+ * the runner and nothing at all about this code.
  */
 
 import assert from "node:assert/strict"
@@ -54,6 +60,31 @@ async function check(name, run) {
 const browserPath = await findBrowser()
 if (!browserPath) {
   console.log("\nNo Chrome-family browser on this machine — skipping the live sign-in run.")
+  console.log("\n0 passed, 0 failed")
+  process.exit(0)
+}
+
+/**
+ * Can a browser WINDOW be opened here?
+ *
+ * macOS and Windows always can. On Linux it takes a display server, and a CI
+ * runner has neither `DISPLAY` nor `WAYLAND_DISPLAY` — so the honest answer
+ * there is a skip, not a twenty-second launch timeout reported as a failure of
+ * the sign-in flow. `xvfb-run` sets `DISPLAY`, so a runner that wants this
+ * suite can have it by wrapping the command.
+ */
+function canOpenAWindow() {
+  if (process.platform !== "linux") return true
+  return Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY)
+}
+
+if (!canOpenAWindow()) {
+  console.log(
+    "\nNo display on this machine — skipping the live sign-in run.\n" +
+      "  The capturing pass opens a real window on purpose; there is nowhere to put one here.\n" +
+      "  Run it under `xvfb-run -a npm test`, or on a desktop.\n" +
+      "  Every decision around the browser is proved without one, in library-signin-cases.mjs."
+  )
   console.log("\n0 passed, 0 failed")
   process.exit(0)
 }

@@ -27,6 +27,32 @@ import path from "node:path"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
 
+/**
+ * A `navigator` global, on the Node versions that do not have one.
+ *
+ * Node made `navigator` a global in 21. The suite's floor is 20.19, and on 20
+ * the bare identifier resolves to nothing — which matters because several
+ * suites bundle a browser module and evaluate it here, and anything reaching
+ * `core/toast.ts` pulls in sonner and therefore react-dom, which reads
+ * `navigator` at module scope. jsdom gives its own window one, but react-dom
+ * asks the global.
+ *
+ * Failing that way is expensive to read rather than merely red: the thrown
+ * `ReferenceError` carries a stack whose every frame is the base64 data URL the
+ * module was imported from, so one missing global prints thirteen megabytes on
+ * a single line and a CI job spends nine minutes streaming it.
+ *
+ * Only the two properties those modules actually read, and only when the
+ * runtime has not supplied the real thing. On 21 and up this is a no-op.
+ */
+if (typeof globalThis.navigator === "undefined") {
+  Object.defineProperty(globalThis, "navigator", {
+    value: { userAgent: `Node.js/${process.versions.node}`, platform: process.platform },
+    configurable: true,
+    writable: true,
+  })
+}
+
 export const PACKAGE_DIR = fileURLToPath(new URL("..", import.meta.url))
 
 /** The default host: a `host-app` checkout beside this one. */
