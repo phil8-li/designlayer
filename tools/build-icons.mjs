@@ -511,19 +511,14 @@ const punched = (...subpaths) => [
 const ring = (x, y, w, h, t = 1, r = 0) =>
   punched(roundRect(x, y, w, h, r), roundRect(x + t, y + t, w - 2 * t, h - 2 * t, Math.max(r - t, 0)))
 
-/**
- * A circle's outline, as one closed subpath.
- *
- * The round counterpart to `roundRect`, and it exists for the same reason: the
- * two marks that need a circle — the sun's body and the moon — are both a disc
- * with a second disc taken OUT of it, which is `punched` given two of these.
- * Drawn as two half-arcs rather than as a `<circle>`, so a hole and its host
- * can share one path and one winding rule.
+/*
+ * A `circleAt` lived here: a circle's outline as one closed subpath, two
+ * half-arcs rather than a `<circle>`, written for the two marks that were then
+ * a disc with a second disc punched out of it. Neither is drawn that way any
+ * more — the sun's body is SOLID at this size and is a `ring` at full radius
+ * (see the note on its glyph below), and nothing else in the set ever called
+ * it. `ring` and `punched` still carry the technique for anything that needs it.
  */
-const circleAt = (cx, cy, r) => {
-  const [CX, CY, R] = [u(cx), u(cy), u(r)]
-  return `M${CX - R} ${CY}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0z`
-}
 
 /**
  * Half a ring, as the hook an undo arrow turns through.

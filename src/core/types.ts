@@ -58,13 +58,12 @@ export interface Rect {
   height: number
 }
 
-/** A single className mutation queued for the source writer. */
-export interface ClassEdit {
-  /** Classes to strip (exact match). */
-  remove: string[]
-  /** Classes to add. */
-  add: string[]
-}
+/*
+ * A `ClassEdit` was declared here — `{ remove: string[]; add: string[] }`, the
+ * shape of one className mutation. Nothing ever imported it: the writer's own
+ * `ClassWrite` (`core/writer.ts`) is what `applyClasses` takes and what every
+ * caller builds, so this was a second name for one idea and the one that lost.
+ */
 
 /** Inline style mutation, applied live and mirrored into source on commit. */
 export interface StyleEdit {
