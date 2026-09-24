@@ -888,8 +888,11 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
      * enough not to promise a number the audit has not returned yet.
      */
     if (lintRunState() === "running") return skeletonRows()
+    // The first state a designer meets, so it says what an audit looks for as
+    // well as what to press. One sentence, like its three siblings: the Audit
+    // button is directly above, and Fix explains itself on the rows it lands on.
     if (!lintRanAt()) {
-      return empty("Nothing audited yet. Press Audit to check this page against the design system.")
+      return empty("Press Audit to find hard-coded values on this page that should use design tokens.")
     }
     // The control that acts on this number is one line below, in the footer,
     // and the sentence used to give the count without naming it — a reader told

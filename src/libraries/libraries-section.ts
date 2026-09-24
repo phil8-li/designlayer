@@ -128,45 +128,6 @@ interface AddLibraryInput {
 }
 
 /**
- * The summary line on a row, and the whole of what a library claims to bring.
- *
- * Derived here rather than taken off the wire because `Library` carries counts
- * and not prose — the server's own `describeLibrary` writes the one-liner for a
- * CANDIDATE, where the file has not been added yet and there is no `counts` to
- * read. Two places that both turn numbers into a sentence is the kind of drift
- * that ends with a row and the box that added it disagreeing about how many
- * colors a file has, so the installed side counts from the record it is drawing
- * rather than from a string somebody else wrote.
- *
- * Singular and plural are spelled out per group because three of them do not
- * take an `s` — radii, and the two groups whose names are already phrases.
- */
-const COUNT_GROUPS: ReadonlyArray<{ key: keyof Library["counts"]; one: string; many: string }> = [
-  { key: "colors", one: "color", many: "colors" },
-  { key: "spacing", one: "spacing step", many: "spacing steps" },
-  { key: "radii", one: "radius", many: "radii" },
-  { key: "textStyles", one: "text style", many: "text styles" },
-  { key: "effects", one: "effect", many: "effects" },
-  { key: "icons", one: "icon size", many: "icon sizes" },
-  { key: "motion", one: "motion token", many: "motion tokens" },
-  { key: "components", one: "component", many: "components" },
-  { key: "iconDrawings", one: "icon", many: "icons" },
-]
-
-/**
- * Three groups on the line, and the rest is not shown anywhere.
- *
- * The same cap the server's candidate line uses, and the reason is the width it
- * has to survive: at 260px a fourth clause wraps to a third line, and a row
- * whose summary is taller than its own name has stopped summarising. What the
- * cap hides used to be one fold away, in a per-library contents list; that list
- * was part of the browsing UI and went with it. The counts it held are not lost
- * — every one of them is a token that is now IN the pickers on the Design tab,
- * which is a better place to read them than a list in a panel.
- */
-const SUMMARY_GROUPS = 3
-
-/**
  * How many candidate rows are dealt out on a stagger before the rest simply
  * land together.
  *
@@ -185,37 +146,6 @@ const ARRIVAL_STEPS = 5
 const RECOGNISED =
   "A design-system manifest, a DTCG or Style Dictionary token file, an icon " +
   "drawing set, or a stylesheet declaring custom properties."
-
-/**
- * The empty state, and it is the only place the editor says what a library IS.
- *
- * Not "no libraries yet" on its own: an empty list is already visible, and a
- * sentence that restates it teaches nothing. What a reader standing here does
- * not know is what pressing Add would get them, so the copy is about the
- * CONSEQUENCE — the pickers on the Design tab grow, alongside this project's
- * own tokens.
- *
- * It carries no second Add button, which the manager dialog's version did. That
- * button existed because the add flow was folded shut behind a header control;
- * here the URL box is in the same section, unfolded, two rows below this
- * sentence, and a duplicate control for it would be two ways to press one
- * thing in the space of half a panel.
- */
-const EMPTY =
-  "No libraries yet. Add one and turn it on, and its colors, spacing, text " +
-  "styles, effects and components appear in the pickers on the Design tab " +
-  "alongside this project’s own."
-
-function countsLine(counts: Library["counts"], limit = COUNT_GROUPS.length): string {
-  const parts: string[] = []
-  for (const group of COUNT_GROUPS) {
-    const value = counts[group.key]
-    if (!value) continue
-    parts.push(`${value} ${value === 1 ? group.one : group.many}`)
-    if (parts.length === limit) break
-  }
-  return parts.join(" · ")
-}
 
 /** The kind of file a library was read out of, as a badge. */
 function kindBadge(kind: string): HTMLElement {
@@ -696,7 +626,6 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
 
   const count = el("span", { class: "de-lib-count" })
   const list = el("div", { class: "de-lib-list" })
-  const empty = el("p", { class: "de-lib-empty" }, [EMPTY])
 
   /* ---------- the CTA ---------- */
 
@@ -1268,8 +1197,8 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
    * reachable by a mis-aimed click.
    */
 
+  // No visible label: the field's placeholder and aria-label name it.
   const cta = el("div", { class: "de-lib-cta" }, [
-    el("span", { class: "de-lib-cta-label" }, ["Link to a design system or Storybook"]),
     el("div", { class: "de-lib-cta-row" }, [urlField, urlAdd]),
   ])
 
@@ -1286,10 +1215,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
    * no use for the concept. The block appears the first time it has something
    * to say and disappears again when the last credential is forgotten.
    */
-  const signedBlock = el("div", { class: "de-lib-signed", "data-de-lib": "signed" }, [
-    el("span", { class: "de-lib-cta-label" }, ["Signed in to"]),
-    signInRows,
-  ])
+  const signedBlock = el("div", { class: "de-lib-signed", "data-de-lib": "signed" }, [signInRows])
   signedBlock.hidden = true
 
   /* ---------- the fold: a file in this project ---------- */
@@ -1379,7 +1305,6 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
 
   const body = el("div", { class: "de-lib" }, [
     list,
-    empty,
     cta,
     // Under the CTA, because a sign-in is a fact about the box above it: the
     // credentials listed here are the reason a link that used to be refused now
@@ -2275,12 +2200,56 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     renderSignIns()
   }
 
+  /**
+   * What a credential's row is called: the libraries it opens, by name.
+   *
+   * An origin is plumbing — `https://storybook-3f81c0a2-ue.example.net` tells a
+   * designer nothing about which design system it is — so the row is labelled
+   * with the names of the installed libraries read from that origin, and the
+   * link itself moves to the hover title. Before any library from the origin
+   * has landed (the add is replayed after the sign-in), the bare host stands in.
+   */
+  function signedLabel(entry: LibrarySignIn): { name: string; link: string } {
+    const opened = (libraryList() as InstalledLibrary[]).filter((library) => {
+      try {
+        return !!library.source.url && new URL(library.source.url).origin === entry.origin
+      } catch {
+        return false
+      }
+    })
+    const host = entry.origin.replace(/^[a-z]+:\/\//i, "")
+    if (!opened.length) return { name: host, link: entry.origin }
+    return {
+      name: opened.map((library) => library.name).join(", "),
+      link: opened.map((library) => library.source.url).join("\n"),
+    }
+  }
+
+  /** Relabel the rows in place, so a library landing does not rebuild them. */
+  function paintSignedLabels(): void {
+    const rows = [...signInRows.querySelectorAll<HTMLElement>('[data-de-lib="signed-in"]')]
+    for (const entry of signIns) {
+      const row = rows.find((candidate) => candidate.getAttribute("data-de-lib-id") === entry.origin)
+      const nameEl = row?.querySelector<HTMLElement>(".de-lib-name")
+      const forget = row?.querySelector<HTMLElement>('[data-de-lib="forget"]')
+      if (!row || !nameEl || !forget) continue
+      const { name, link } = signedLabel(entry)
+      const when = entry.addedAt > 0 ? new Date(entry.addedAt).toLocaleDateString() : ""
+      const word = SCHEME_WORDS[entry.scheme] ?? entry.scheme
+      nameEl.textContent = name
+      nameEl.title = `${link}\n${when ? `A ${word}, saved ${when}` : `A ${word}`}`
+      const said = `Forget the credential for ${name}. It stops loading until you add the credential again.`
+      forget.title = said
+      forget.setAttribute("aria-label", said)
+    }
+  }
+
   function signedRow(entry: LibrarySignIn): HTMLElement {
     // Two sentences, the way the library row's Remove is: "Forget" alone does
     // not say what stops working, and what stops working is every library on
-    // that origin, silently, on the next refresh.
-    const said =
-      `Forget the sign-in for ${entry.origin}. Its libraries stop loading until you sign in again.`
+    // that origin, silently, on the next refresh. `paintSignedLabels` writes
+    // the final wording once the row is in the list.
+    const said = `Forget the credential for ${entry.origin}.`
     const forget = el(
       "button",
       {
@@ -2291,7 +2260,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "forget",
         "data-de-lib-id": entry.origin,
       },
-      [icon("Trash", tokens.icon.control)]
+      [icon("X", tokens.icon.control)]
     ) as HTMLButtonElement
     forget.addEventListener("click", () => {
       forget.disabled = true
@@ -2329,21 +2298,12 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         })
     })
 
-    const when = entry.addedAt > 0 ? new Date(entry.addedAt).toLocaleDateString() : ""
-    const word = SCHEME_WORDS[entry.scheme] ?? entry.scheme
     return el(
       "div",
       { class: "de-lib-signed-row", "data-de-lib": "signed-in", "data-de-lib-id": entry.origin },
       [
-        el("code", { class: "de-lib-path", title: entry.origin }, [entry.origin]),
-        // The kind of credential, and the date in the title rather than on the
-        // row: a 260px column has no width for a date, and "which of the two is
-        // this" is the fact that explains a refusal.
-        el(
-          "span",
-          { class: "de-lib-kind", title: when ? `A ${word}, saved ${when}` : `A ${word}` },
-          [word]
-        ),
+        // The link, the kind of credential and the date live in the title.
+        el("span", { class: "de-lib-name" }, [entry.origin]),
         forget,
       ]
     )
@@ -2362,6 +2322,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     signedBlock.hidden = signIns.length === 0
     clear(signInRows)
     for (const entry of signIns) signInRows.append(signedRow(entry))
+    paintSignedLabels()
     // The sign-in dialog's hint reads this list to say whether it is replacing
     // a credential rather than adding a first one.
     paintSignIn()
@@ -2562,7 +2523,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "remove",
         "data-de-lib-id": library.id,
       },
-      [icon("Trash", tokens.icon.control)]
+      [icon("X", tokens.icon.control)]
     ) as HTMLButtonElement
     remove.addEventListener("click", () => {
       remove.disabled = true
@@ -2593,12 +2554,6 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         })
     })
 
-    // The server's own sentence wins over the counts when it sent one — see
-    // `InstalledLibrary.detail`. A library that failed to parse says that
-    // instead of either, because "no tokens in this file yet" over a file the
-    // server could not read is a description of the wrong problem.
-    const summary = library.detail?.trim() || countsLine(library.counts, SUMMARY_GROUPS)
-
     return el(
       "div",
       {
@@ -2609,12 +2564,11 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       [
         el("div", { class: "de-lib-line" }, [
           el("span", { class: "de-lib-name", title: library.name }, [library.name]),
-          kindBadge(library.source.kind),
           el("span", { class: "de-lib-actions" }, [enableSwitch(library), remove]),
         ]),
-        library.error
-          ? el("div", { class: "de-lib-error" }, [library.error])
-          : el("div", { class: "de-lib-detail" }, [summary || "No tokens in this file yet"]),
+        // A library that failed to parse still says so; one that read cleanly
+        // shows only its name and where it came from.
+        library.error ? el("div", { class: "de-lib-error" }, [library.error]) : null,
         sourceLine(library),
       ]
     )
@@ -2664,13 +2618,13 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     const hold = holdScroll(node)
     const libraries: InstalledLibrary[] = libraryList()
 
-    // Silent at zero, the way the Handover heading's count is: the empty state
-    // directly below is already saying it, in words, in the same column.
+    // Silent at zero, the way the Handover heading's count is.
     count.textContent = libraries.length ? String(libraries.length) : ""
-    empty.hidden = libraries.length > 0
 
     clear(list)
     for (const library of libraries) list.append(libraryRow(library))
+    // A credential's row is named after the libraries it opens.
+    paintSignedLabels()
 
     if (addOpen) renderCandidates()
     restore(memory)

@@ -301,14 +301,15 @@ const toasterProps = (() => {
   return mounts[0]
 })()
 
-await check("it is mounted bottom-left, clear of the launcher", () => {
-  // Bottom-RIGHT is the launcher's corner (`css/launcher.ts` pins the disc
-  // there), and the launcher is the only way back once the chrome is hidden.
-  assert.equal(toasterProps.position, "bottom-left")
+await check("it is mounted bottom-right", () => {
+  assert.equal(toasterProps.position, "bottom-right")
 })
 
-await check("it is inset by the same gutter the panels dock with", () => {
-  assert.equal(toasterProps.offset, 12)
+await check("it stacks above the launcher and lines up with the panel gutter", () => {
+  // The launcher shares this corner (`css/launcher.ts` pins the disc there) and
+  // is the only way back once the chrome is hidden, so the stack must clear it:
+  // 32 inset + 40 disc + 8 gap on the bottom, the panels' 12 on the right.
+  assert.deepEqual(toasterProps.offset, { bottom: 80, right: 12 })
 })
 
 /*
@@ -317,7 +318,7 @@ await check("it is inset by the same gutter the panels dock with", () => {
  * This was `false`, on the note that a toast this short is read in one glance
  * and gone before a close button could be aimed at. True while every toast
  * expired; not true of an error that now waits. A card that never leaves and
- * offers no way out parks over the bottom-left corner of the canvas until
+ * offers no way out parks over the bottom-right corner of the canvas until
  * something else happens to dismiss it.
  */
 await check("a toast that waits for the reader can still be got rid of", () => {

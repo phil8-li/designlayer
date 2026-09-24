@@ -1173,11 +1173,11 @@ await check("on an untouched editor the group is Audit alone", async () => {
     null,
     "Hide markers is offered before there are any markers to hide"
   )
-  assert.match(
-    fresh.node.querySelector(".de-empty")?.textContent ?? "",
-    /Press Audit/,
-    "the untouched section does not say what to press"
-  )
+  const said = fresh.node.querySelector(".de-empty")?.textContent ?? ""
+  assert.match(said, /Press Audit/, "the untouched section does not say what to press")
+  // "Nothing audited yet" said only that nothing had happened. The first state a
+  // designer meets has to say what the section is for.
+  assert.match(said, /design tokens/, "the untouched section does not say what an audit looks for")
   // The dot is already answering, because the tool list is fetched on first
   // paint rather than waiting for a run.
   assert.match(

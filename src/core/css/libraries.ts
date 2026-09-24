@@ -82,6 +82,18 @@ const SIGNIN = nest({
   hairline: 1,
 })
 
+/**
+ * A signed-in origin, drawn as a card like the library cards above it. Its
+ * right corner holds the Forget `.de-mini` at `radius.sm`, so 12 − 8 = 4 is
+ * the inset that keeps the two curves parallel; the border is counted in.
+ */
+const SIGNED = nest({
+  of: ".de-lib-signed-row",
+  outer: t.radius.lg,
+  inset: t.space.md,
+  hairline: 1,
+})
+
 export const librariesCss = `/* ---------- libraries section ---------- */
 .de-lib { display: flex; flex-direction: column; gap: ${t.space.lg}px; }
 
@@ -169,27 +181,14 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    equal specificity the later rule is what makes the tint win. */
 .de-lib-error { color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
 
-/* ---------- the empty state ---------- */
-/*
- * A sentence, at the Design tab's own note rank: 11px, dim, 1.4.
- *
- * Deliberately not \`.de-empty\`, which is centred text with 24px of air above
- * and below it — that box is for a PANE with nothing in it, and this is one
- * section of a tab that has another section directly underneath. The 24px would
- * push DS Lint down by a row and a half to announce a list that is one line
- * long. Same treatment as \`.de-variant-note\`, for the same reason: it is
- * explanatory prose inside a section body.
- */
-.de-lib-empty {
-  margin: 0;
-  color: ${t.color.textDim};
-  font-size: ${t.type.caption}; line-height: ${t.type.leadingRow};
-}
-.de-lib-empty[hidden] { display: none; }
-
 /* ---------- the add-by-URL CTA ---------- */
+/* No \`.de-lib-cta-label\` any more. The box had a caption over it reading "Link
+   to a design system or Storybook", which is what the placeholder and the
+   aria-label already say — and the two lists in this section each lost their
+   heading in the same pass, so a caption left on this one would be the only
+   label in the block. The rule went with the span; a guard in
+   \`design-system-tab-cases.mjs\` keeps it from growing back. */
 .de-lib-cta { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
-.de-lib-cta-label { color: ${t.color.textDim}; font-size: ${t.type.caption}; }
 .de-lib-cta-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
 /*
  * \`field\` rather than the \`bgSunken\` the options browser's inputs take: that
@@ -411,6 +410,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
 .de-lib-signin-more { display: flex; flex-direction: column; }
 .de-lib-signin-panel {
   display: flex; flex-direction: column; gap: ${t.space.md}px;
+  min-width: 0;
   /*
    * A HAIRLINE, because the two halves of this dialog are written for two
    * different readers and nothing else says where one ends.
@@ -460,15 +460,15 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-signed { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
 .de-lib-signed[hidden] { display: none; }
-/* Between rows at \`space.md\`, inside a row at \`space.sm\` — 2x, where it was
-   0.5x. These rows carry no fill at all, so proximity is the ONLY thing
-   grouping them, and it was grouping the wrong pairs. */
-.de-lib-signed-rows { display: flex; flex-direction: column; gap: ${t.space.md}px; }
-.de-lib-signed-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
-/* The origin takes whatever the badge and the button leave, and truncates into
-   it — the same rule the source line on a library card follows, because it is
-   the same problem: an unbounded string beside two fixed controls. */
-.de-lib-signed-row > .de-lib-path { flex: 1 1 auto; }
+/* Each sign-in is a card, drawn with the library card's surface so the two
+   lists in this section read as the same kind of object. */
+.de-lib-signed-rows { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lib-signed-row {
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  padding: ${SIGNED.padding};
+  border: 1px solid ${t.color.border}; border-radius: ${SIGNED.outer};
+  background: ${t.color.bgRaised};
+}
 
 /* ---------- the fold: a file in this project ---------- */
 /* No \`gap\`: the space under the toggle belongs to the drawer, which carries it
@@ -550,9 +550,15 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * between 12px and its full height rather than between nothing and it. Naming
  * a floor of zero is what makes the track free to actually close; the panel's
  * own \`min-height: 0\` is the other half and is just as load-bearing.
+ *
+ * The column takes the same floor for the width, as \`.de-section-fold\` does.
+ * An implicit \`auto\` column grows to the panel's min-content — a candidate's
+ * nowrap file path — so the drawer ran past the right edge and clipped the
+ * candidate's own actions; \`minmax(0, 1fr)\` holds it to the section.
  */
 .de-lib-drawer {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 0fr);
   overflow: hidden;
   transition: grid-template-rows ${t.duration.base} ${t.ease};
@@ -599,6 +605,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   /* Load-bearing: see \`.de-lib-drawer\`. Without it the \`0fr\` row keeps the
      panel's content as its minimum and the drawer never shuts. */
   min-height: 0;
+  min-width: 0;
   padding: ${DRAWER.padding};
   border-radius: ${DRAWER.outer};
   background: ${t.color.bgSunken};

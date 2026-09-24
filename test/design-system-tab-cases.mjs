@@ -108,6 +108,8 @@
  */
 
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { JSDOM } from "jsdom"
 
 import { PACKAGE_DIR } from "./host.mjs"
@@ -808,17 +810,16 @@ await check("it is a real de-section titled Libraries, not a panel with a bar", 
   )
 })
 
-await check("one row per installed library, each saying what it contains", () => {
+await check("one row per installed library, naming it and where it came from", () => {
   assert.equal(all("library").length, 2, "the section did not draw a row per library")
 
   const pier = row(PIER.id)
   assert.ok(pier, "Pier is missing from the list")
   assert.match(pier.textContent, /Pier/)
-  // Three groups, in plain words, from three different count fields: a row that
-  // printed one number would satisfy a laxer assertion and say nothing true.
-  assert.match(pier.textContent, /48 colors/)
-  assert.match(pier.textContent, /12 spacing steps/)
-  assert.match(pier.textContent, /38 components/)
+  // No contents summary and no kind badge: a row is its name, its source and
+  // its controls, and the remove control is an X rather than a trash can.
+  assert.equal(pier.querySelector(".de-lib-detail"), null, "the row still prints a contents summary")
+  assert.equal(pier.querySelector(".de-lib-kind"), null, "the row still prints a kind badge")
   // And where it came from, in full, in a title a pointer can read.
   const where = pier.querySelector(".de-lib-path")
   assert.ok(where, "the row does not say where the library came from")
@@ -826,7 +827,7 @@ await check("one row per installed library, each saying what it contains", () =>
 
   const beacon = row(BEACON.id)
   assert.ok(beacon, "Beacon is missing from the list")
-  assert.match(beacon.textContent, /2 components/)
+  assert.match(beacon.textContent, /Beacon/)
 })
 
 await check("every row carries a switch that says which library it is for", () => {
@@ -891,9 +892,7 @@ await check("Add posts {url}, and the row that lands is the server's own", async
 
   const added = row(ORBIT.id)
   assert.ok(added, "the added library never appeared in the list")
-  // The server's own sentence, which the counts on this record cannot produce:
-  // a section writing its own summary would print "9 components" here.
-  assert.match(added.textContent, /9 components across 24 stories/)
+  assert.match(added.textContent, /Orbit/)
   assert.equal(
     added.querySelector(".de-lib-path")?.getAttribute("title"),
     ORBIT.source.url,
@@ -1309,7 +1308,7 @@ await check("a credential that opens the wall signs in and finishes the add", as
 
   const added = row(VAULT.id)
   assert.ok(added, "the library behind the wall never arrived")
-  assert.match(added.textContent, /12 components across 30 stories/)
+  assert.match(added.textContent, /Vault/)
 
   assert.equal(signInShown(), false, "the sign-in block stayed open over a completed sign-in")
   assert.equal(value.value, "", "the credential was left in the DOM after it was posted")
@@ -1324,12 +1323,15 @@ await check("the signed-in origins are listed, and Forget reaches the server", a
   const listed = one("signed-in")
   assert.ok(listed, "the editor holds a credential and says so nowhere")
   assert.equal(listed.getAttribute("data-de-lib-id"), WALL.origin)
-  assert.ok(
-    listed.textContent.includes(WALL.origin),
-    `the row does not name the origin: ${listed.textContent}`
-  )
-  // Which of the two credentials it is: the fact that explains a later refusal.
-  assert.match(listed.textContent, /token/)
+  // Named after the library it opens; the link waits in the hover title.
+  const name = listed.querySelector(".de-lib-name")
+  assert.equal(name?.textContent, VAULT.name, `the row does not name the library: ${listed.textContent}`)
+  assert.ok(!listed.textContent.includes(WALL.origin), "the row still prints the raw origin")
+  assert.ok(name.getAttribute("title").includes(WALL.url), "the link is not on hover")
+  assert.ok(!/signed in/i.test(one("signed").textContent), "the block still says 'Signed in'")
+  // Which of the two credentials it is lives in the title, not as a badge.
+  assert.equal(listed.querySelector(".de-lib-kind"), null, "the row still prints a kind badge")
+  assert.match(name.getAttribute("title"), /token/)
 
   const forget = control("forget", WALL.origin)
   assert.ok(forget, "a stored credential with no way to drop it")
@@ -1612,26 +1614,20 @@ await check("the local-file fold is shut until it is asked for, and scans when o
 
 console.log("\nThe empty state")
 
-await check("with nothing installed it says what turning a library on does", async () => {
+await check("with nothing installed it draws no empty-state sentence", async () => {
   const installed = clone(server.libraries)
-  const empty = () => libraries.node.querySelector(".de-lib-empty")
-  assert.ok(empty(), "there is no empty state at all")
-  assert.equal(empty().hidden, true, "the empty state is showing over a list of libraries")
 
   server.libraries = []
   await editor.refreshLibraries(API)
   await settle()
 
   assert.deepEqual(all("library"), [], "the section lists libraries this project does not have")
-  assert.equal(empty().hidden, false, "nothing is installed and the section says nothing")
-  // Not "press this button": the sentence has to say what pressing it gets you,
-  // and it is the only place in the feature that explains what a library IS.
-  for (const brought of ["colors", "components", "Design tab"]) {
-    assert.ok(
-      empty().textContent.includes(brought),
-      `the empty state never says a library brings ${brought}: ${empty().textContent}`
-    )
-  }
+  assert.equal(libraries.node.querySelector(".de-lib-empty"), null, "the empty-state sentence came back")
+  assert.equal(
+    libraries.node.querySelector(".de-lib-cta .de-lib-cta-label"),
+    null,
+    "the URL box grew its visible label back"
+  )
 
   // Scaffolding: the libraries go back, so the file ends where it started.
   server.libraries = installed
@@ -2333,6 +2329,30 @@ await check("Forget does not claim a credential the server did not have", async 
   // Re-read from the server rather than asserted from here: the list on screen
   // is now the list the server answered with, whatever that turned out to be.
   assert.equal(one("signed-in"), null, "the row survived a list the server says is empty")
+})
+
+/*
+ * JSDOM does no layout, so this reads the rules rather than measuring a box.
+ * Both folds are one-column grids, and a grid with no column template sizes
+ * its implicit track to the content's min-content width: a nowrap URL in the
+ * Libraries card or a file path in the candidate drawer pushed the whole
+ * section past the panel edge, clipping the switch and delete controls and
+ * stopping every ellipsis from firing.
+ */
+await check("the section fold and the libraries drawer are held to the panel width", () => {
+  const rule = (file, selector) => {
+    const css = readFileSync(join(PACKAGE_DIR, "src/core/css", file), "utf8")
+    const found = new RegExp(`^${selector.replace(/[.>]/g, "\\$&")} \\{\\n([\\s\\S]*?)\\n\\}`, "m").exec(css)
+    assert.ok(found, `${selector} is missing from ${file}`)
+    return found[1]
+  }
+  for (const [file, grid, item] of [
+    ["panels.ts", ".de-section-fold", ".de-section-fold > .de-section-body"],
+    ["libraries.ts", ".de-lib-drawer", ".de-lib-panel"],
+  ]) {
+    assert.match(rule(file, grid), /grid-template-columns: minmax\(0, 1fr\)/, `${grid} has no zero floor on its column`)
+    assert.match(rule(file, item), /min-width: 0/, `${item} can still grow past its track`)
+  }
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

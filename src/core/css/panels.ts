@@ -450,9 +450,19 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * \`base\` and not \`drawer\`: 240ms is a whole panel crossing the screen edge,
  * and this is a disclosure opening inside one — the same rung \`.de-entering\`
  * and the libraries drawer take for the same statement.
+ *
+ * The column needs the same floor. With no \`grid-template-columns\` the one
+ * implicit track is \`auto\`, which grows to the body's min-content width — and
+ * a body holding a nowrap URL or code path has a min-content of 500px or more.
+ * The track then ran past the panel edge, \`overflow: hidden\` cut it off, and
+ * every row inside laid out against the wide track: ellipses never fired and
+ * the right-hand controls sat outside the visible column. \`minmax(0, 1fr)\`
+ * pins the track to the panel, and the body's \`min-width: 0\` below lets it
+ * shrink into it.
  */
 .de-section-fold {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   transition: grid-template-rows ${t.duration.base} ${t.ease};
@@ -495,6 +505,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-section-fold > .de-section-body {
   align-self: start;
   min-height: 0;
+  min-width: 0;
 }
 /*
  * Inside the fold the body is never \`display: none\` — a box that is not laid

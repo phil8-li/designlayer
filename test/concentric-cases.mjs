@@ -274,6 +274,7 @@ const EXPECTED = [
    * above it.
    */
   [".de-lib-signin", "20px", 12, 1, "11px", "8px"],
+  [".de-lib-signed-row", "12px", 8, 1, "7px", "4px"],
   /*
    * THREE ASSET NESTS LEFT HERE, and the reason is worth keeping.
    *
@@ -400,6 +401,9 @@ check("the radius a nest computed is the radius its children are given", () => {
        `.de-button` rule on purpose — if that ever moves off `md`, this card
        stops being concentric and should say so. */
     ".de-lib-signin": [".de-button"],
+    /* A signed-in origin's card: the Forget `.de-mini` sits in its right
+       corner, and `radius.sm` is what the nest asks of it. */
+    ".de-lib-signed-row": [".de-mini"],
     /* The button in its corner is shared furniture — `.de-button` draws its own
        `radius.md`, and the row was raised to `radius.lg` so that IS the nest's
        radius. Asserted against the shared rule on purpose: if `.de-button` ever
@@ -700,6 +704,17 @@ check("no enabled control in the chrome withholds the pointer", () => {
     [],
     `enabled control(s) drawing no pointer:\n      ${strays.join("\n      ")}`
   )
+})
+
+/*
+ * No question-mark cursor anywhere in the chrome. Every help dot is a
+ * `<button>`, so it takes `pointer` like any other control — see the note on
+ * `.de-ann-help` in `css/annotations.ts`. Fixed there once and missed on
+ * `.de-lint-info`, which is why this is a sweep rather than a memory.
+ */
+check("no rule in the chrome draws the help cursor", () => {
+  const strays = ALL.filter((rule) => declaration(rule.body, "cursor") === "help").map((rule) => rule.selector)
+  assert.deepEqual(strays, [], `question-mark cursor on:\n      ${strays.join("\n      ")}`)
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

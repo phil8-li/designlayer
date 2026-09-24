@@ -47,6 +47,7 @@ import { createElement, Fragment, useEffect, type CSSProperties } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { Toaster, toast as sonner } from "sonner"
 
+import { LAUNCHER_CLEARANCE } from "./css/launcher"
 import { toasterCss } from "./css/toast"
 import { CHROME_ATTR } from "./dom"
 import { tokens as t } from "./tokens"
@@ -195,20 +196,19 @@ export function installToaster(): () => void {
       createElement(Toaster, {
         key: "toaster",
         /*
-         * Bottom-LEFT, and the corner is the whole reason to say so.
+         * Bottom-right, stacked ABOVE the launcher rather than on it.
          *
-         * Bottom-right is the launcher's — `css/launcher.ts` pins the disc
-         * there at a 32px inset, and it is the one control that must stay
-         * findable, because it is the only way back once the chrome is hidden.
-         * A stack of up to three cards landing on top of it would cover the
-         * exit. Bottom-left is clear: the toolbar is centred in the canvas and
-         * floats above this line, and both panels are docked to the edges
-         * rather than the corners.
+         * `css/launcher.ts` pins the disc in this corner, and it is the one
+         * control that must stay findable, because it is the only way back
+         * once the chrome is hidden. So the bottom offset clears the resting
+         * disc plus one gap; the right offset is the panel inset, so the card
+         * lines up with the docked chrome.
          */
-        position: "bottom-left",
-        // The same inset the panels are docked with, so the toast lines up with
-        // the chrome rather than floating at some arbitrary margin.
-        offset: t.size.panelInset,
+        position: "bottom-right",
+        offset: {
+          bottom: LAUNCHER_CLEARANCE + t.space.md,
+          right: t.size.panelInset,
+        },
         gap: t.space.md,
         visibleToasts: VISIBLE_TOASTS,
         /*
@@ -219,7 +219,7 @@ export function installToaster(): () => void {
          * before a close button could be aimed at. True of the four-second
          * info rung, and no longer true of the error rung, which waits (see
          * `DURATION`). A card that never leaves and offers no way out is worse
-         * than one that leaves too early: it parks over the bottom-left corner
+         * than one that leaves too early: it parks over the bottom-right corner
          * of the canvas until something else happens to dismiss it.
          *
          * Sonner puts the button on every toast rather than per type, so the

@@ -117,7 +117,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * The header's info dot: which checkers run, on hover.
  *
  * Same drawing as \`.de-ann-help\` in \`css/annotations.ts\` — a 14px disc on the
- * field plate, \`cursor: help\`, no border — because it is the same object doing
+ * field plate, \`cursor: pointer\`, no border — because it is the same object doing
  * the same job, and two help dots in one panel that look different are two
  * things to learn. It is NOT folded into that rule: this one sits in a section
  * header's actions track rather than beside a settings label, and sharing a
@@ -139,7 +139,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
   border: none; border-radius: 50%;
   background: ${t.color.field};
   color: ${t.color.textDim};
-  cursor: help;
+  cursor: pointer;
   transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
 }
 .de-lint-info:hover, .de-lint-info:focus-visible { background: ${t.color.fieldHover}; color: ${t.color.text}; }

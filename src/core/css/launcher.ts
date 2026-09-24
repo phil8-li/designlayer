@@ -38,6 +38,9 @@ import { TOOLBAR_HEIGHT } from "./toolbar"
 const SIZE = TOOLBAR_HEIGHT
 const INSET = 32
 
+/** How far above the page's bottom edge the resting disc's top sits — what a toast in this corner has to clear. */
+export const LAUNCHER_CLEARANCE = INSET + SIZE
+
 /**
  * The disc's half of standing down — the other half is in \`css/toolbar.ts\`.
  *

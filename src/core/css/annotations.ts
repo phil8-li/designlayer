@@ -1669,8 +1669,11 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   }
   .de-swap > .de-swap-done,
   .de-swap--done > .de-swap-rest { transform: none; }
-  .de-ann-toggle:active,
-  .de-ann-format:active { transform: none; }
+  /* \`.de-ann-format:active\` stood beside this one until the four-segment format
+     strip became a row and a \`selectField\`. Nothing wears that class now, and a
+     reduced-motion exemption for a control that does not exist is one more
+     selector every reader of this block has to rule out. */
+  .de-ann-toggle:active { transform: none; }
   /*
    * Nothing here for the row actions or the setting tip, for the reason
    * toolbar.ts gives about its own: the blanket rule above clamps DURATION and
