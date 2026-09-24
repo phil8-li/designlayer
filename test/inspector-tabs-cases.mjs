@@ -316,8 +316,19 @@ await check("the strip and the store agree, in both directions", () => {
 console.log("\nThe Changes tab")
 
 const notesPane = () => paneFor("Changes")
+/**
+ * The OUTBOX's Copy, scoped to the button row rather than swept off the pane.
+ *
+ * There are two controls reading "Copy" in this tab — this one, and the one
+ * beside the MCP address in Settings, which copies the agent's URL. They are
+ * deliberately the same drawing (a case below asserts exactly that), so a
+ * sweep of the pane for the word finds whichever comes first in the document
+ * and reports on the wrong control the moment the other leaves. The button row
+ * is out of the column entirely over an empty session, so that is not
+ * hypothetical: an unscoped sweep silently started measuring the MCP button.
+ */
 const copyButton = () =>
-  Array.from(notesPane().querySelectorAll("button")).find(
+  Array.from(notesPane().querySelectorAll(".de-ann-ctas button")).find(
     (node) => node.textContent.trim() === "Copy"
   ) ?? null
 const rowKinds = () =>
@@ -374,7 +385,17 @@ async function reset() {
   await frame()
 }
 
-await check("the copy button lives in the panel, and the toolbar holds no copy at all", () => {
+await check("the copy button lives in the panel, and the toolbar holds no copy at all", async () => {
+  await reset()
+  // Something in the session, because the button row only exists once there
+  // is something for it to hand over.
+  editor.recordEdit({
+    property: "box-shadow",
+    from: "none",
+    to: "0 2px 8px rgba(0,0,0,.3)",
+    element: CTA,
+    written: false,
+  })
   click(tabNamed("Changes"))
   assert.ok(copyButton(), "the Notes tab has no copy button")
   const strays = Array.from(context.slots.toolbar.querySelectorAll("button")).filter((node) =>
@@ -383,10 +404,17 @@ await check("the copy button lives in the panel, and the toolbar holds no copy a
   assert.deepEqual(strays, [], "the toolbar still carries a copy button")
 })
 
-await check("an empty outbox disables the button and says what would ever be in it", async () => {
+await check("an empty outbox takes the buttons away and says what would ever be in it", async () => {
   await reset()
   click(tabNamed("Changes"))
-  assert.equal(copyButton().disabled, true)
+  /*
+   * The button used to be here and disabled. The whole row leaves now, which
+   * is the same statement made once instead of four times: a disabled Copy, a
+   * disabled Send, an eye over no markers and a bin over no notes is four
+   * controls saying "not yet" above a sentence that already says it.
+   */
+  assert.equal(copyButton(), null, "the button row sat over an empty session")
+  assert.equal(notesPane().querySelector(".de-ann-ctas"), null)
   assert.match(notesPane().textContent, /Pin a note or make an edit/)
 })
 
@@ -477,10 +505,9 @@ await check("the clipboard write happens in the click task, before any await", (
   assert.match(written, /This gap is too tight/)
   assert.match(written, /box-shadow/)
   assert.ok(!written.includes("/Users/someone"), "the brief carried an absolute path")
-  // The brief spells its own source line `- Source:` precisely so the sanitizer
-  // that deletes the resolver's half-right `**Source:**` attribution leaves it
-  // standing. One that came through this way is one nobody stands behind.
-  assert.ok(!written.includes("**Source:**"), "the brief carried a Source line")
+  // The brief is in Agentation's format, so its source line is `**Source:**`,
+  // cut to the file's `src/` tail.
+  assert.match(written, /^\*\*Source:\*\* src\/components\/card\.tsx:42$/m, "the note lost its source line")
 })
 
 await check("Copy answers on the button itself, with both marks already in the box", () => {
@@ -571,7 +598,7 @@ await check("Send to agent carries a mark, and keeps it while it is in flight", 
   assert.equal(send.childNodes.length, 2, "the label and the mark are not both there")
 })
 
-await check("dropping the last row empties the list and re-disables the button", async () => {
+await check("dropping the last row empties the list and takes the buttons with it", async () => {
   await reset()
   editor.recordEdit({
     property: "box-shadow",
@@ -587,7 +614,9 @@ await check("dropping the last row empties the list and re-disables the button",
   assert.ok(drop, "an edit cannot be retracted from the handover")
   click(drop)
   assert.deepEqual(rowKinds(), [])
-  assert.equal(copyButton().disabled, true)
+  // The session is empty again, so the column goes back to what it looks like
+  // before anything happens: the empty state and Settings, nothing to press.
+  assert.equal(copyButton(), null, "the buttons outlived the last row")
 })
 
 await check("the ledger repaints the outbox, and only while the outbox is showing", async () => {

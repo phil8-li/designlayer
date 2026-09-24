@@ -522,5 +522,71 @@ check("the empty state fills the slot the code view would have taken", () => {
   assert.match(editor.shellCss, /\.de-code \.de-empty\s*\{[^}]*flex:\s*1/)
 })
 
+/*
+ * The strip Code shares, asked about the tab that joined it.
+ *
+ * Same shape of claim as the Code case at the top of this file and asked here
+ * for the same reason: Controls arrived from a floating `role="dialog"` that
+ * mounted itself on `document.body`, and the one thing that move could quietly
+ * undo is its own position. A pane appended to the left slot with no tab
+ * pointing at it would be unreachable and would still satisfy `.de-controls`,
+ * so the strip is what gets asked.
+ */
+console.log("\nThe strip Code shares")
+
+check("Controls is the left strip's third tab, and the inspector did not grow one", () => {
+  const labels = tabsIn(left).map((node) => node.textContent.trim())
+  assert.deepEqual(labels, ["Layers", "Code", "Controls"], `the left strip is ${JSON.stringify(labels)}`)
+  const button = tabsIn(left)[2]
+  assert.equal(button.getAttribute("aria-controls"), "de-left-tabpanel-controls")
+  assert.equal(
+    tabsIn(right).find((node) => /controls/i.test(node.textContent)),
+    undefined,
+    "the inspector grew a Controls tab, so the app's controls are in two places"
+  )
+  assert.ok(
+    window.document.getElementById("de-left-tabpanel-controls")?.querySelector(".de-controls"),
+    "the tab names a pane the controls view is not in"
+  )
+})
+
+/*
+ * The requirement the deleted dialog's own header gave as the reason it mounted
+ * its own root: a list of everything the app exposes must not require picking
+ * something first. The left panel has always behaved this way — it does not
+ * unmount on deselection, it merely repaints Code — which is what made the
+ * dialog redundant. Asserted from the empty selection, because that is the
+ * state the dialog was built to survive.
+ */
+check("the Controls pane is still there with nothing selected", () => {
+  editor.setState({ selection: [] })
+  tabsIn(left)[2].dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+  const pane = window.document.getElementById("de-left-tabpanel-controls")
+  assert.equal(pane.hidden, false)
+  assert.ok(pane.querySelector(".de-opt-filter"), "the pane lost its filter when nothing was selected")
+  // And it did not arrive as a popover. `de-arrive` is the shared entrance for
+  // surfaces that appear OVER something; a docked pane must not pop.
+  assert.equal(pane.querySelector(".de-arrive"), null)
+  assert.equal(pane.firstElementChild?.classList.contains("de-arrive"), false)
+})
+
+check("switching away and back leaves exactly one pane showing", () => {
+  const panes = ["layers", "code", "controls"].map((id) =>
+    window.document.getElementById(`de-left-tabpanel-${id}`)
+  )
+  for (const [index, button] of tabsIn(left).entries()) {
+    button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+    assert.deepEqual(
+      panes.map((node) => !node.hidden),
+      panes.map((_, slot) => slot === index),
+      `tab ${index} left the wrong panes showing`
+    )
+    assert.deepEqual(
+      tabsIn(left).map((node) => node.getAttribute("aria-selected")),
+      panes.map((_, slot) => String(slot === index))
+    )
+  }
+})
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

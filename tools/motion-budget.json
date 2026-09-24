@@ -1,0 +1,22 @@
+{
+  "cssBytes": 133630,
+  "bundleBytes": 2217602,
+  "rules": 885,
+  "transitionDeclarations": 94,
+  "animationDeclarations": 26,
+  "keyframes": 13,
+  "infiniteAnimations": 5,
+  "transitionAll": 0,
+  "paletteRolesInCrossfade": 46,
+  "expensiveProperties": {
+    "height": 2,
+    "padding": 2,
+    "border-width": 1,
+    "margin": 2,
+    "max-width": 1,
+    "width": 3
+  },
+  "unknownProperties": {
+    "none": 2
+  }
+}

@@ -345,12 +345,22 @@ function childArgv(options, choice) {
   ]
 }
 
-/** The sentence the chooser shows where the editor used to be. */
+/**
+ * The sentence the chooser shows where the editor used to be.
+ *
+ * All three end by naming the next action, and the crash case used not to. It
+ * said where the output was and stopped there — which is the one of the three
+ * where the reader most needs telling that the screen in front of them still
+ * works, because the other two are things they did on purpose and this is not.
+ */
 function farewell(choice, code, signal) {
   const name = choice.packageName ?? path.basename(choice.projectRoot)
   if (signal) return `The editor for ${name} was stopped (${signal}). Choose an app to start again.`
   if (code === 0) return `The editor for ${name} closed. Choose an app to start again.`
-  return `The editor for ${name} stopped with code ${code}. Its output is in the terminal running designlayer.`
+  return (
+    `The editor for ${name} stopped with code ${code}. Its output is in the terminal ` +
+    "running designlayer. Pick an app below to try again."
+  )
 }
 
 function startEditor(options, choice, screen) {

@@ -79,6 +79,8 @@
  */
 
 import { clear, el } from "../core/dom"
+import { smoothScroll } from "../core/motion"
+import { holdScroll } from "../core/scroll"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
 import { section } from "../panels/inspector/field"
@@ -142,9 +144,17 @@ const ROW_ACTIVE = "de-lint-row--active"
  * naming the choice that is left — and the sentence is what hovering explains.
  * Identical prose repeated down a list is not emphasis; it is the thing the
  * reader learns to skip, and it takes the rows either side of it with it.
+ *
+ * It opens with the row's own four words rather than a second spelling of them.
+ * This said "No safe automatic fix" while the row said "No automatic fix", and
+ * a hover whose job is to expand the row instead restated it differently — two
+ * names for one state, which reads as two states. `safe` was also doing no work
+ * in a four-word hint: every fix this panel offers is one the checker named
+ * outright, so there is no unsafe fix being withheld for the word to contrast
+ * with. The full reason it might be is the sentence that follows.
  */
 const NO_FIX =
-  "No safe automatic fix — the checker did not name a single replacement. " +
+  "No automatic fix — the checker did not name a single replacement. " +
   "Select the element and pick a token in the inspector."
 
 /** `3 issues`, `1 issue`. The summary has to count aloud. */
@@ -243,6 +253,11 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
    * order; it deliberately does nothing when pressed. The one thing it must not
    * be is a control that re-runs discovery on click, which would make a press
    * on an explanation change the state of the feature it explains.
+   *
+   * `InfoMark` follows that dot too, and for the same reason: this is a 14px
+   * disc, so `Info`'s own ring drew a second circle 1.4px inside it and left
+   * the `i` illegible. The badge in `markers.ts` keeps the ringed `Info` — it
+   * is a rounded square plate over the app, with no circle of its own.
    */
   const checkers = el(
     "button",
@@ -252,7 +267,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       "data-de-lint": "checkers",
       "aria-label": "Which checkers run",
     },
-    [icon("Info", tokens.icon.row)]
+    [icon("InfoMark", tokens.icon.row)]
   ) as HTMLButtonElement
 
   const summaryLine = el("div", {
@@ -261,6 +276,28 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // Polite rather than assertive: the count changes when a run lands, which
     // is news, but not news worth interrupting a screen reader mid-sentence.
     "aria-live": "polite",
+  })
+  /**
+   * A run that failed, announced rather than silently swapped in.
+   *
+   * It used to be a `<p>` built inside `body` on the render that noticed the
+   * failure. That is an asynchronous error written into a plain container: the
+   * press that started the audit moved no focus, the button has already gone
+   * back to saying "Audit", and nothing tells a screen-reader user that the
+   * thing they asked for did not happen. `role="alert"` is what
+   * `libraries-section.ts` uses on its sign-in refusal for exactly this shape of
+   * failure, and this is the same shape.
+   *
+   * It lives OUTSIDE `body` and is hidden rather than removed, because `body` is
+   * cleared on every render — a live region rebuilt each paint either announces
+   * a sentence that has not changed or, worse, is inserted already-populated and
+   * announces nothing at all.
+   */
+  const errorLine = el("p", {
+    class: "de-lint-error",
+    role: "alert",
+    "data-de-lint": "failure",
+    hidden: true,
   })
   const body = el("div", { class: "de-lint-body" })
   const footer = el("div", { class: "de-lint-footer" })
@@ -278,8 +315,11 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
    * project gets.
    */
   const node = section(
-    "DS Lint",
-    el("div", { class: "de-lint" }, [controls, summaryLine, body, footer]),
+    // Sentence case, like the fifteen other section headings in the inspector.
+    // "Lint" is not a proper noun and this file already spells the tool
+    // `ds-lint` in lower case where it names the binary.
+    "DS lint",
+    el("div", { class: "de-lint" }, [controls, summaryLine, errorLine, body, footer]),
     checkers
   )
 
@@ -290,7 +330,12 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // No repaint here: `runAudit` announces the running state synchronously,
     // and the subscription below turns that into the disabled button.
     void runAudit(editor.apiBase).catch((error: unknown) => {
-      editor.toast(error instanceof Error ? error.message : "The audit could not run", "error")
+      editor.toast(
+        error instanceof Error
+          ? error.message
+          : "The audit could not run. Check the terminal running designlayer, then press Audit again.",
+        "error"
+      )
     })
   }
 
@@ -301,10 +346,13 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         for (const id of result.fixed) checked.delete(id)
         if (result.failed.length) {
           // Named rather than counted: a failure here means the file moved
-          // under us, and the one thing the user can do about it is re-audit.
+          // under us, and the one thing the user can do about it is re-audit —
+          // which the sentence now says outright. The comment used to argue for
+          // a recovery the copy never mentioned, leaving the reader a reason
+          // and no instruction.
           editor.toast(
             `Fixed ${result.fixed.length}, could not fix ${result.failed.length}: ` +
-              `${result.failed[0].reason}`,
+              `${result.failed[0].reason} Press Audit again to see what is left.`,
             "error"
           )
           return
@@ -312,7 +360,12 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         editor.toast(`Fixed ${result.fixed.length} of ${ids.length}`)
       })
       .catch((error: unknown) => {
-        editor.toast(error instanceof Error ? error.message : "That fix could not be written", "error")
+        editor.toast(
+          error instanceof Error
+            ? error.message
+            : "That fix could not be written. Press Audit again — the file may have changed.",
+          "error"
+        )
       })
   }
 
@@ -322,13 +375,23 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         for (const id of ids) checked.delete(id)
       })
       .catch((error: unknown) => {
-        editor.toast(error instanceof Error ? error.message : "Could not ignore that", "error")
+        editor.toast(
+          error instanceof Error
+            ? error.message
+            : "Could not ignore that finding. Try again.",
+          "error"
+        )
       })
   }
 
   function unignore(ids: string[]): void {
     void unignoreFindings(editor.apiBase, ids).catch((error: unknown) => {
-      editor.toast(error instanceof Error ? error.message : "Could not restore that", "error")
+      editor.toast(
+        error instanceof Error
+          ? error.message
+          : "Could not restore that finding. Try again.",
+        "error"
+      )
     })
   }
 
@@ -348,12 +411,16 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         .map(selectable)
         .find(Boolean) ?? null
     if (!element) {
-      editor.toast(`${where(finding)} is not rendered on this page`, "error")
+      editor.toast(
+        `${where(finding)} is not rendered on this page. ` +
+          `Navigate to the route that renders it, then press the row again.`,
+        "error"
+      )
       return
     }
     editor.select(element)
     // Guarded: JSDOM does not implement it, and the suites drive this directly.
-    element.scrollIntoView?.({ block: "center", inline: "nearest" })
+    element.scrollIntoView?.({ block: "center", inline: "nearest", behavior: smoothScroll() })
     announceHover(finding.id)
   }
 
@@ -377,7 +444,11 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
   function checkerLine(): string {
     if (!lintToolsLoaded()) return "Working out which checkers fit this project…"
     const all = lintTools()
-    if (!all.length) return "No design-system checker is installed here."
+    // The one branch of this sentence that is a dead end rather than a report:
+    // there is nothing to name, so it names what would make the feature work.
+    if (!all.length) {
+      return "No design-system checker is installed here. Install Stylelint, ds-lint or shadcn/lint to audit this project."
+    }
     const names = (subset: typeof all): string => subset.map((tool) => tool.name).join(", ")
     const on = all.filter((tool) => tool.available)
     const off = all.filter((tool) => !tool.available)
@@ -463,8 +534,11 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         onclick: () => reveal(finding),
       },
       [
-        // Unmodified: the tone comes down from the row's severity class, so
-        // there is one place a severity turns into a colour.
+        // Unmodified: the tone AND the corner both come down from the row's
+        // severity class, so there is one place a severity turns into a mark.
+        // Hidden from the reader because the severity word is already in the
+        // button's accessible name above; the shape is the sighted half of the
+        // same statement, for someone who cannot sort red from amber.
         el("span", { class: "de-lint-dot", "aria-hidden": "true" }),
         el("span", { class: "de-lint-headline" }, [
           literalChip(finding.snippet, "found"),
@@ -591,7 +665,42 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     auditButton.disabled = running || (lintToolsLoaded() && !lintTools().some((tool) => tool.available))
     clear(auditButton)
     auditButton.append(icon("ListChecks", tokens.icon.row), running ? "Auditing…" : "Audit")
-    auditButton.title = auditButton.disabled && !running ? "No checker is available for this project" : ""
+    /*
+     * A disabled button has to say where the answer is, and say it twice.
+     *
+     * `No checker is available for this project` stated the fact and stopped
+     * there, on the one control the reader just pressed and watched do nothing.
+     * The reasons exist — the info dot beside the heading has every checker and
+     * why it was skipped — and the sentence's job is to send them there rather
+     * than restate the greyed-out state they can already see.
+     *
+     * Paired with `aria-description` for the same reason the info dot is: a
+     * `title` is mouse-only, and a screen-reader user meeting a disabled Audit
+     * button would otherwise get the disabled state with no account of it.
+     */
+    const why =
+      auditButton.disabled && !running
+        ? "No checker fits this project — the info icon beside the heading says which ones were tried"
+        : ""
+    auditButton.title = why
+    if (why) auditButton.setAttribute("aria-description", why)
+    else auditButton.removeAttribute("aria-description")
+    /*
+     * The one long-running, network-bound thing in the editor said so with a
+     * STATIC STRING beside a glyph that did not move.
+     *
+     * An audit is a round trip to a checker over the whole page: seconds, not
+     * frames. Everything about the button during that time — disabled, greyed,
+     * relabelled — describes a state rather than an activity, and a disabled
+     * button wearing a word is exactly what a button looks like when something
+     * has gone wrong. The sweep is the only part that says the wait is
+     * progressing rather than stuck.
+     *
+     * An attribute, not a class, so `css/lint.ts` can hang the sweep and the
+     * skeleton rows off one flag; and paired with the rows below, which are the
+     * same statement made where the answer will appear.
+     */
+    auditButton.toggleAttribute("data-de-busy", running)
   }
 
   /** The header icon's sentence. Cheap, and it changes only when discovery does. */
@@ -725,6 +834,23 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
   }
 
   /**
+   * The SHAPE of the answer, while the answer is still being fetched.
+   *
+   * Three boxes at the height the findings will use, breathing on a stagger so
+   * the group reads as one thing waiting rather than three things blinking.
+   *
+   * `aria-hidden`, with the announcement left to the button's own label: a
+   * screen reader wants "Auditing", not a description of three grey rectangles.
+   */
+  function skeletonRows(): HTMLElement {
+    return el(
+      "div",
+      { class: "de-lint-skeleton", "aria-hidden": "true" },
+      [0, 1, 2].map(() => el("div", { class: "de-lint-skeleton-row" }))
+    )
+  }
+
+  /**
    * What the list says when it has no rows, and it is four different answers.
    *
    * Never audited, audited and clean, everything dismissed, and no checker
@@ -750,11 +876,30 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
             .join(" ")
       )
     }
-    if (lintRunState() === "running") return empty("Auditing…")
+    /*
+     * Three grey rows where the findings will be, rather than a sentence where
+     * they will not.
+     *
+     * `empty()` prints a line of prose into the middle of the panel — which for
+     * every other empty state here is right, because those are answers. This
+     * one is not an answer, it is a gap, and the useful thing to say about a gap
+     * is its SHAPE: rows, at row height, in the place the findings are about to
+     * land. The count is three because it is enough to read as a list and few
+     * enough not to promise a number the audit has not returned yet.
+     */
+    if (lintRunState() === "running") return skeletonRows()
     if (!lintRanAt()) {
       return empty("Nothing audited yet. Press Audit to check this page against the design system.")
     }
-    if (dismissed) return empty(`Nothing open — ${issueWord(dismissed)} ignored.`)
+    // The control that acts on this number is one line below, in the footer,
+    // and the sentence used to give the count without naming it — a reader told
+    // that three things are hidden and not told what hides them reads it as a
+    // statistic rather than as a door.
+    if (dismissed) {
+      return empty(
+        `Nothing open. ${issueWord(dismissed)} ignored — open “Show ignored” below to bring one back.`
+      )
+    }
     return empty("No design-system issues found.")
   }
 
@@ -772,6 +917,14 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
 
   function render(): void {
     if (signature() === painted) return
+
+    /*
+     * The findings list repaints under a reader who is working through it —
+     * every tick, every ignore, every re-run — and `clear(body)` below would
+     * otherwise hand them back the top of the list each time. `core/scroll.ts`
+     * carries why an emptied scroller loses its offset at all.
+     */
+    const hold = holdScroll(node)
 
     const findings = lintFindings()
     const dismissed = ignoredFindings()
@@ -805,9 +958,10 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     clear(body)
     rows = new Map()
     const failure = lintRunState() === "error" ? lintError() : null
-    if (failure) {
-      body.append(el("p", { class: "de-lint-error" }, [failure]))
-    }
+    // Written only when it changes: `errorLine` is a live region, and re-setting
+    // the same sentence on the next beat would announce the failure twice.
+    if ((errorLine.textContent || null) !== failure) errorLine.textContent = failure ?? ""
+    errorLine.hidden = !failure
     if (findings.length) {
       for (const group of byRule(findings)) {
         const built = group.rows.map((finding) => {
@@ -845,6 +999,10 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     renderControls(findings)
     renderFooter(dismissed)
     paintSelection()
+    // Last: the controls and the footer are part of this section's height, and
+    // releasing before they are back would clamp against a column that is one
+    // row short of the one the reader will see.
+    hold.release()
   }
 
   /*
@@ -869,7 +1027,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     const lit = new Set(detail?.ids?.length ? detail.ids : id ? [id] : [])
     for (const [key, row] of rows) row.classList.toggle(ROW_ACTIVE, lit.has(key))
     if (!id) return
-    rows.get(id)?.scrollIntoView?.({ block: "nearest" })
+    rows.get(id)?.scrollIntoView?.({ block: "nearest", behavior: smoothScroll() })
   })
 
   subscribeToLint(() => render())

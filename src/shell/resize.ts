@@ -53,6 +53,7 @@ import type { PanelController, PanelOptions } from "motion-panels"
 
 import { el } from "../core/dom"
 import { tokens } from "../core/tokens"
+import { prefersReducedMotion } from "../core/motion"
 
 export type PanelSide = "left" | "right"
 
@@ -116,12 +117,49 @@ const SPECS: Record<PanelSide, Spec> = {
  *
  * `motion-panels` ships its own default and it is a good one, but the chrome
  * has exactly one motion vocabulary and a panel that settles on a different
- * curve from the one it slides out on reads as two different surfaces. The
- * numbers are `tokens.duration.drawer` and `tokens.ease` — spelled as seconds
- * and as a raw cubic-bezier here because Motion takes them that way, and CSS
- * strings are not a thing it can parse.
+ * curve from the one it slides out on reads as two different surfaces.
+ *
+ * DERIVED, not restated. These were the literals `0.24` and
+ * `[0.32, 0.72, 0, 1]` — `tokens.duration.drawer` and `tokens.ease` written out
+ * by hand, with nothing keeping them in agreement. Motion wants seconds and a
+ * number array where CSS wants a string, which is why the conversion exists;
+ * it is not a reason for the values to be typed twice.
  */
-const FOLD = { duration: 0.24, ease: [0.32, 0.72, 0, 1] } as const
+const FOLD = {
+  duration: Number.parseFloat(tokens.duration.drawer) / 1000,
+  ease: cubicBezierPoints(tokens.ease),
+} as const
+
+/**
+ * `cubic-bezier(a, b, c, d)` as the four numbers Motion takes.
+ *
+ * Falls back to the curve's own control points if the token is ever written in
+ * a form this cannot read — a keyword, say. A fold on a slightly wrong curve is
+ * a much smaller failure than a fold that throws, and the test suite pins the
+ * token's shape.
+ */
+function cubicBezierPoints(curve: string): [number, number, number, number] {
+  const numbers = curve.match(/-?\d*\.?\d+/g)?.map(Number)
+  return numbers?.length === 4
+    ? (numbers as [number, number, number, number])
+    : [0.32, 0.72, 0, 1]
+}
+
+/**
+ * Reduced motion, for the one animation in the chrome that CSS cannot reach.
+ *
+ * Every other transition here is a stylesheet declaration, so the blanket in
+ * `css/base.ts` clamps it. This one is a JS animation writing an inline width
+ * per frame, and no media query can touch it: a reader who asked for less
+ * motion still got 240ms of panel width on a seam double-click, a keyboard
+ * resize, or a window re-fit.
+ *
+ * The query itself lives in `core/motion.ts`, which is where the other two
+ * places JS has to ask this question read it from.
+ */
+function foldTransition(): typeof FOLD | { duration: 0 } {
+  return prefersReducedMotion() ? { duration: 0 } : FOLD
+}
 
 // ──────────────────────────────────────────────── remembering widths ───────
 
@@ -250,7 +288,7 @@ export function mountPanelResize(options: PanelResizeOptions): PanelResize {
     minSize: entry.spec.minSize,
     maxSize: `${Math.round(entry.spec.maxShare * 100)}%`,
     defaultSize: entry.spec.defaultSize,
-    transition: FOLD,
+    transition: foldTransition(),
     onSizeChange: (next) => {
       entry.desired = next
       rememberWidths({ left: entries.left.desired, right: entries.right.desired })

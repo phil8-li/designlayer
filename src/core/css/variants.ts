@@ -41,7 +41,7 @@ export const variantsCss = `/* ---------- variant axes ---------- */
  * alone — and a documented prop sets the live attribute and files the change
  * for an agent.
  */
-.de-variant-note { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: 1.4; }
+.de-variant-note { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
 
 /* ---------- the instance header ---------- */
 /*
@@ -69,7 +69,12 @@ export const variantsCss = `/* ---------- variant axes ---------- */
 .de-instance-glyph {
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  color: ${t.color.accent};
+  /* \`textDim\`, not the accent. On this tab the accent means "this one is
+     chosen" — the selected row, the pressed tool, the active token. A permanent
+     accent mark at the head of the Component section claimed a state it never
+     leaves, and spent the one colour that has a job. \`.de-layer-icon\` is the
+     same "what kind of thing is this" mark one panel over, and it is dim. */
+  color: ${t.color.textDim};
 }
 /*
  * The live thumbnail's box, and the two rules that used to belong to the assets
@@ -126,7 +131,11 @@ export const variantsCss = `/* ---------- variant axes ---------- */
   color: ${t.color.textDim};
   font-family: ${t.font.mono}; font-size: ${t.type.caption};
 }
-.de-instance-desc { color: ${t.color.textMuted}; font-size: ${t.type.body}; line-height: 1.5; }
+/* Prose, so it takes the measure cap for the reason \`type.measure\` gives. */
+.de-instance-desc {
+  max-width: ${t.type.measure};
+  color: ${t.color.textMuted}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody};
+}
 /*
  * A property the library documents and nothing here can set.
  *
@@ -138,7 +147,7 @@ export const variantsCss = `/* ---------- variant axes ---------- */
 .de-instance-stated {
   overflow: hidden; text-overflow: ellipsis;
   color: ${t.color.textMuted};
-  font-size: ${t.type.body}; line-height: 1.4;
+  font-size: ${t.type.body}; line-height: ${t.type.leadingRow};
 }
 
 /* ---------- the boolean switch ---------- */
@@ -196,7 +205,18 @@ export const variantsCss = `/* ---------- variant axes ---------- */
   transform: translateX(12px);
   background: ${t.color.onAccent};
 }
-.de-instance-switch:active { transform: scale(0.94); }
+.de-instance-switch:active { transform: scale(0.96); }
+/*
+ * The press squeeze goes with the motion, the way its two siblings' already do.
+ *
+ * \`.de-lib-switch\` and the annotation toggle are the same control and both are
+ * stood down in their own files' reduced-motion blocks; this one was the third
+ * copy and had never got one, so a reader who asks for less motion got a squeeze
+ * on exactly one of the chrome's three switches.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .de-instance-switch:active { transform: none; }
+}
 /* No disabled state, unlike its two siblings, and that is a decision rather
    than an omission: a switch is drawn in a POSITION, and a boolean this panel
    cannot read has no position to draw it in. The section states those as text

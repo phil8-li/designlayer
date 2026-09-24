@@ -238,6 +238,41 @@ export function installTransform(context: EditorContext, writer: Writer): void {
     if (!gesture.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return
     if (!gesture.moved) {
       gesture.moved = true
+      /*
+       * THE THRESHOLD'S OWN TRAVEL IS APPLIED, AND THAT IS THE RIGHT TRADE.
+       *
+       * A drag does nothing until the pointer has moved `DRAG_THRESHOLD`, then
+       * applies the whole distance — so a slow drag begins with the element
+       * jumping three pixels to catch a pointer that has already moved on. It
+       * looks like the element was stuck and then slipped, and it is the obvious
+       * thing to want to fix.
+       *
+       * Both fixes were built and both were reverted, and the second one is the
+       * interesting failure.
+       *
+       * Re-basing the origin to `event.clientX` is simply wrong: a pointer that
+       * crosses the threshold in one large event — a flick, a trackpad, a coarse
+       * pointer — has its entire first move discarded rather than three pixels
+       * of it. `test/drag-write-cases.mjs` failed seven ways.
+       *
+       * Shifting the origin along the travel vector by `DRAG_THRESHOLD` is the
+       * textbook form, and it is correct about the jump: it spends the threshold
+       * once instead of twice, and a flick keeps all but three pixels. It also
+       * means the element trails the pointer by those three pixels FOR THE REST
+       * OF THE DRAG — the point you grabbed is no longer the point under the
+       * cursor. DW-01 caught it as 67px where the gesture travelled 70.
+       *
+       * In a tool whose output is coordinates in somebody's source, grab-point
+       * fidelity outranks the smoothness of the first frame. A three-pixel jump
+       * at the start is visible once; a three-pixel offset between the cursor
+       * and the thing it is holding is wrong for the whole gesture, and it is
+       * wrong in the direction the designer is trying to be precise about.
+       *
+       * So the jump stays, and it is the cost of having a threshold at all. The
+       * only fix that does not trade it for something worse is a smaller
+       * threshold, which is a question about tremor tolerance rather than about
+       * motion.
+       */
       const info: DragInfo = {
         element: gesture.targets[0].element,
         mode: gesture.mode,

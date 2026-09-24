@@ -40,6 +40,9 @@ import { isProjectSourcePath } from "../../core/bridge"
 import { createApply } from "../../core/apply"
 import { previewOnlyChanges, type PreviewOnlyChange } from "../../core/change-prompt"
 import { clear, el } from "../../core/dom"
+import { holdScroll } from "../../core/scroll"
+import { leaveRow } from "../../core/leave"
+import { swapMark } from "../../core/swap-mark"
 import { icon, type IconName } from "../../core/icons"
 import { requestAgent } from "../../ai/transport"
 import {
@@ -49,6 +52,7 @@ import {
   onAnnotationsChange,
   onSettingsChange,
   removeAnnotation,
+  restoreAnnotation,
   updateSettings,
 } from "../../annotations/store"
 import { clearEdits, isEditQueued, onEditsChange } from "../../annotations/journal"
@@ -81,42 +85,24 @@ import { tokens } from "../../core/tokens"
  * genuinely holds.
  */
 
-/**
- * The marker colors on offer, and the whole of the control.
- *
- * A native `<input type="color">` used to sit here and is gone. It renders
- * three different ways across Chrome, Safari and Firefox — a swatch, a well, a
- * bevelled button — none of which can be styled to look like anything else in
- * this panel, and all three answer a click by opening an OS colour panel over a
- * 260px inspector to choose one of about six colours anyone ever wants. Seven
- * presets ARE the six colours, and they are legible on a white page and a dark
- * one alike, which is the only real constraint on a marker.
- *
- * The setting is still a plain hex string, so nothing downstream — the painter,
- * the brief, the persisted settings — learned that the picker went away.
- */
 /*
- * Apple's system colours, which is the set a white numeral is designed against.
+ * THE MARKER COLOUR PICKER IS GONE, and the setting it wrote is not.
  *
- * The seven before these were hand-mixed mid-to-light hues, picked back when the
- * pin wore DARK ink — an amber at `#e3b341` is a sensible choice under near-black
- * and an indefensible one under white, where it measures 1.4:1. Swapping the ink
- * without swapping the palette would have kept the old constraint and broken it.
+ * Seven swatches stood here, and before them a native `<input type="color">`.
+ * What finished them off is that the choice was never one a designer came to
+ * this panel to make: the pin is read by the person who dropped it, in the
+ * session they dropped it in, and the shipped blue is legible on a white page
+ * and a dark one alike. A row that is right by default is a row nobody opens
+ * Settings for, and this block is small enough that every row in it has to
+ * earn the line.
  *
- * Same hues in the same order, so a saved `markerColor` still lands on the swatch
- * the user picked; the values are simply the system ones now. They are also what
- * Agentation uses, which is the point — the pin is meant to read as the same
- * object a designer already knows from there.
+ * `markerColor` survives untouched — `annotations/types.ts` still defaults it,
+ * `annotations/store.ts` still migrates a stored one off the retired palette,
+ * and `annotations/canvas.ts` still paints `--de-ann-color` from it. A project
+ * that needs a different pin sets it there, once, rather than by hunting seven
+ * circles in a fold. Nothing downstream learned that the picker went away,
+ * which is the same bargain the `<input type="color">` removal made.
  */
-const MARKER_PRESETS: ReadonlyArray<{ hex: string; name: string }> = [
-  { hex: "#6155F5", name: "Indigo" },
-  { hex: "#0088FF", name: "Blue" },
-  { hex: "#00C3D0", name: "Cyan" },
-  { hex: "#34C759", name: "Green" },
-  { hex: "#FFCC00", name: "Yellow" },
-  { hex: "#FF8D28", name: "Orange" },
-  { hex: "#FF383C", name: "Red" },
-]
 
 /**
  * Two sentences, rather than shortened to "Remove".
@@ -148,12 +134,23 @@ const DROP_EDIT = "Take this change back. The preview reverts and nothing is wri
  * buttons. The tick is gone, so naming it here would send a reader looking for
  * a control that is not on the row.
  *
- * What replaces it is the part that was always the point: this is the one
- * action in the outbox with no way back. The neighbouring edit row says the
- * opposite about ITS bin — "the change stays applied" — and the pair only works
- * if each states its own consequence rather than the other's name.
+ * What replaces it is the part that was always the point: what happens to the
+ * note. The neighbouring edit row says the opposite about ITS bin — "the change
+ * stays applied" — and the pair only works if each states its own consequence
+ * rather than the other's name.
+ *
+ * It used to end "There is no undo.", which was true and is not any more: the
+ * delete now raises a card offering the note back (see `erase`). Leaving the
+ * sentence in place would have been the worse of the two possible errors — a
+ * reader who believes a reversible action is final does not press it, so the
+ * recovery would have paid for nothing.
+ *
+ * "Undo" rather than a fuller promise, because the label on the card says the
+ * same word and the two have to match: a tooltip that offers "a chance to
+ * restore it" and a button that says "Undo" are two affordances as far as the
+ * reader is concerned.
  */
-const DELETE_NOTE = "Delete this note. There is no undo."
+const DELETE_NOTE = "Delete this note. Undo is offered once it goes."
 
 /**
  * Said as "reopen", not "edit", because the note is written somewhere else.
@@ -333,47 +330,13 @@ function filesInOutbox(items: OutboxItem[]): string[] {
 /** How long the tick stays up after a copy, matching agentation's own. */
 const COPIED_FOR = 2000
 
-/**
- * A button glyph that becomes a tick for a moment, and the moment IS the
- * feedback.
- *
- * Both drawings are in the DOM at once, stacked in one box, and the swap is a
- * crossfade with a scale: the outgoing mark leaves at 0.8 and the incoming one
- * arrives at 1. That is agentation's treatment, copied deliberately rather than
- * reinvented — its toolbar sits on the same page as this panel, so a copy
- * confirming itself two different ways in one viewport would read as two
- * products. Its numbers are 200ms and scale(0.8), which is `duration.base` and
- * the step the stylesheet already uses.
- *
- * Stacked rather than swapped in place for two reasons. Replacing the `<svg>`
- * gives the browser nothing to transition between — the new node enters at its
- * final state, so there is no animation, only a jump — and a glyph that is
- * momentarily absent lets the label slide, which is the one thing a 24px pill
- * on a 244px row must not do.
- *
- * The tick takes `success` rather than `currentColor`. On the plain pill that
- * is the only channel saying the press LANDED as opposed to merely registering,
- * and it is the same green the composer's own confirmations use.
+/*
+ * The tick-on-copy helper used to live here, and the argument for it still
+ * reads best next to a copy button — but it is a general statement about glyph
+ * state and three other surfaces needed it, one of which (the Code tab's copy
+ * button) was doing the exact clear-and-append the note warns against. It is
+ * `core/swap-mark.ts` now; the reasoning moved with it.
  */
-interface SwapMark {
-  node: HTMLElement
-  /** Show the tick (`true`) or the resting glyph. */
-  show(done: boolean): void
-}
-
-function swapMark(resting: IconName): SwapMark {
-  const rest = icon(resting, tokens.icon.row)
-  const done = icon("Check", tokens.icon.row)
-  rest.classList.add("de-swap-rest")
-  done.classList.add("de-swap-done")
-  const node = el("span", { class: "de-swap", "aria-hidden": "true" }, [rest, done])
-  return {
-    node,
-    show(showDone: boolean): void {
-      node.classList.toggle("de-swap--done", showDone)
-    },
-  }
-}
 
 export function annotationsTab(editor: EditorContext): InspectorTab {
   /*
@@ -757,7 +720,17 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
       // The words live in the toast because the control is a glyph: a trash can
       // that has become a tick has asked "again?" and said nothing at all about
       // what is at stake.
-      editor.toast(`${CLEAR.prompt(noteCount)}. This cannot be undone.`, "error")
+      //
+      // The DEFAULT rung, not `error`, and the difference became load-bearing
+      // when `DURATION.error` went to `Infinity`. An error card stays until it
+      // is dismissed, which is right for "the write failed" and wrong for this:
+      // the arming window is `CLEAR.armedMs`, six seconds, after which
+      // `disarm()` turns the tick back into a bin. A card that outlives the
+      // window goes on saying "press again" about a control that has already
+      // stood down — so pressing again re-arms rather than clearing, which is
+      // the opposite of what the card promised. `info` is 4000ms, inside the
+      // window, so the prompt and the state it describes end together.
+      editor.toast(`${CLEAR.prompt(noteCount)}. This cannot be undone.`)
     },
   })
 
@@ -867,6 +840,13 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * because the stylesheet has no hidden-text class to lend, and faking one
    * inline would be the only inline style in this file that is not a swatch's
    * own color.
+   *
+   * `InfoMark` and not `Info`: the dot IS the circle. `Info` is a ring with an
+   * `i` in it, and drawn at 12px inside this 14px disc the two circles sat
+   * 1.4px apart and the `i` between them came to a 1.25px stroke over 2px of
+   * stem — which is what the dot was reported for, a ring with a smudge in it.
+   * `InfoMark` is the same glyph with Lucide's ring dropped and the `i` scaled
+   * to fill the disc that was already drawing one.
    */
   function helpDot(setting: string, hint: string): HTMLButtonElement {
     return el(
@@ -878,7 +858,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         "aria-label": `Help: ${setting}`,
         "aria-description": hint,
       },
-      [icon("Info", tokens.icon.row)]
+      [icon("InfoMark", tokens.icon.row)]
     )
   }
 
@@ -888,14 +868,20 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   }
 
   /**
-   * A switch, for a setting that changes how the tool behaves from now on.
+   * A switch. EVERY setting in this block is one now.
    *
-   * Switch rather than checkbox, and the asymmetry with the last group is the
-   * point: these take effect the instant they are pressed and change the editor
-   * under you, while the two below only say what should happen at some later
-   * handover. A screen reader draws exactly that line — "on"/"off" for a
-   * switch, "checked"/"unchecked" for a checkbox — so the roles are doing work,
-   * not decoration.
+   * There used to be two vocabularies here, and the split was defended at
+   * length: a switch for a setting that changes the editor from now on, a
+   * checkbox for a "one-shot preference" about some later handover. It was a
+   * distinction the panel could state and the reader could not use. All five
+   * rows persist, all five take effect the moment they are pressed, and none
+   * of them is scoped to a single handover — "Clear on copy or send" is a
+   * standing instruction about every copy, not a box you tick before one. What
+   * the two drawings actually communicated was that some rows in one fold were
+   * a different KIND of thing, which they are not.
+   *
+   * So: one control, on the right edge, for every row. The alignment is no
+   * longer carrying a meaning, which means it can no longer carry a wrong one.
    *
    * The button carries no text: the row's label already names it, and a second
    * copy inside the control is one more thing to read for the same fact. That
@@ -918,73 +904,96 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   }
 
   /**
-   * A one-shot preference: the box first, then the words.
+   * A whole row: the name, its dot, and the switch opposite them.
    *
-   * Still a real `<input type="checkbox">` rather than another `role` — it is
-   * the one control here the platform already draws, focuses and toggles
-   * correctly, and nothing about a preference justifies reimplementing that.
+   * The three rows this builds were `<input type="checkbox">` with a `<label
+   * for>`, and losing the native input costs one real thing — clicking the
+   * WORDS no longer toggles the setting. That is the price of the row above
+   * being a `role="switch"` too, and it is paid on purpose: `.de-ann-setting`
+   * is not a `<label>` and cannot become one without putting a `<button>`
+   * inside label content, which is invalid and makes a press on the help dot
+   * silently flip the setting behind it. Every row in the block now has one
+   * target, in the same place, doing the same thing.
    *
-   * The `<label>` points at the input with `for` instead of wrapping it, which
-   * it used to. It has to: the help dot lives in the same flex child now, and a
-   * `<button>` inside a `<label>` is invalid content AND a click on the dot
-   * that silently toggles the checkbox behind it.
+   * The returned switch is handed back rather than looked up again, because
+   * `syncSettings` writes `aria-checked` on it on every render and a
+   * `querySelector` per render over a block that never rebuilds is a lookup
+   * for a node we are holding.
    */
-  function checkRow(
-    id: string,
+  function switchRow(
     label: string,
     hint: string,
     onCommit: (value: boolean) => void
-  ): { row: HTMLElement; input: HTMLInputElement } {
-    const input = el("input", { type: "checkbox", id })
-    input.addEventListener("change", () => onCommit(input.checked))
-    const row = el("div", { class: "de-ann-setting de-ann-setting--check" }, [
-      input,
-      labelWith(el("label", { for: id }, [label]), helpDot(label, hint)),
+  ): { row: HTMLElement; toggle: HTMLButtonElement } {
+    const toggle = switchControl(label, onCommit)
+    const row = el("div", { class: "de-ann-setting" }, [
+      labelWith(label, helpDot(label, hint)),
+      toggle,
     ])
-    return { row, input }
+    return { row, toggle }
   }
 
   /*
-   * "Reload", not "restart", even though the flag is `hideUntilRestart`.
+   * A SWITCH IS LABELLED WITH WHAT IS TRUE WHEN IT IS ON.
    *
-   * Restart is a word with three referents on a dev machine — the browser, the
-   * dev server, the editor — and only one of them is what brings the markers
-   * back. A designer who reads "restart" and bounces their dev server has spent
-   * a minute on something Cmd+R does, and the setting looks broken meanwhile.
+   * This was "Hide until reload", which inverts the contract of the control it
+   * is on: a `role="switch"` reads out as "Hide until reload, on", and what
+   * that state actually produces is markers you cannot see. The reader has to
+   * negate the label in their head to know what the switch is doing, and the
+   * negation is exactly the part people get wrong under time pressure.
+   *
+   * "Show markers" is the same setting stated forward, so ON means markers are
+   * on the page — and it is already the product's own word for it: the eye
+   * button in the strip above says "Show markers"/"Hide markers" off the same
+   * flag. Two surfaces onto one setting now agree about which direction is
+   * which.
+   *
+   * The FLAG does not move. `hideUntilRestart` is persisted, filtered on read,
+   * and reasoned about in four files (`annotations/store.ts` most of all);
+   * renaming it to chase the label would be a migration in exchange for
+   * nothing. The inversion lives here, at the one seam where a word becomes a
+   * boolean, and at the one read in `syncSettings`.
+   *
+   * "Reload", not "restart", survives in the hint for its original reason:
+   * restart has three referents on a dev machine — the browser, the dev server,
+   * the editor — and only one of them brings the markers back. A designer who
+   * reads "restart" and bounces their dev server has spent a minute on
+   * something Cmd+R does, with the setting looking broken meanwhile.
    */
-  const hideMarkers = switchControl("Hide until reload", (value) => updateSettings({ hideUntilRestart: value }))
-  const clearOnCopy = checkRow(
-    "de-ann-clear-on-copy",
+  const hideMarkers = switchControl("Show markers", (value) =>
+    updateSettings({ hideUntilRestart: !value })
+  )
+  const clearOnCopy = switchRow(
     "Clear on copy or send",
     // The label already says when. The hint owes the two facts it does not:
     // that the edits go too, and that a refused clipboard keeps the list.
     "Takes the edits as well, and only once the handover has gone through.",
     (value) => updateSettings({ clearOnCopy: value })
   )
-  const blockInteractions = checkRow(
-    "de-ann-block-interactions",
+  const blockInteractions = switchRow(
     "Block page interactions",
     "Turn it off to drive the app into the state worth annotating, then turn it back on.",
     (value) => updateSettings({ blockPageInteractions: value })
   )
-
-  const swatches = MARKER_PRESETS.map((preset) =>
-    el("button", {
-      class: "de-ann-swatch",
-      type: "button",
-      // The one inline style in this file, and it cannot be anywhere else: the
-      // color IS the datum, and a stylesheet cannot name seven values that the
-      // control is defined by rather than decorated with.
-      style: `background: ${preset.hex}`,
-      title: preset.name,
-      // The colour alone. The group below is named "Marker color", and a screen
-      // reader reads the group before the option — so the prefix made every one
-      // of the seven announce "Marker color, Violet, Marker color group".
-      "aria-label": preset.name,
-      "aria-pressed": "false",
-      onclick: () => updateSettings({ markerColor: preset.hex }),
-    })
-  )
+  /*
+   * "Annotate the editor itself" STOOD HERE, and the switch is gone.
+   *
+   * It was the one setting in the fold that took away the gesture you would
+   * undo it with: once the editor is annotatable, a click on that row files a
+   * note about the row, and the only way back out is a keyboard shortcut the
+   * switch itself had to teach you. A control whose own hint has to name an
+   * escape hatch is a control that can strand the person who pressed it, and
+   * the surface it unlocked — notes filed against the editor's own panels — is
+   * one this product's designers do not need in the middle of annotating an
+   * app.
+   *
+   * `AnnotationSettings.scope` survives, because `annotations/canvas.ts` asks
+   * it one question in three places and the answer is now always `"app"`. It
+   * is reachable from the console and from the tests, and no longer from here.
+   * `annotations/store.ts` forces it back to `"app"` on load for the reason
+   * written there: with no row to flip, a persisted `"editor"` would be
+   * permanent.
+   */
 
   /*
    * CONNECTING AN AGENT, in the one place a designer will look for it.
@@ -1056,7 +1065,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
             editor.toast("The browser refused the clipboard", "error")
           })
           showMcpCopied()
-          editor.toast("Address copied — paste it into your agent's MCP settings")
+          editor.toast("Address copied — paste it into your agent’s MCP settings")
         } catch {
           undoMcpCopied()
           editor.toast("The browser refused the clipboard", "error")
@@ -1126,7 +1135,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     } catch {
       // A dead route reads the same as a refusal, the bargain `ai/transport.ts`
       // makes too: say nothing confident rather than invent a state.
-      mcpState.textContent = "Could not reach the editor's own server."
+      mcpState.textContent = "Could not reach the editor’s own server."
       mcpState.dataset.deState = "off"
     }
   }
@@ -1157,46 +1166,47 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
           "MCP",
           helpDot(
             "MCP",
-            "The address your coding agent connects to. Paste it into your agent's MCP settings — it does not change between restarts."
+            "The address your coding agent connects to. Paste it into your agent’s MCP settings — it does not change between restarts."
           )
         ),
         el("div", { class: "de-mcp-row" }, [mcpAddress, mcpCopy]),
         mcpState,
       ]),
     ]),
-    // Group two is how the tool behaves while you work: it changes what the
-    // markers already on the page do, right now.
-    // Two settings that used to live here are gone, for the same reason in
-    // different words. Output detail moved to the strip above the list, where
-    // the thing it governs is. The component-stack switch was deleted outright
-    // — the editor detects React or Angular itself and reads the stack either
-    // way, so the row only ever offered a worse brief.
+    /*
+     * Group two is everything else, and it is ONE group now.
+     *
+     * There were three: Show markers on its own, Marker colour on its own, and
+     * the three checkboxes under a rule. The rules between them were drawing a
+     * distinction the controls used to make — switch versus checkbox, right
+     * edge versus left — and the controls stopped making it. Four rows that
+     * look the same and behave the same, separated by two hairlines, would be
+     * the block claiming three kinds of setting and showing one.
+     *
+     * The rule above this group stays, because MCP genuinely is another kind:
+     * it is an address and a status, not a setting anybody sets.
+     *
+     * Settings that used to live here and are gone, for the record. Output
+     * detail moved to the strip above the list, where the thing it governs is.
+     * The component-stack switch was deleted outright — the editor detects
+     * React or Angular itself and reads the stack either way, so the row only
+     * ever offered a worse brief. Marker colour went because the shipped blue
+     * is legible everywhere the pin lands and nobody came to this fold to
+     * change it; see the note at the top of this file.
+     */
     el("div", { class: "de-ann-setting-group" }, [
       el("div", { class: "de-ann-setting" }, [
         labelWith(
-          "Hide until reload",
-          helpDot("Hide until reload", "Takes every marker off this tab until you reload the page.")
+          "Show markers",
+          // Stated forward to match the switch. The hint carries the half the
+          // label cannot: that turning it off is scoped to this page load.
+          helpDot("Show markers", "Turn this off to take every marker off the page until you reload.")
         ),
         hideMarkers,
       ]),
-    ]),
-    // `--stacked`: seven circles and a label do not share a 260px row, and the
-    // label is the half that would lose.
-    el("div", { class: "de-ann-setting-group" }, [
-      el("div", { class: "de-ann-setting de-ann-setting--stacked" }, [
-        labelWith(
-          "Marker color",
-          // An instruction, not the argument for having the setting. The reader
-          // pressed the dot to find out what to pick, not whether to care.
-          helpDot("Marker color", "Pick one that stands out against the page you are annotating.")
-        ),
-        // Grouped and named, because seven unlabelled buttons in a row are seven
-        // separate colors to a screen reader and no statement that choosing one
-        // unchooses the rest.
-        el("div", { class: "de-ann-swatches", role: "group", "aria-label": "Marker color" }, swatches),
-      ]),
-    ]),
-    el("div", { class: "de-ann-setting-group" }, [clearOnCopy.row, blockInteractions.row])
+      clearOnCopy.row,
+      blockInteractions.row,
+    ])
   )
 
   const settings = el("div", { class: "de-ann-settings" }, [settingsBody])
@@ -1206,17 +1216,26 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     // Both surfaces onto `hideUntilRestart`, off ONE read, in one place. Either
     // of them keeping its own copy is how a switch comes to say "off" over a
     // page with no markers on it.
-    hideMarkers.setAttribute("aria-checked", String(current.hideUntilRestart))
+    // Inverted at the read for the reason given where the switch is built: the
+    // stored flag says "hidden" and the label says "shown", and this is the one
+    // other place the two meet.
+    hideMarkers.setAttribute("aria-checked", String(!current.hideUntilRestart))
     setGlyph(
       visibility,
       current.hideUntilRestart ? "EyeOff" : "Eye",
-      // Verb and object, and no "on the page": a marker has nowhere else to be,
-      // and the settings row beside it is separately named "Hide until reload",
-      // so the two surfaces onto this flag are still told apart by name.
+      // Verb and object, and no "on the page": a marker has nowhere else to be.
+      // This button and the settings switch now share the phrase "Show markers"
+      // on purpose — they are one setting, and the button names the action
+      // while the switch names the state.
       current.hideUntilRestart ? "Show markers" : "Hide markers"
     )
-    clearOnCopy.input.checked = current.clearOnCopy
-    blockInteractions.input.checked = current.blockPageInteractions
+    // `aria-checked` rather than `.checked`, for the same reason the switch
+    // above reads it back on click: the attribute IS the state now, and the
+    // stylesheet paints off it. Written as a string because that is what an
+    // attribute holds — `String(false)` is "false", not the empty attribute a
+    // boolean property would leave behind.
+    clearOnCopy.toggle.setAttribute("aria-checked", String(current.clearOnCopy))
+    blockInteractions.toggle.setAttribute("aria-checked", String(current.blockPageInteractions))
 
     /*
      * The chosen level, painted onto the menu rather than across four segments.
@@ -1232,20 +1251,6 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
       ? current.outputDetail
       : OUTPUT_DETAILS[0].id
     if (formatControl.value !== level) formatControl.value = level
-
-    // A stored color that is not one of the seven — the shipped default among
-    // them — leaves every swatch unpressed rather than lighting the nearest
-    // one. Highlighting a near miss is the panel claiming a choice nobody made.
-    // Both sides folded, not just the stored one. A hex is case-insensitive and
-    // this comparison should not care how either was typed — it silently stopped
-    // matching the moment the presets were written in Apple's uppercase, which
-    // left every swatch unpressed while the colour was applied perfectly well.
-    const chosen = current.markerColor.toLowerCase()
-    swatches.forEach((swatch, index) => {
-      const active = MARKER_PRESETS[index].hex.toLowerCase() === chosen
-      swatch.classList.toggle("de-ann-swatch--active", active)
-      swatch.setAttribute("aria-pressed", String(active))
-    })
   }
 
   /* ---------- the two sections ---------- */
@@ -1356,6 +1361,14 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    */
   const empty = emptyState()
 
+  /*
+   * Settings is the one block that is ALWAYS in the column, which makes it the
+   * anchor everything above it is inserted before. Held in a variable for that
+   * reason rather than for tidiness: `place` needs a connected sibling, and
+   * `node.lastChild` would be whatever the last render happened to leave.
+   */
+  const settingsSection = section("Settings", settings, undefined, true)
+
   const node = el("div", { class: "de-ann" }, [
     empty,
     editsSection,
@@ -1372,7 +1385,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * they are bracketed by being last.
      */
     ctas,
-    section("Settings", settings, undefined, true),
+    settingsSection,
   ])
 
   /**
@@ -1447,6 +1460,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      *
      * No confirm, unlike the footer's clear-all: one row is one mistake, and a
      * control you use on most rows in a session cannot ask twice every time.
+     * The recovery is an UNDO instead — see `erase` below.
      */
     const remove = el(
       "button",
@@ -1455,10 +1469,60 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         type: "button",
         "data-de-tip": DELETE_NOTE,
         "aria-label": DELETE_NOTE,
-        onclick: () => removeAnnotation(note.id),
+        /*
+         * The row closes first, and the store is written once it has.
+         *
+         * Deleting a note is terminal, and until now the only sign it had
+         * happened was that something the reader was looking at stopped
+         * existing — the same appearance as a list that failed to draw. The
+         * write is deferred rather than doubled up because `removeAnnotation`
+         * rebuilds this whole list through its subscription; doing both at once
+         * would race the rebuild against the row's own departure.
+         */
+        onclick: (event: Event) => {
+          const row = (event.currentTarget as HTMLElement).closest(".de-ann-item")
+          const closing = row instanceof HTMLElement ? leaveRow(row) : null
+          // Synchronous where the row cannot close — see `leaveRow`. A delete
+          // does not become async because a panel happens to be paintable.
+          if (closing) void closing.then(erase)
+          else erase()
+        },
       },
       [icon("Trash", tokens.icon.row)]
     )
+
+    /*
+     * THE DELETE, AND THE WAY BACK FROM IT.
+     *
+     * This was the last irreversible single click in the editor. Everything
+     * else destructive is recoverable — an element delete and a style change go
+     * through `core/history.ts`, a revert restores what it reverted, clear-all
+     * arms first and says what it will cost — and this one act was not, over
+     * the one thing on screen the user wrote themselves. A note is not in a
+     * source file to be recovered from; deleting it is the whole of its ending.
+     *
+     * The row keeps its single click, because the argument above is right: a
+     * control used on most rows in a session cannot ask twice. Confirm and undo
+     * are alternatives, and undo is the cheaper one for the reader — the common
+     * case, where the press was meant, costs nothing at all.
+     *
+     * The card names WHICH note, not "note deleted". By the time it appears the
+     * row is gone, so the sentence is the only thing left saying what was lost,
+     * and with four notes on a page "deleted" is a statement the reader cannot
+     * check. `noteSubject` is the same phrase the row itself used.
+     *
+     * Nothing is raised if the store had already dropped it — a second press
+     * arriving during the row's own departure, or a clear-all landing first.
+     * Offering to undo something that did not happen is worse than silence.
+     */
+    function erase(): void {
+      const removed = removeAnnotation(note.id)
+      if (!removed) return
+      editor.toast(`Deleted the note on ${noteSubject(removed.note)}`, "info", {
+        label: "Undo",
+        onClick: () => restoreAnnotation(removed.note, removed.index),
+      })
+    }
 
     /*
      * Rewriting a note happens where the note is, not in the row.
@@ -1742,6 +1806,19 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   }
 
   function render(): void {
+    /*
+     * The outbox repaints on four stores, and two of them fire while the reader
+     * is looking at a row halfway down it — a note deleted from its own row, an
+     * edit landing from a scrub on the canvas. Both lists are emptied and
+     * refilled below, and an emptied scroller is clamped to the top by the next
+     * layout, so without this the list jumps to the top under the hand that was
+     * working in it. `core/scroll.ts` carries the mechanism.
+     *
+     * Unconditional, unlike the Design tab's version of this: nothing in here
+     * is a view of one element, so there is no change of subject that would
+     * justify starting again from the top.
+     */
+    const hold = holdScroll(node)
     clear(editList)
     clear(noteList)
     const items = outboxItems()
@@ -1845,19 +1922,67 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * exactly as they left — so this costs an insert, not the focus of whoever
      * was using them.
      */
+    /*
+     * THE BUTTONS LEAVE TOO, and they are placed FIRST so the rest can aim at
+     * them.
+     *
+     * They used to sit in the column unconditionally, which put a row of four
+     * controls directly under "Nothing to hand over yet" — Send and Copy
+     * disabled, the eye toggling the visibility of no markers, the bin armed
+     * to clear an empty list. Four controls over an empty state is the panel
+     * offering you its ending before you have started, and the one thing a
+     * first-time reader should be looking at there is the sentence saying what
+     * this tab is for.
+     *
+     * Same condition as Notes, not a narrower one: an edit made on the canvas
+     * with no note written is still a session worth handing over, and Copy and
+     * Send both carry it. The buttons come back with the first thing the
+     * session holds, whichever kind it is.
+     *
+     * Bottom-up, because each block goes in BEFORE a sibling and the sibling
+     * has to be in the column already. Settings never leaves, so it anchors
+     * the buttons; the buttons, or Settings when they are gone, anchor Notes;
+     * and Notes, or whatever is under it, anchors Direct edits.
+     */
     const owed = committer.hasPendingChanges()
+    place(ctas, filled || owed, settingsSection)
+    const belowNotes = inColumn(ctas) ? ctas : settingsSection
+    place(notesSection, filled || owed, belowNotes)
     place(empty, !(filled || owed), node.firstChild)
-    place(editsSection, editRows.length > 0 || owed, notesSection.isConnected ? notesSection : ctas)
-    place(notesSection, filled || owed, ctas)
+    place(editsSection, editRows.length > 0 || owed, inColumn(notesSection) ? notesSection : belowNotes)
+    // Last, after the sections have been placed: the release measures the
+    // rebuilt column, and a section still detached at that point would make it
+    // clamp against a height the panel is about to grow past.
+    hold.release()
   }
 
-  /** In the column at `before`, or out of the document entirely. */
+  /**
+   * Is this block in the column right now — asked of THIS parent, not of the
+   * document.
+   *
+   * `isConnected` is the obvious call and it is the wrong question. It means
+   * "reachable from a Document", so it is false for every block here whenever
+   * the tab itself is off the document — which is most of the tab's life in
+   * the test host, and any moment the inspector is holding a pane it has not
+   * mounted. Every block then reported itself absent, `place` re-inserted one
+   * that was already there, and an insert of a node that already has this
+   * parent is a MOVE: the column quietly reordered itself, which is how the
+   * buttons ended up above the Notes section they belong under.
+   *
+   * The question this file actually asks is about membership of one parent, so
+   * that is what it asks.
+   */
+  function inColumn(block: HTMLElement): boolean {
+    return block.parentNode === node
+  }
+
+  /** In the column at `before`, or out of it entirely. */
   function place(block: HTMLElement, wanted: boolean, before: Node | null): void {
     if (!wanted) {
       block.remove()
       return
     }
-    if (!block.isConnected) node.insertBefore(block, before)
+    if (!inColumn(block)) node.insertBefore(block, before)
   }
 
   /*

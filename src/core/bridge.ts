@@ -9,7 +9,7 @@
 
 import { isAngularHost, owningComponentName, resolveAngularSource } from "./angular"
 import type { ClassUpdate } from "./tailwind"
-import { notify } from "./toast"
+import { notify, type ToastAction } from "./toast"
 import type { SourceRef } from "./types"
 
 /**
@@ -124,7 +124,17 @@ export interface RewriteBridge {
   hitTest(x: number, y: number): HTMLElement | null
   selectedElement(): HTMLElement | null
   refreshGeometry(): void
-  toast(message: string, kind?: "info" | "error"): void
+  /**
+   * The vendor's method, replaced by ours — see `withEditorToast`.
+   *
+   * `action` is not the vendor's and it never passes one: `V` takes a message
+   * and a kind it then discards. It is declared here because this signature is
+   * what every caller in the product is typed against, and after the wrapper
+   * has run the function behind it is `notify`, which does take one. Declaring
+   * it anywhere else would mean a second path to the toaster, which is exactly
+   * what the wrapper exists to prevent.
+   */
+  toast(message: string, kind?: "info" | "error", action?: ToastAction): void
   root(): HTMLElement | null
   store: RewriteStore
 }
@@ -194,7 +204,8 @@ function withAngularElementInfo(bridge: RewriteBridge): RewriteBridge {
  */
 function withEditorToast(bridge: RewriteBridge): RewriteBridge {
   const wrapped: RewriteBridge = Object.create(bridge)
-  wrapped.toast = (message: string, kind: "info" | "error" = "info") => notify(message, kind)
+  wrapped.toast = (message: string, kind: "info" | "error" = "info", action?: ToastAction) =>
+    notify(message, kind, action)
   return wrapped
 }
 
@@ -425,18 +436,6 @@ export function resolveElementSource(
   })
   sourceByElement.set(element, pending)
   return pending
-}
-
-/**
- * Start resolving before the user edits anything.
- *
- * Selection is the moment we know which element matters and the moment the
- * user is least likely to notice a round trip, so priming here is the
- * difference between the first edit queueing instantly and it queueing a
- * few hundred milliseconds later. Nothing depends on the result.
- */
-export function primeElementSource(bridge: RewriteBridge, element: Element): void {
-  void resolveElementSource(bridge, element).catch(() => null)
 }
 
 /** Test seam: drops the per-component grep results. */

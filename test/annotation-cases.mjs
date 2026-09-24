@@ -211,6 +211,9 @@ const bundled = await build({
       export { annotationsTab } from "./src/panels/inspector/tab-annotations"
       export { DEFAULT_SETTINGS, OUTPUT_DETAILS } from "./src/annotations/types"
       export { annotationsCss } from "./src/core/css/annotations"
+      // The sheet that used to silently outrank the swap crossfade. Exported so
+      // the relationship between the two can be asserted rather than described.
+      export { iconsCss } from "./src/core/css/icons"
       export { createContext } from "./src/core/context"
       export { getState, setState, selectionOwnsInput } from "./src/core/store"
       export { config } from "./src/core/config"
@@ -688,7 +691,7 @@ check("a retired setting on disk is dropped, and cannot withhold the stack", () 
   note(saveButton, "Whose component is this?")
   assert.match(
     editor.buildAnnotationBrief(),
-    /React components: `SaveButton` in `Toolbar`/,
+    /^\*\*React:\*\* <Toolbar> <SaveButton>$/m,
     "a stale setting still suppressed the component stack"
   )
 })
@@ -999,25 +1002,29 @@ check("the four detail levels mean four different things", () => {
 
   // Compact is one line per item and stops. Anything else here means a level
   // that says it is compact and is not.
-  assert.ok(!briefs.compact.includes("- Selector:"), "compact printed the selector")
-  assert.match(briefs.compact, /^1\. \*\*/m)
+  assert.ok(!briefs.compact.includes("**Location:**"), "compact printed the location")
+  assert.ok(!briefs.compact.includes("**Viewport:**"), "compact printed the viewport")
+  assert.match(briefs.compact, /^1\. \*\*button "Save"\*\* \(src\/components\/card\.tsx:42:1\): /m)
 
-  assert.ok(briefs.standard.includes("- Selector:"), "standard lost the selector")
-  assert.ok(briefs.standard.includes("- Source:"), "standard lost the source line")
-  assert.ok(!briefs.standard.includes("- Computed:"), "standard leaked computed styles")
+  assert.ok(briefs.standard.includes("**Location:**"), "standard lost the location")
+  assert.ok(briefs.standard.includes("**Source:**"), "standard lost the source line")
+  assert.ok(briefs.standard.includes("**Viewport:**"), "standard lost the viewport")
+  assert.ok(!briefs.standard.includes("**Classes:**"), "standard leaked the classes")
 
-  assert.ok(briefs.detailed.includes("- Computed:"), "detailed lost the computed styles")
-  assert.ok(briefs.detailed.includes("- Inside:"), "detailed lost the ancestry")
-  assert.ok(!briefs.detailed.includes("## Environment"), "detailed leaked the environment block")
+  assert.ok(briefs.detailed.includes("**Classes:** btn, px-4"), "detailed lost the classes")
+  assert.ok(briefs.detailed.includes("**Position:** 10px, 20px (120×40px)"), "detailed lost the box")
+  assert.ok(briefs.detailed.includes("**Context:**"), "detailed lost the nearby text")
+  assert.ok(!briefs.detailed.includes("**Environment:**"), "detailed leaked the environment block")
 
-  assert.ok(briefs.forensic.includes("## Environment"), "forensic lost the environment block")
+  assert.ok(briefs.forensic.includes("**Environment:**"), "forensic lost the environment block")
   assert.ok(briefs.forensic.includes("- Viewport:"), "forensic lost the viewport")
-  assert.ok(briefs.forensic.includes("- Box:"), "forensic lost the note's box")
+  assert.ok(briefs.forensic.includes("**Full DOM Path:**"), "forensic lost the DOM path")
+  assert.ok(briefs.forensic.includes("**Computed Styles:**"), "forensic lost the computed styles")
+  assert.ok(briefs.forensic.includes("**Annotation at:**"), "forensic lost the pin's place")
 
-  // Each level is a superset of the one before, so asking for more never takes
-  // a line away from the reader.
-  assert.ok(briefs.detailed.includes("- Selector:"))
-  assert.ok(briefs.forensic.includes("- Computed:"))
+  // Detailed is standard plus lines, so asking for more never takes a line away.
+  assert.ok(briefs.detailed.includes("**Location:**"))
+  assert.ok(briefs.forensic.includes("**Source:**"))
 })
 
 /*
@@ -1046,25 +1053,206 @@ check("every note in the store is in the brief", () => {
   )
 })
 
+console.log("\nThe brief is in Agentation's format")
+
+/*
+ * Agentation runs beside the editor as a companion, and a note from either tool
+ * has to reach the agent as the same document. These cases pin the format
+ * itself — header, item heading, field names and order — rather than words
+ * somewhere in it.
+ */
+
+/** Markup from a real `/studio` page, mounted for one case and taken away again. */
+function withFixture(markup, fn) {
+  const host = window.document.createElement("div")
+  host.innerHTML = markup
+  window.document.body.append(host)
+  try {
+    fn(host)
+  } finally {
+    host.remove()
+  }
+}
+
+check("a note reads exactly as Agentation would copy it", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "standard" })
+  selectWithSource(saveButton, "/Users/someone/app/src/components/card.tsx", 42)
+  note(saveButton, "This button is doing too much")
+  assert.equal(
+    editor.buildAnnotationBrief(),
+    [
+      "## Page Feedback: /",
+      "**App:** app on localhost",
+      `**Viewport:** ${window.innerWidth}×${window.innerHeight}`,
+      "",
+      '### 1. button "Save"',
+      "**Location:** #app > .panel > .row > .btn",
+      "**Source:** src/components/card.tsx:42:1",
+      "**React:** <Toolbar> <SaveButton>",
+      "**Feedback:** This button is doing too much",
+    ].join("\n")
+  )
+})
+
+check("compact is Agentation's one line per note, and says nothing else", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "compact" })
+  selectWithSource(saveButton, "/Users/someone/app/src/components/card.tsx", 42)
+  note(saveButton, "Too loud")
+  assert.equal(
+    editor.buildAnnotationBrief(),
+    [
+      "## Page Feedback: /",
+      "**App:** app on localhost",
+      "",
+      '1. **button "Save"** (src/components/card.tsx:42:1): Too loud',
+    ].join("\n")
+  )
+})
+
+check("elements are named and located the way Agentation names them", () => {
+  withFixture(
+    `<div class="lt-page" data-testid="live-translate">
+      <div class="lt-conversation lt-conversation-empty" data-testid="lt-empty-state">
+        <div class="lt-empty-lockup">
+          <div class="lt-empty-icon"></div>
+          <p class="lt-empty-title">Translations will appear here</p>
+        </div>
+      </div>
+    </div>`,
+    (host) => {
+      const title = editor.describeElement(host.querySelector(".lt-empty-title"))
+      assert.equal(title.name, 'paragraph: "Translations will appear here"')
+      assert.equal(
+        title.path,
+        '.lt-page[data-testid="live-translate"] > .lt-conversation[data-testid="lt-empty-state"] > .lt-empty-lockup > .lt-empty-title'
+      )
+      assert.equal(editor.describeElement(host.querySelector(".lt-empty-icon")).name, "empty icon")
+    }
+  )
+  withFixture(
+    `<nav class="Nav_bar__x1Y2z">
+      <button aria-label="Close panel"></button>
+      <button><svg class="lucide"></svg>Delete</button>
+      <a href="/pricing">See pricing</a>
+      <h2>Plans for every team</h2>
+      <input placeholder="Search models">
+      <span>New</span>
+    </nav>`,
+    (host) => {
+      const name = (selector) => editor.describeElement(host.querySelector(selector)).name
+      assert.equal(name("[aria-label]"), "button [Close panel]")
+      assert.equal(name("svg"), 'icon in "Delete" button')
+      assert.equal(name("a"), 'link "See pricing"')
+      assert.equal(name("h2"), 'h2 "Plans for every team"')
+      assert.equal(name("input"), 'input "Search models"')
+      assert.equal(name("span"), '"New"')
+      // A CSS-module hash is a build artifact, not a name.
+      assert.match(editor.describeElement(host.querySelector("a")).path, /^.*\.Nav_bar > a$/)
+    }
+  )
+})
+
+check("a text note quotes its selection, in both forms Agentation does", () => {
+  reset()
+  editor.addAnnotation({
+    kind: "text",
+    comment: "Say what it replaced",
+    url: window.location.href,
+    rect: { x: 40, y: 120, width: 200, height: 18 },
+    target: editor.describeElement(lede),
+    selectedText: "Vertex AI is now Agent Platform and more besides",
+    element: lede,
+  })
+  editor.updateSettings({ outputDetail: "standard" })
+  const standard = editor.buildAnnotationBrief()
+  assert.match(standard, /^### 1\. paragraph: "Vertex AI is now Agent Platform\."$/m)
+  assert.match(
+    standard,
+    /^\*\*Selected text:\*\* "Vertex AI is now Agent Platform and more besides"\n\*\*Feedback:\*\* Say what it replaced$/m
+  )
+  editor.updateSettings({ outputDetail: "compact" })
+  assert.match(
+    editor.buildAnnotationBrief(),
+    /: Say what it replaced \(re: "Vertex AI is now Agent Platfor\.\.\."\)$/m
+  )
+})
+
+check("a dragged region is an Area selection at its page position", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "standard" })
+  editor.addAnnotation({
+    kind: "region",
+    comment: "Too much air here",
+    url: window.location.href,
+    rect: { x: 12.4, y: 300.6, width: 400, height: 120 },
+    target: null,
+    selectedText: null,
+    element: null,
+  })
+  assert.match(
+    editor.buildAnnotationBrief(),
+    /^### 1\. Area selection\n\*\*Location:\*\* region at \(12, 301\)\n\*\*Feedback:\*\* Too much air here$/m
+  )
+})
+
+check("edits read like notes, numbered on from them, under their own headings", () => {
+  seedBrief()
+  editor.updateSettings({ outputDetail: "standard" })
+  const brief = editor.buildAnnotationBrief()
+  assert.match(
+    brief,
+    /^### 2\. paragraph: "Vertex AI is now Agent Platform\."\n\*\*Location:\*\* #app > \.panel > #lede\n\*\*React:\*\* <Lede>\n\*\*Change:\*\* set `padding` to `24px` \(was `16px`\)$/m
+  )
+  assert.match(brief, /^### 3\. button "Save"\n[\s\S]*?\*\*Change:\*\* swap the icon to `Heart`/m)
+})
+
+check("forensic opens with Agentation's environment block and rule", () => {
+  seedBrief()
+  editor.updateSettings({ outputDetail: "forensic" })
+  const brief = editor.buildAnnotationBrief()
+  assert.match(
+    brief,
+    /^## Page Feedback: \/\n\*\*App:\*\* app on localhost\n\n\*\*Environment:\*\*\n- Viewport: \d+×\d+\n- URL: http:\/\/localhost\/\n- User Agent: .+\n- Timestamp: .+\n- Device Pixel Ratio: \d+(\.\d+)?\n\n---\n\n### 1\. button "Save"\n\*\*Full DOM Path:\*\* body > main#app > section\.panel > div\.row > button\.btn\n/
+  )
+  assert.ok(!brief.includes("**Viewport:**"), "forensic printed the viewport twice")
+})
+
+check("a note stored before names were captured still gets a heading and location", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "standard" })
+  const legacy = editor.describeElement(saveButton)
+  for (const key of ["name", "path", "fullPath", "nearbyText", "nearbyElements", "accessibility"]) {
+    delete legacy[key]
+  }
+  note(saveButton, "Old note", { target: legacy })
+  const brief = editor.buildAnnotationBrief()
+  assert.match(brief, /^### 1\. button "Save"$/m)
+  assert.match(brief, /^\*\*Location:\*\* .*button\.btn\.px-4:nth-of-type\(1\)$/m)
+})
+
 console.log("\nWhat leaves the machine")
 
 check("sanitizeBrief shortens an absolute path to its src tail", () => {
-  const cleaned = editor.sanitizeBrief("- Source: `/Users/someone/app/src/components/card.tsx:42`")
-  assert.equal(cleaned, "- Source: `src/components/card.tsx:42`")
+  const cleaned = editor.sanitizeBrief("**Source:** /Users/someone/app/src/components/card.tsx:42")
+  assert.equal(cleaned, "**Source:** src/components/card.tsx:42")
   // The failure it exists to prevent is a screen-share, not a broken path: a
   // brief on a projector carrying the user's home directory and their name.
   assert.ok(!cleaned.includes("/Users/"))
 })
 
 check("a relative path that merely contains src survives untouched", () => {
-  const line = "- Source: `packages/ui/src/button.tsx:7`"
+  const line = "**Source:** packages/ui/src/button.tsx:7"
   assert.equal(editor.sanitizeBrief(line), line, "a monorepo path was chopped at src/")
 })
 
-check("the resolver's half-right attribution is dropped, ours is kept", () => {
-  const cleaned = editor.sanitizeBrief("**Source:** app/chunk.js:953\n- Source: `src/card.tsx`\n")
-  assert.ok(!cleaned.includes("**Source:**"), "a compiled chunk was pasted into a prompt as fact")
-  assert.ok(cleaned.includes("- Source: `src/card.tsx`"), "the brief's own source line went with it")
+check("the brief's own **Source:** lines survive sanitizing", () => {
+  // `**Source:**` is Agentation's field name, and the brief is in Agentation's
+  // format. The change prompt's rule that deletes such lines would delete the
+  // one fact the brief is surest of, so sanitizeBrief does not apply it.
+  const brief = '### 1. button "Save"\n**Location:** .row > .btn\n**Source:** src/card.tsx:42\n**Feedback:** x'
+  assert.equal(editor.sanitizeBrief(brief), brief)
 })
 
 check("the brief as built carries no home directory anywhere in it", () => {
@@ -1103,7 +1291,9 @@ const context = editor.createContext(
   {
     elementInfo: () => null,
     send() {},
-    toast: (message, kind) => toasts.push([message, kind]),
+    // Three arguments now: an undo arrives as `action`, and a stub that drops
+    // it would let a card ship with no way back and still pass.
+    toast: (message, kind, action) => toasts.push([message, kind, action]),
     subscribe: () => () => {},
   },
   slots
@@ -1185,6 +1375,66 @@ await checkAsync("a composer saved with nothing in it pins nothing", async () =>
   // one more marker an agent has to be told to ignore.
   write("   ")
   assert.deepEqual(editor.annotations(), [], "an empty note reached the page")
+})
+
+/**
+ * The field is sized by the note, not by a drag.
+ *
+ * The composer is a popover: `place` measures it ONCE, on open, and clamps it
+ * between the docked panels and the foot of the window. A textarea shipped with
+ * the browser's resize grip let the designer drag that measurement out from
+ * under itself — on a note taken low on the page, far enough to put Save under
+ * the edge of the window with Escape the only way out. Both halves of the
+ * replacement are asserted here, because either one alone is a regression: the
+ * grip has to be gone AND the height has to follow the text, or a long note is
+ * typed three lines at a time through a slot that no longer grows.
+ */
+await checkAsync("the note field grows with the note and has no grip to drag", async () => {
+  reset()
+  enterAnnotating(true)
+  window.__stack = [lede]
+  await settle()
+  pin(lede)
+
+  const rule = /\.de-ann-composer-text \{([^}]*)\}/.exec(editor.annotationsCss)?.[1] ?? ""
+  assert.match(rule, /resize: none/, "the note field still carries a resize grip")
+  assert.match(rule, /max-height: \d+px/, "the field grows without a ceiling, so it can outgrow the card")
+  assert.match(rule, /overflow-y: auto/, "a note past the ceiling has no way to be scrolled")
+
+  const box = composer()
+  assert.ok(box, "no composer opened, so there was no field to grow")
+  const field = box.querySelector("textarea")
+
+  // jsdom lays nothing out, so the one number the grower reads has to be
+  // supplied: `scrollHeight` is the height the text wants, and the borders it
+  // leaves out are zero here.
+  let content = 140
+  for (const [name, get] of [
+    ["scrollHeight", () => content],
+    ["offsetHeight", () => 0],
+    ["clientHeight", () => 0],
+  ]) {
+    Object.defineProperty(field, name, { configurable: true, get })
+  }
+
+  const type = (value) => {
+    field.value = value
+    field.dispatchEvent(new window.Event("input", { bubbles: true }))
+  }
+
+  type("a note long enough to wrap onto several lines")
+  assert.equal(field.style.height, "140px", "the field did not grow to the note typed into it")
+
+  // Down as well as up. A grower that only ever measures the box it is already
+  // in reads its own height back and leaves the card tall after a delete.
+  content = 56
+  type("short")
+  assert.equal(field.style.height, "56px", "the field stayed tall after the note was cut back")
+
+  Array.from(box.querySelectorAll("button"))
+    .find((b) => b.textContent === "Cancel")
+    .dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
+  assert.equal(composer(), null, "this case left a composer open for the next one")
 })
 
 await checkAsync("a pin carries the note's number and can be clicked through an inert layer", async () => {
@@ -1329,6 +1579,99 @@ await checkAsync("the editor never annotates its own chrome", async () => {
   assert.equal(latest.target.tagName, "button", "the note was pinned to the editor's own overlay")
 })
 
+/*
+ * COLLAPSING THE EDITOR TAKES THE MODE'S MARKS WITH IT.
+ *
+ * Reported from the running tool: leave the Notes mode armed, collapse the
+ * editor to its disc, and the hover outline stays painted around whatever the
+ * pointer was last over. Nothing on screen explains it — the panels, the bar and
+ * the pins have all gone — and no gesture can clear it, because every handler in
+ * the lane is gated on `editorOwnsInput()` and is now inert. The frame sits on
+ * the app until the editor is opened again.
+ *
+ * The cause was that the surfaces were tied to the `annotating` flip alone,
+ * which the collapse does not touch. `annotating` is the designer's switch and
+ * SHOULD survive a collapse; what must not survive is any claim that the next
+ * click will annotate something, and the outline, the hint bar and a half-typed
+ * composer are all exactly that claim.
+ *
+ * Both directions are asserted, because a stand-down that never came back would
+ * be the worse bug: the mode would still be lit in the toolbar with nothing on
+ * the canvas answering to it.
+ */
+await checkAsync("collapsing the editor clears the mode's outline, and opening it restores it", async () => {
+  reset()
+  enterAnnotating(true)
+  editor.setState({ chromeHidden: false })
+  window.__stack = [saveButton]
+  await settle()
+
+  // Hover an element, so there is an outline with somewhere to be.
+  fire(saveButton, "pointermove", { clientX: 30, clientY: 30 })
+  await settle()
+  const outline = () => layer.querySelector(".de-ann-target")
+  assert.ok(outline(), "the mode drew no hover outline, so this case proves nothing")
+  assert.equal(
+    outline().style.display,
+    "block",
+    "the outline never painted around the hovered element"
+  )
+  assert.ok(layer.querySelector(".de-ann-hint"), "the mode drew no hint bar")
+
+  editor.setState({ chromeHidden: true })
+  await settle()
+  assert.equal(outline(), null, "the hover outline stayed on the canvas after the editor collapsed")
+  assert.equal(layer.querySelector(".de-ann-hint"), null, "the hint bar outlived the editor")
+  assert.equal(layer.querySelector(".de-ann-region"), null, "the drag rectangle outlived the editor")
+  // The switch itself is the designer's, and is not touched.
+  assert.equal(editor.getState().annotating, true, "collapsing turned the mode off behind the designer")
+
+  // A pointer moving over the page while the editor is down must not bring it
+  // back — the lane is inert, and a frame drawn by a hidden editor is the bug.
+  fire(lede, "pointermove", { clientX: 40, clientY: 40 })
+  await settle()
+  assert.equal(outline(), null, "a hover repainted the outline while the editor was collapsed")
+
+  editor.setState({ chromeHidden: false })
+  await settle()
+  assert.ok(outline(), "opening the editor left the armed mode with no surfaces at all")
+  assert.ok(layer.querySelector(".de-ann-hint"), "the hint bar never came back")
+  // Nothing is outlined until the pointer says so again: the element hovered
+  // before the collapse is a stale subject by the time the editor is back.
+  assert.equal(outline().style.display, "none", "the outline came back around a stale element")
+
+  // One hint bar, not two. `enter()` appends, so a second entrance without a
+  // matching stand-down would stack duplicates on the same layer.
+  assert.equal(layer.querySelectorAll(".de-ann-hint").length, 1, "the editor came back with two hint bars")
+  assert.equal(layer.querySelectorAll(".de-ann-target").length, 1, "the editor came back with two outlines")
+})
+
+/*
+ * A composer open when the editor collapses is closed, not left over the page.
+ *
+ * It is the one surface in this lane that takes the pointer (`pointer-events:
+ * auto`), so a card outliving the editor is a dialog floating over an app with
+ * no editor on screen, still able to write a note into a session the designer
+ * believes they have left.
+ */
+await checkAsync("collapsing the editor closes a composer that was open", async () => {
+  reset()
+  enterAnnotating(true)
+  editor.setState({ chromeHidden: false })
+  window.__stack = [saveButton]
+  await settle()
+
+  pin(saveButton)
+  assert.ok(composer(), "no composer opened, so there was nothing to close")
+
+  editor.setState({ chromeHidden: true })
+  await settle()
+  assert.equal(composer(), null, "a half-typed note was left floating over the collapsed editor")
+  assert.deepEqual(editor.annotations(), [], "collapsing saved the note instead of dropping it")
+
+  editor.setState({ chromeHidden: false })
+})
+
 enterAnnotating(false)
 
 /* ==========================================================================
@@ -1358,7 +1701,7 @@ const pane = tab.node
 const tools = () => Array.from(pane.querySelectorAll(".de-ann-tools button"))
 const eyeButton = () => tools()[0]
 const clearButton = () => tools()[1]
-const settingsSwitch = () => pane.querySelector('.de-ann-toggle[aria-label="Hide until reload"]')
+const settingsSwitch = () => pane.querySelector('.de-ann-toggle[aria-label="Show markers"]')
 const noteRows = () => Array.from(pane.querySelectorAll(".de-ann-item--note"))
 const editRows = () => Array.from(pane.querySelectorAll(".de-ann-item--edit"))
 /**
@@ -1406,25 +1749,48 @@ function seedTab() {
   tab.update()
 }
 
-check("an empty session is the empty state, the buttons and Settings — no headings", () => {
+check("an empty session is the empty state and Settings — no headings, no buttons", () => {
   seedTab()
   /*
-   * NOTHING TO HEAD, SO NOTHING HEADS IT.
+   * NOTHING TO HEAD, SO NOTHING HEADS IT — AND NOTHING TO DO, SO NOTHING
+   * OFFERS TO DO IT.
    *
-   * The outbox is two sections now, Direct edits and Notes, and each one is
-   * built once and taken out of the document while it holds nothing. Over an
-   * empty session that leaves the empty state, the whole-session buttons and
-   * Settings — rather than two headings over two blank bodies, which is the
-   * panel filing nothing under two names.
+   * The outbox is two sections, Direct edits and Notes, and each one is built
+   * once and taken out of the document while it holds nothing. The
+   * whole-session buttons go the same way, and that is the later half of this
+   * case: they used to sit in the column unconditionally, which put four
+   * controls under "Nothing to hand over yet" — Send and Copy disabled, an eye
+   * toggling the visibility of no markers, a bin armed to clear an empty list.
+   * A row of controls over an empty state is the panel offering its ending
+   * before anything has begun.
+   *
+   * What is left is the sentence saying what the tab is for, and Settings.
    */
   assert.deepEqual(
     Array.from(pane.children).map((node) => node.className),
-    ["de-empty de-ann-empty", "de-ann-ctas", "de-section"]
+    ["de-empty de-ann-empty", "de-section"]
   )
   assert.ok(sections()[0].querySelector(".de-ann-settings"), "the one section left is not Settings")
   // The old shapes, stated as negatives so neither can quietly come back.
   assert.equal(pane.querySelector(".de-ann-footer"), null, "the footer survived the restructure")
   assert.equal(pane.querySelector(".de-ann-group"), null, "the groups came back inside a section")
+})
+
+check("the whole-session buttons arrive with the first thing the session holds", () => {
+  seedTab()
+  assert.equal(pane.querySelector(".de-ann-ctas"), null, "the buttons sat over an empty session")
+
+  note(saveButton, "Something to hand over")
+  assert.ok(pane.querySelector(".de-ann-ctas"), "a note did not bring the buttons back")
+  // Under the list and above Settings, which is the position that makes their
+  // scope readable: they act on everything written above them.
+  assert.deepEqual(
+    Array.from(pane.children).map((node) => node.className),
+    ["de-section", "de-ann-ctas", "de-section"]
+  )
+
+  seedTab()
+  assert.equal(pane.querySelector(".de-ann-ctas"), null, "the buttons outlived the session")
 })
 
 check("a note brings the Notes section with it, holding the detail menu and the rows", () => {
@@ -1442,9 +1808,19 @@ check("a note brings the Notes section with it, holding the detail menu and the 
   )
   const notes = sections()[0]
   assert.equal(notes.querySelector(".de-section-title").textContent.trim(), "Notes")
+  /*
+   * A header and the fold layer under it. The body is one level down now: the
+   * section animates open and shut on a grid row, and the row has to belong to
+   * a box with no padding of its own or a shut section leaves its padding
+   * behind. See `.de-section-fold` in `css/panels.ts`.
+   */
   assert.deepEqual(
     Array.from(notes.children).map((node) => node.className),
-    ["de-section-header de-section-header--collapsible", "de-section-body"]
+    ["de-section-header de-section-header--collapsible", "de-section-fold"]
+  )
+  assert.deepEqual(
+    Array.from(notes.querySelector(".de-section-fold").children).map((node) => node.className),
+    ["de-section-body"]
   )
   /*
    * Inside the body: what the section is for, the control that governs how much
@@ -1528,6 +1904,9 @@ check("the settings fold is user state and survives a repaint", () => {
 
 check("the visibility toggle sits with the CTAs, not behind the settings fold", () => {
   seedTab()
+  // A note first: the buttons leave the column over an empty session, and the
+  // eye leaves with them. There is nothing to show or hide until there is one.
+  note(saveButton, "Something to pin")
   const eye = eyeButton()
   assert.ok(eye, "the tab has no visibility toggle at all")
   // It is reached for several times a session; settings is somewhere you go
@@ -1544,7 +1923,9 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
   assert.equal(editor.markersVisible(), true)
   assert.equal(eye.dataset.glyph, "Eye")
   assert.equal(eye.getAttribute("aria-label"), "Hide markers")
-  assert.equal(settingsSwitch().getAttribute("aria-checked"), "false")
+  // The switch is labelled "Show markers" and reads forward: checked means the
+  // markers are on the page, which is the state the eye beside it also reports.
+  assert.equal(settingsSwitch().getAttribute("aria-checked"), "true")
 
   press(eye)
   // The store first: a toggle that only repainted itself would look perfect and
@@ -1555,7 +1936,7 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
   assert.equal(eye.getAttribute("aria-label"), "Show markers")
   assert.equal(
     settingsSwitch().getAttribute("aria-checked"),
-    "true",
+    "false",
     "the settings row disagreed with the footer about one flag"
   )
 
@@ -1569,6 +1950,9 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
 
 check("hidden is a fact about the markers, so the eye is two drawings", () => {
   seedTab()
+  // The eye only exists once the session holds something — see the CTA case
+  // above.
+  note(saveButton, "Something to pin")
   const eye = eyeButton()
   // No `aria-pressed`: the label already moves with the state, and a moving
   // label over a pressed state announces "Show markers, pressed", which says
@@ -1633,10 +2017,20 @@ check("a note row offers exactly edit and delete, and says what delete costs", (
     "a row action announces itself as a toggle, and neither of these is one"
   )
 
-  // The name has to carry the consequence, because this is the one control in
-  // the outbox with no way back.
+  /*
+   * The name carries the consequence, and the consequence changed.
+   *
+   * It used to say "There is no undo." and that was true: the row delete was
+   * the last irreversible single click in the editor. It now raises a card
+   * offering the note back, so the sentence promises the recovery instead —
+   * and the promise is asserted here rather than merely allowed, because the
+   * failure it guards against is silent. A reader who believes a reversible
+   * action is final does not press it, and the undo would have paid for
+   * nothing.
+   */
   assert.match(remove.getAttribute("aria-label"), /^Delete this note/)
-  assert.match(remove.getAttribute("aria-label"), /no undo/i)
+  assert.match(remove.getAttribute("aria-label"), /undo is offered/i)
+  assert.doesNotMatch(remove.getAttribute("aria-label"), /no undo/i)
   /*
    * `data-de-tip`, and deliberately NO `title`.
    *
@@ -1655,7 +2049,10 @@ console.log("\nDeleting all of them")
 
 check("clear-all is disabled with nothing to clear, edits included", () => {
   seedTab()
-  assert.equal(clearButton().disabled, true, "an empty list offered a delete")
+  // Over an empty session the whole button row is out of the column, so there
+  // is no disabled bin to check — the absence IS the stronger version of the
+  // assertion this case used to make.
+  assert.equal(clearButton(), undefined, "an empty session drew the button row anyway")
 
   editor.recordEdit({ property: "gap", from: "8px", to: "16px", element: lede, written: false })
   // It clears notes only, so a list of edits is still nothing it can take.
@@ -1693,7 +2090,11 @@ check("clear-all needs two clicks, and says what the second one costs", () => {
   const [message, kind] = toasts.at(-1)
   assert.match(message, /2 notes/)
   assert.match(message, /cannot be undone/i)
-  assert.equal(kind, "error")
+  // The DEFAULT rung, not `error`. `DURATION.error` is `Infinity`, and a card
+  // that never dismisses outlives the six-second arming window it is
+  // instructing — it would go on saying "click again" after `disarm()` has
+  // turned the tick back into a bin, where clicking again re-arms instead.
+  assert.equal(kind, "info")
 
   press(clear)
   assert.deepEqual(editor.annotations(), [], "the second click did not clear the list")
@@ -1807,10 +2208,31 @@ check("the copy mark crossfades in a box the row never learns about", () => {
   assert.ok(box, "the swap has no box")
   assert.match(box[1], /position: relative/)
   assert.match(box[1], /width: 12px; height: 12px/)
-  assert.match(editor.annotationsCss, /\.de-swap > svg \{[^}]*position: absolute/)
+  assert.match(
+    editor.annotationsCss,
+    /\[data-designlayer\] \.de-swap > svg\[data-de-glyph\] \{[^}]*position: absolute/
+  )
   // Both properties transition, or the scale lands in one frame and the fade
   // it was supposed to ride arrives underneath it.
-  assert.match(editor.annotationsCss, /\.de-swap > svg \{[^}]*transition: opacity [^;]*transform/)
+  assert.match(
+    editor.annotationsCss,
+    /\[data-designlayer\] \.de-swap > svg\[data-de-glyph\] \{[^}]*transition: opacity [^;]*transform/
+  )
+  /*
+   * AND THE SELECTOR IS PART OF THE ASSERTION, not incidental to it.
+   *
+   * `css/icons.ts` declares `transition: stroke-width` on
+   * `[data-designlayer] svg[data-de-glyph]` — (0,2,1). While this rule was a
+   * plain `.de-swap > svg` at (0,1,1) it lost, and because `transition` is a
+   * shorthand it did not lose one property, it lost the whole list: the
+   * crossfade above was in the stylesheet and never once ran. Pinning the
+   * winning form here is what stops it being simplified back.
+   */
+  assert.ok(
+    !/(^|\n)\.de-swap > svg \{/.test(editor.annotationsCss),
+    "the swap rule went back to a specificity the icon stroke rule beats"
+  )
+  assert.match(editor.iconsCss, /\[data-designlayer\] svg\[data-de-glyph\] \{[^}]*stroke-width/)
   // The tick is the only thing in this chrome that is green, and that is the
   // channel saying the press LANDED rather than merely registered.
   assert.match(
@@ -1828,7 +2250,10 @@ check("the copy mark crossfades in a box the row never learns about", () => {
     editor.annotationsCss
   )
   assert.ok(reduced, "the reduced-motion block is gone")
-  assert.match(reduced[1], /\.de-swap > svg \{ transition: opacity [^}]*linear !important/)
+  assert.match(
+    reduced[1],
+    /\[data-designlayer\] \.de-swap > svg\[data-de-glyph\] \{\s*transition: opacity [^}]*linear !important/
+  )
   assert.match(reduced[1], /\.de-swap--done > \.de-swap-rest \{ transform: none/)
 })
 
@@ -2025,6 +2450,27 @@ check("output detail is offered once, and the settings fold no longer offers it"
       node.textContent.includes("Output detail")
     ),
     "the settings fold still names a setting it no longer controls"
+  )
+})
+
+check("the fold no longer offers to turn the lane on the editor", () => {
+  seedTab()
+  /*
+   * The one row in this fold that could strand the person who pressed it.
+   *
+   * Editor scope swallows clicks on the editor's own chrome in order to
+   * annotate it, which includes the switch that turns it off — so the hint had
+   * to teach a keyboard escape before anyone touched the control. The setting
+   * still exists for `annotations/canvas.ts` and for the cases at the bottom of
+   * this file; what is gone is the row that let a designer walk into it by
+   * accident while annotating an app.
+   */
+  const settingsPane = sections().at(-1)
+  assert.ok(
+    !Array.from(settingsPane.querySelectorAll(".de-ann-setting-label")).some((node) =>
+      node.textContent.includes("Annotate the editor")
+    ),
+    "the settings fold still offers to point the lane at the editor"
   )
 })
 
@@ -2227,16 +2673,141 @@ check("the two bundles really are two hosts, not one module loaded twice", () =>
 })
 
 check("a React host is told to look for React components", () => {
-  assert.match(reactBrief, /React components: `SaveButton` in `Toolbar`/)
-  assert.ok(!reactBrief.includes("Angular components"), "a React brief named Angular")
+  // Agentation's field, outermost component first.
+  assert.match(reactBrief, /^\*\*React:\*\* <Toolbar> <SaveButton>$/m)
+  assert.ok(!reactBrief.includes("**Angular:**"), "a React brief named Angular")
 })
 
 check("an Angular host is told to look for Angular components", () => {
   // Told to find a React component in an Angular project, an agent searches for
   // a file that was never going to exist and concludes the brief describes a
-  // different application. Saying nothing would be better.
-  assert.match(angularBrief, /Angular components: `ShellComponent`/)
-  assert.ok(!angularBrief.includes("React components"), "an Angular brief named React")
+  // different application. The field keeps Agentation's shape and takes the
+  // host's name.
+  assert.match(angularBrief, /^\*\*Angular:\*\* <ShellComponent>$/m)
+  assert.ok(!angularBrief.includes("**React:**"), "an Angular brief named React")
+})
+
+
+/* ── Annotating the editor itself ────────────────────────────────────────── */
+
+/*
+ * The scope that replaced a second annotation tool.
+ *
+ * The editor cannot normally be pointed at its own chrome — `isChrome` is what
+ * stops a pin becoming the target of a pin — and that gap is the only thing a
+ * separate, PolyForm-licensed toolbar was mounted beside this lane to do. The
+ * cases below are the terms on which the gap was closed: the app stays the
+ * default, the chrome becomes targetable when asked, and the lane's own
+ * surfaces never do.
+ */
+
+await checkAsync("the app is the default subject, and chrome is not annotatable", async () => {
+  reset()
+  editor.updateSettings({ scope: "app" })
+  // Dismiss a composer an earlier case left open, through its own Cancel —
+  // the mode flag does not tear one down, and without this the assertion below
+  // reads someone else's state rather than this case's.
+  const stale = composer()
+  if (stale) {
+    Array.from(stale.querySelectorAll("button"))
+      .find((b) => b.textContent === "Cancel")
+      ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
+  }
+  enterAnnotating(true)
+  await settle()
+  assert.equal(composer(), null, "a composer survived into this case from an earlier one")
+
+  assert.equal(editor.annotationSettings().scope, "app", "the lane did not start on the app")
+
+  // A press on the editor's own panel does nothing at all in app scope.
+  window.__stack = [slots.right]
+  pin(slots.right)
+  assert.equal(composer(), null, "a click on the editor's own panel opened a composer in app scope")
+  assert.deepEqual(editor.annotations(), [], "app scope pinned a note on the editor's chrome")
+})
+
+await checkAsync("editor scope pins a note on the editor's own panel", async () => {
+  reset()
+  editor.updateSettings({ scope: "editor" })
+  enterAnnotating(true)
+  await settle()
+
+  window.__stack = [slots.right]
+  pin(slots.right)
+  assert.ok(composer(), "editor scope did not open a composer over the editor's own panel")
+  write("the inspector empty state is too quiet")
+
+  const notes = editor.annotations()
+  assert.equal(notes.length, 1, "editor scope did not record the note")
+  assert.equal(notes[0].comment, "the inspector empty state is too quiet")
+})
+
+await checkAsync("editor scope leaves the app alone", async () => {
+  reset()
+  editor.updateSettings({ scope: "editor" })
+  enterAnnotating(true)
+  await settle()
+
+  // The app is not the subject now, so a press on it is not a note. Without
+  // this the two scopes would be additive and every note ambiguous about which
+  // product it is feedback on.
+  window.__stack = [saveButton]
+  pin(saveButton)
+  assert.equal(composer(), null, "editor scope opened a composer over the app")
+  assert.deepEqual(editor.annotations(), [], "editor scope pinned a note on the app")
+})
+
+await checkAsync("the lane never becomes its own subject", async () => {
+  reset()
+  editor.updateSettings({ scope: "editor" })
+  enterAnnotating(true)
+  await settle()
+
+  // `layer` is inside `slots.overlay`, which is chrome — so without the
+  // `layer.contains` guard this is exactly the infinite regress: a pin you can
+  // annotate, and a note about a note.
+  const ownSurface = window.document.createElement("div")
+  layer.append(ownSurface)
+  window.__stack = [ownSurface]
+  pin(ownSurface)
+  assert.equal(composer(), null, "the annotation layer annotated itself")
+  assert.deepEqual(editor.annotations(), [], "a note was pinned to the lane's own chrome")
+  ownSurface.remove()
+})
+
+await checkAsync("the scope does not survive a restart", async () => {
+  editor.updateSettings({ scope: "editor" })
+  assert.equal(editor.annotationSettings().scope, "editor")
+  // A session that silently resumed pointed at the panels would look like the
+  // annotation tool had stopped seeing the page.
+  assert.equal(
+    editor.DEFAULT_SETTINGS.scope,
+    "app",
+    "the shipped default points the lane at the editor rather than the page"
+  )
+  editor.updateSettings({ scope: "app" })
+
+  /*
+   * And the default is not the whole claim, now that no control sets this.
+   *
+   * `persist` writes the settings blob whole, so a session that reached editor
+   * scope left `"editor"` on disk — and with the switch gone from the fold
+   * there is nothing left to flip it back with. The next load has to do it, or
+   * the editor opens permanently pointed at its own panels. A fresh module over
+   * a seeded blob is the only way to assert it: `load()` runs once per module
+   * instance, and this file's main instance ran it long ago.
+   */
+  window.localStorage.setItem(
+    SETTINGS_KEY,
+    JSON.stringify({ ...editor.DEFAULT_SETTINGS, scope: "editor" })
+  )
+  const restarted = await loadEditor("scope-restart", "react")
+  assert.equal(
+    restarted.annotationSettings().scope,
+    "app",
+    "a stored editor scope came back on the next load, with no control left to leave it by"
+  )
+  window.localStorage.clear()
 })
 
 fs.rmSync(bundleDir, { recursive: true, force: true })

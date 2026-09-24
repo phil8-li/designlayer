@@ -15,7 +15,7 @@ import { isLocked, selectionOwnsInput } from "../core/store"
 import { createWriter } from "../core/writer"
 import type { EditorContext } from "../core/context"
 import type { LayerElement } from "../core/types"
-import { installSelectionFrame } from "./selection"
+import { dipHoverOutline, installSelectionFrame, releaseHoverDip } from "./selection"
 import { installTransform, translateBy } from "./transform"
 import { installSnapping } from "./snapping"
 import { installMarquee } from "./marquee"
@@ -61,12 +61,39 @@ export function installCanvas(context: EditorContext): void {
     if (context.getState().hovered !== hovered) context.setState({ hovered })
   }
 
+  /**
+   * Meta/Control changes what a click would select, so the outline follows the
+   * key even with the pointer standing still — and because there is no pointer
+   * travel to carry the change, it is dipped rather than cut. `dipHoverOutline`
+   * argues the mechanism; what belongs here is when it is worth spending.
+   *
+   * Only a swap between two live boxes is. Arriving from nothing and leaving to
+   * nothing are already fades — the outline's own `display` transition carries
+   * both — so dipping either of those would only spend `snap` in front of a
+   * fade that was about to happen anyway. A press that resolves to the element
+   * already outlined, which is most of them on a leaf, moves nothing and gets
+   * nothing: a modifier that blinked the outline whether or not it had changed
+   * the answer would be worse than the teleport this is fixing.
+   */
+  const previewDeepSelect = (event: KeyboardEvent) => {
+    const hit = pointerHit ?? resolver.hitStack(pointerX, pointerY)[0] ?? null
+    const target = targetFor(hit, isDeepSelect(event))
+    const current = context.getState().hovered
+    if (target === current) return
+    if (target && current) dipHoverOutline()
+    setHovered(target)
+  }
+
   const onPointerMove = (event: PointerEvent) => {
     pointerX = event.clientX
     pointerY = event.clientY
     pointerHit = hitFor(event)
     if (!selectionOwnsInput()) return
     if (isChrome(event.target)) return
+    // The pointer outranks the keyboard on this question: it has just answered
+    // it against a position a dip in flight was frozen before, and the travel
+    // is its own transition. A no-op unless a dip is actually running.
+    releaseHoverDip()
     setHovered(targetFor(pointerHit, isDeepSelect(event)))
   }
 
@@ -170,9 +197,7 @@ export function installCanvas(context: EditorContext): void {
     // A held modifier changes what a click would select, so the outline has to
     // follow it even while the pointer is stationary.
     if (event.key === "Meta" || event.key === "Control") {
-      setHovered(
-        targetFor(pointerHit ?? resolver.hitStack(pointerX, pointerY)[0] ?? null, isDeepSelect(event))
-      )
+      previewDeepSelect(event)
       return
     }
     if (!ownsCanvasKeys(event)) return
@@ -233,9 +258,7 @@ export function installCanvas(context: EditorContext): void {
   const onKeyUp = (event: KeyboardEvent) => {
     if (!selectionOwnsInput()) return
     if (event.key !== "Meta" && event.key !== "Control") return
-    setHovered(
-      targetFor(pointerHit ?? resolver.hitStack(pointerX, pointerY)[0] ?? null, isDeepSelect(event))
-    )
+    previewDeepSelect(event)
   }
 
   // Swallow app activation while the editor owns the page: clicking a button to

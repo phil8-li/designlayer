@@ -276,6 +276,16 @@ export interface LibraryChallenge {
   audience: string
   /** The `WWW-Authenticate` realm a 401 named, and "" for every other wall. */
   realm: string
+  /**
+   * The redirect the site answered with, and "" when it answered with none.
+   *
+   * Reported rather than interpreted by the server — `classifyWall` refuses to
+   * look at hostnames, on purpose — so that this side can name the identity
+   * provider on a button. Being wrong about the name costs a generic label;
+   * being wrong in the classifier would cost the classification, which is why
+   * the two live apart.
+   */
+  location: string
   /** The server's own sentence about this wall. Always present. */
   hint: string
   /** The URL the refused add was for, which signing in re-fetches to verify. */

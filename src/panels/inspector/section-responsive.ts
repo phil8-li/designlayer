@@ -11,6 +11,7 @@ import {
   responsiveClassBindings,
   type ResponsiveClassBinding,
 } from "../../core/responsive"
+import { canvasWidth } from "../../shell/shell"
 import { isExpanded, miniButton, section, setExpanded, textField } from "./field"
 import type { InspectorSection } from "./index"
 import type { LayerElement } from "../../core/types"
@@ -129,7 +130,18 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
 
   const viewportSteps = breakpointSteps()
   const containerSteps = containerBreakpointSteps()
-  const viewport = window.innerWidth
+  /*
+   * The CANVAS, not the window, and the difference is the panels.
+   *
+   * Which step is "active now" is a claim about the app, and the app's own
+   * breakpoints are asked of the strip between the panels — `shell/
+   * app-viewport.ts` shifts every width query by the inset so that a 940px
+   * canvas inside a 1440px window wears the layout it would wear in a 940px
+   * window. Reading `innerWidth` here would have this row announce `xl` over
+   * an app that is currently rendering `md`, which is worse than not marking a
+   * step at all: it is the panel disagreeing with the thing it is describing.
+   */
+  const viewport = canvasWidth()
   const active = activeBreakpoint(viewport, viewportSteps)
   const activeContainer = scope?.width ? activeBreakpoint(scope.width, containerSteps) : null
   const nested = bindings.filter((binding) => !binding.direct)
@@ -274,7 +286,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
   if (scope) {
     containerNotes.push(
       el("div", { class: "de-hint" }, [
-        `${scope.self ? "This element is" : "Inside"} @container${scope.name ? `/${scope.name}` : ""}. These steps measure that container's width, not the window's.`,
+        `${scope.self ? "This element is" : "Inside"} @container${scope.name ? `/${scope.name}` : ""}. These steps measure that container’s width, not the window’s.`,
       ]),
       el("div", { class: "de-hint" }, [
         scope.width === null

@@ -197,13 +197,20 @@ function endpoint(apiBase: string, path = ""): string {
 }
 
 /**
- * The server's own words for a failure, and a status code only when it had none.
+ * The server's own words for a failure, and a recovery when it had none.
  *
  * Worth reading the body for the reason the libraries store gives about its
  * own: the sentences this feature's endpoints produce are about a checker that
  * is not installed, a config that names a plugin that is not there, or a file
  * that moved under a fix — and those sentences are the entire help available at
- * the moment it goes wrong. "HTTP 500" in a toast is a dead end.
+ * the moment it goes wrong.
+ *
+ * When the body had nothing, the status code is NOT the fallback. This message
+ * is rendered verbatim into a toast and into the section's failure line, so
+ * `HTTP 500` was the panel handing a designer a number they cannot act on at the
+ * moment they are least equipped to look it up. The number is real information
+ * for whoever is running the server, so it goes where that person is already
+ * looking, and what reaches the panel names the terminal and the retry.
  */
 async function failure(response: Response): Promise<Error> {
   let stated = ""
@@ -214,7 +221,12 @@ async function failure(response: Response): Promise<Error> {
   } catch {
     // A body that is not JSON has nothing in it a person can act on.
   }
-  return new Error(stated || `HTTP ${response.status}`)
+  if (stated) return new Error(stated)
+  console.warn("[designlayer] the lint route answered", response.status, response.url)
+  return new Error(
+    "The editor’s own server could not answer that. " +
+      "Check the terminal running designlayer, then try again."
+  )
 }
 
 async function send<T>(url: string, init: RequestInit = {}): Promise<T> {
@@ -373,24 +385,6 @@ export function lintResolutionEpoch(): number {
   return resolutionEpoch
 }
 
-/**
- * Tells the index the DOM has moved under it — a route change, a re-render.
- *
- * For a change of PAGE, not for a change of frame. Rebuilding runs one
- * `querySelectorAll` per finding, which is nothing once and is a scroll-jank
- * machine if it is called from a repaint loop; the marker layer's per-frame
- * work is re-measuring boxes, and boxes are not what this index holds.
- *
- * Deliberately does NOT notify. The marker layer is a subscriber and this is
- * exactly the call it makes when the page changes underneath it, so announcing
- * it would be a store beat raised from inside the handler of a store beat. The
- * panel picks the change up through `lintResolutionEpoch` on its next update
- * instead, which is the same frame the page changed on.
- */
-export function refreshLintResolution(): void {
-  invalidateResolution()
-}
-
 function buildResolution(): void {
   const resolved: LintPlacement[] = []
   const index = new Map<Element, LintFinding[]>()
@@ -476,13 +470,6 @@ function isIgnoredFinding(finding: LintFinding): boolean {
   return finding.ignored === true || ignoredIds.has(finding.id)
 }
 
-/** True when this finding is dismissed and therefore unmarked and unlisted. */
-export function isIgnored(id: string): boolean {
-  if (ignoredIds.has(id)) return true
-  const finding = findings.find((entry) => entry.id === id)
-  return finding ? isIgnoredFinding(finding) : false
-}
-
 /**
  * The findings the panel lists and the canvas marks: everything not ignored.
  *
@@ -496,11 +483,6 @@ export function lintFindings(): LintFinding[] {
 
 function visibleFindings(): LintFinding[] {
   return findings.filter((finding) => !isIgnoredFinding(finding))
-}
-
-/** Everything the last run returned, dismissed ones included. */
-export function allLintFindings(): LintFinding[] {
-  return findings
 }
 
 /** The dismissed ones, for the "Show ignored" disclosure. */
@@ -580,13 +562,6 @@ export function loadLintTools(apiBase: string): Promise<LintTool[]> {
       return []
     })
   return toolsInFlight
-}
-
-/** The same request, past the cache — a checker may have been installed since. */
-export function refreshLintTools(apiBase: string): Promise<LintTool[]> {
-  toolsLoaded = false
-  toolsInFlight = null
-  return loadLintTools(apiBase)
 }
 
 /**

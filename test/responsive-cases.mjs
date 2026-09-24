@@ -95,7 +95,7 @@ async function loadEditorHelpers() {
  * That makes this suite one of the four places the editor is coupled to a real
  * app rather than a fixture, which is the point: it is the regression net that
  * catches a change to the tool silently changing what a real app sees, and the
- * numbers below are the Workspaces app's. The host-AGNOSTIC contract — that
+ * numbers below are the pinned host app's. The host-AGNOSTIC contract — that
  * the same code reads a design system it has never met — is proved without this
  * file, on the fixture hosts in host-agnostic-cases.mjs.
  */

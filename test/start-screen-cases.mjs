@@ -42,6 +42,10 @@ import {
   scanLocalApps,
 } from "../runtime/local-apps.mjs"
 import { startScreenPage } from "../runtime/start-screen-page.mjs"
+// The stylesheet, for the type cases at the foot of this file. It is a separate
+// module from the page and imports the built token bundle, so it is read here
+// directly rather than scraped back out of the `<style>` the page inlines.
+import { startScreenStyle } from "../runtime/start-screen-style.mjs"
 import { PREFERRED_START_SCREEN_PORT, createStartScreen } from "../runtime/start-screen.mjs"
 
 let passed = 0
@@ -115,12 +119,12 @@ await check("the scan list covers the ports a local app is actually on", () => {
 })
 
 await check("a running app is found, and named by its own <title>", async () => {
-  const app = await pageServer("Workspaces")
+  const app = await pageServer("Host App")
   try {
     const apps = await scanLocalApps({ ports: [app.port] })
     assert.equal(apps.length, 1)
     assert.equal(apps[0].port, app.port)
-    assert.equal(apps[0].title, "Workspaces")
+    assert.equal(apps[0].title, "Host App")
     assert.match(apps[0].url, new RegExp(`:${app.port}$`))
     // Present on every hit, even when the machine will not say.
     assert.ok("projectRoot" in apps[0] && "packageName" in apps[0])
@@ -148,9 +152,9 @@ await check("a dev server that names itself in its page needs no permission", ()
 })
 
 await check("a path with spaces in it survives the page and the URL alike", () => {
-  const root = path.join(fixture("IG Projects Local"), "Workspaces app")
+  const root = path.join(fixture("Client Projects Local"), "host app")
   fs.mkdirSync(root, { recursive: true })
-  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "workspaces" }))
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "host-app" }))
   assert.equal(projectRootFromPage(`at Boot (${root}/.next/dev/server/x.js:1:1)`), root)
   // The same path also arrives percent-encoded, inside a file:// URL.
   const encoded = root.split("/").map(encodeURIComponent).join("/")
@@ -167,7 +171,7 @@ await check("the folder reaches the app row the page came from", async () => {
   const root = reactProject()
   fs.mkdirSync(path.join(root, ".next"), { recursive: true })
   // Past where a title lives, so the read has to keep going to find it.
-  const app = await pageServer("Workspaces", `${"<p>filler</p>".repeat(1200)}
+  const app = await pageServer("Host App", `${"<p>filler</p>".repeat(1200)}
     <script>window.__t = "at Layout (${root}/.next/dev/server/chunks/ssr/page.js:1:1)"</script>`)
   try {
     const [found] = await scanLocalApps({ ports: [app.port] })
@@ -222,7 +226,7 @@ await check("a directory that is not there still answers every field", () => {
 
 console.log("\nThe screen")
 
-const app = await pageServer("Workspaces")
+const app = await pageServer("Host App")
 const project = reactProject()
 const screen = await createStartScreen({ host: "127.0.0.1", port: 0, log: () => {} })
 
@@ -270,7 +274,7 @@ await check("a pasted ~ is the home directory, not a relative path", async () =>
 // the Finder, and it writes the shell's escaping along with it.
 await check("a path pasted with shell escaping still finds the folder", async () => {
   const dir = fixture("with space")
-  const spaced = path.join(dir, "IG Projects Local")
+  const spaced = path.join(dir, "Client Projects Local")
   fs.mkdirSync(spaced)
   const escaped = spaced.replace(/ /g, "\\ ")
 
@@ -754,9 +758,9 @@ const projectSaid = (dir) => ({
   framework: "nextjs",
 })
 
-const KNOWN = "/Users/someone/Projects/Workspaces app"
+const KNOWN = "/Users/someone/Projects/host app"
 const ROWS = [
-  { port: 3000, url: "http://127.0.0.1:3000", title: "Workspaces", projectRoot: KNOWN, packageName: "workspaces" },
+  { port: 3000, url: "http://127.0.0.1:3000", title: "Host App", projectRoot: KNOWN, packageName: "host-app" },
   // The 500 page a broken dev server serves carries no absolute path, and the
   // same machine refuses `lsof -d cwd` for its owner's processes. Between them
   // there is nothing left to work the folder out from.
@@ -785,17 +789,36 @@ await check("a row whose folder is unknown never inherits the last row's", async
     await new Promise((resolve) => setTimeout(resolve, 20))
     assert.equal($("url").value, "http://127.0.0.1:3001")
     assert.equal($("folder-path").value, "", "the other app's source tree is still in the field")
-    assert.equal($("submit").disabled, true)
     // Said plainly, where the field it emptied is, rather than left to be noticed.
     assert.equal($("folder-error").hidden, false)
     assert.match($("folder-error").textContent, /could not|cannot/i)
     assert.match($("folder-error").textContent, /3001/)
+    /*
+     * The BUTTON is no longer the thing that says no — the sentence is.
+     *
+     * This used to assert `submit.disabled === true`, which was the whole of
+     * the old refusal: a grey rectangle that could not be focused, could not be
+     * hovered, and explained nothing. It is enabled now, and pressing it is how
+     * a user learns what is missing. So what has to hold here is the pair that
+     * actually protects the wrong project — the field is empty, and the field
+     * is flagged — plus the guarantee that pressing anyway cannot start.
+     */
+    assert.equal($("submit").disabled, false, "the refusal is a sentence now, not a dead button")
+    assert.equal($("folder-path").getAttribute("aria-invalid"), "true")
+
+    $("form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.equal(dom.window.document.activeElement, $("folder-path"), "the gap did not take focus")
+    assert.equal($("submit-error").hidden, false)
+    assert.match($("submit-error").textContent, /folder/i)
+    assert.equal($("waiting").hidden, true, "a press with no folder started something")
 
     // And back: the row that does know its folder fills it in again.
     rows[0].click()
     await new Promise((resolve) => setTimeout(resolve, 20))
     assert.equal($("folder-path").value, KNOWN)
     assert.equal($("folder-error").hidden, true)
+    assert.equal($("folder-path").getAttribute("aria-invalid"), null)
   } finally {
     dom.window.close()
   }
@@ -816,6 +839,691 @@ await check("clicking the row you are already on keeps the page you typed", asyn
     ;[...$("apps").children][1].click()
     await new Promise((resolve) => setTimeout(resolve, 20))
     assert.equal($("url").value, "http://127.0.0.1:3001")
+  } finally {
+    dom.window.close()
+  }
+})
+
+// ── The front door on a cold boot ───────────────────────────────────────────
+
+/*
+ * THE STATE THE PRODUCT IS MET IN, and the one it used to answer worst.
+ *
+ * Nothing running, nothing typed. Measured before this rework: two tab stops on
+ * the whole page, both of them empty text fields; zero buttons, because the
+ * only one was `disabled` and a disabled button leaves the tab order; zero
+ * headings; zero live regions; and `#hint` explicitly blanked, so the single
+ * sentence that could have said what the screen wanted was the one branch that
+ * rendered nothing.
+ *
+ * Every case in this section is that measurement turned into a guard. They are
+ * about REACHABILITY and being TOLD — not about the specific wording, which is
+ * free to improve without failing a test.
+ */
+console.log("\nA cold boot with nothing running")
+
+const coldPage = () => mountPage([], {})
+
+/*
+ * Every word the card is actually showing, in DOM order.
+ *
+ * `hidden` is honored, and so is the one thing this screen hides with a class
+ * rather than the attribute: the list's heading and the "or" rule, which are
+ * furniture for a choice and are gone when there is nothing to choose between.
+ * jsdom has no cascade worth trusting, so that pair is matched by hand rather
+ * than read off `getComputedStyle` — which is also why the budget below is a
+ * floor on prose and not a layout measurement.
+ */
+function shownWords(dom) {
+  const document = dom.window.document
+  const form = document.getElementById("form")
+  const parts = []
+  const walk = (node) => {
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) {
+        const text = child.textContent.trim()
+        if (text) parts.push(text)
+      } else if (child.nodeType === 1 && !child.hasAttribute("hidden")) {
+        const furniture = child.id === "apps-label" || child.classList.contains("or")
+        if (furniture && !form.classList.contains("has-apps")) continue
+        walk(child)
+      }
+    }
+  }
+  walk(document.querySelector("main.card"))
+  return parts.join(" ").split(/\s+/).filter(Boolean)
+}
+
+/*
+ * THE COUNT IS THE POINT, and it is the one thing prose regression can't hide
+ * behind.
+ *
+ * Every sentence this screen accumulated was individually defensible: a hint
+ * per state, a help paragraph per field, a recovery clause per error. Ninety-six
+ * words in the state a first-time user meets, all of them correct, none of them
+ * skimmable. The structure carries it now — a list, a rule reading "or", two
+ * labelled boxes — so what is left to read is what the structure cannot say.
+ *
+ * A budget rather than a fixed number, because the wording is still free to
+ * move; a budget with this much room is still less than a quarter of what it
+ * replaced, and a paragraph cannot be added back under it.
+ */
+await check("a cold boot is read in one breath, not six sentences", async () => {
+  const dom = await coldPage()
+  try {
+    const words = shownWords(dom)
+    assert.ok(
+      words.length <= 28,
+      `the cold-boot card shows ${words.length} words (was 96): ${words.join(" ")}`
+    )
+    const $ = (id) => dom.window.document.getElementById(id)
+    // The one fact a user cannot see for themselves — whether anything is up.
+    assert.match($("apps-note").textContent, /no dev server is running/i)
+    /*
+     * And the hint says NOTHING here, which is the inverse of what this case
+     * used to assert. It required "Fill in both fields above" — a sentence
+     * describing two visibly empty boxes to the person looking at them. The
+     * hint's job is now only the facts the screen holds and the screen does not
+     * show, and on a cold boot it holds none.
+     */
+    assert.equal($("hint").hidden, true, "the hint is narrating the layout again")
+  } finally {
+    dom.window.close()
+  }
+})
+
+/*
+ * The two answers, as two groups rather than as a sentence explaining that
+ * there are two. The heading over the list and the "or" above the fields exist
+ * only to tell them apart, so they come and go with the list itself — with
+ * nothing running there is no alternative for the fields to be the second of.
+ */
+await check("the two ways in are two groups, and the second only exists beside a first", async () => {
+  const cold = await coldPage()
+  try {
+    assert.equal(cold.window.document.getElementById("form").classList.contains("has-apps"), false)
+  } finally {
+    cold.window.close()
+  }
+
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const document = dom.window.document
+    assert.equal(document.getElementById("form").classList.contains("has-apps"), true)
+    // The rule carries one word, which is the whole of what it has to say: the
+    // fields are an alternative to the list, not the next step after it.
+    const or = document.querySelector(".or")
+    assert.ok(or, "nothing on the screen says the two groups are alternatives")
+    assert.equal(or.textContent.trim().toLowerCase(), "or")
+    // And it sits between them, in reading order.
+    const apps = document.getElementById("apps")
+    assert.ok(
+      apps.compareDocumentPosition(or) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+      "the or rule is not between the list and the fields"
+    )
+    assert.ok(
+      or.compareDocumentPosition(document.getElementById("url")) &
+        dom.window.Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  } finally {
+    dom.window.close()
+  }
+})
+
+/*
+ * A paragraph under every field is how the last pass answered "what goes here",
+ * and two of the three said what the label and the placeholder already said.
+ * What survives is the single fact neither can carry: how macOS is made to give
+ * up an absolute path at all.
+ */
+await check("the fields are labelled and exampled, not annotated", async () => {
+  const dom = await coldPage()
+  try {
+    const document = dom.window.document
+    const url = document.getElementById("url")
+    assert.equal(url.getAttribute("aria-describedby"), null, "the address field grew help again")
+    assert.equal(document.getElementById("url-help"), null)
+    // The placeholder is the example the deleted sentence was describing.
+    assert.match(url.getAttribute("placeholder"), /^https?:\/\//)
+    assert.match(document.getElementById("folder-path").getAttribute("placeholder"), /^[/~]/)
+    const help = [...document.querySelectorAll(".fields .note")]
+    assert.equal(help.length, 1, `${help.length} help paragraphs under two fields`)
+    assert.equal(help[0].id, "folder-help")
+    // Both fields still have a visible, associated label — the placeholder is
+    // an example and vanishes on input, so it is never the naming.
+    for (const id of ["url", "folder-path"]) {
+      const label = document.querySelector(`label[for="${id}"]`)
+      assert.ok(label && label.textContent.trim() !== "", `no visible label for ${id}`)
+    }
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("there is something to press, and pressing it says what is missing", async () => {
+  const dom = await coldPage()
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    assert.equal($("submit").disabled, false, "the only action on a cold boot is unreachable")
+
+    $("form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // The gap gets the focus AND the sentence. An announcement alone still
+    // leaves a sighted keyboard user hunting for which of two fields is meant.
+    assert.equal(dom.window.document.activeElement, $("url"))
+    assert.equal($("url").getAttribute("aria-invalid"), "true")
+    assert.equal($("submit-error").hidden, false)
+    assert.match($("submit-error").textContent, /address/i)
+
+    // Answer that one, and the press moves to the next unanswered question
+    // rather than repeating the one just closed.
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    $("form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.equal(dom.window.document.activeElement, $("folder-path"))
+    assert.match($("submit-error").textContent, /folder/i)
+    assert.equal($("url").getAttribute("aria-invalid"), null, "the answered field is still flagged")
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("the button keeps one name, whatever the screen is about to do", async () => {
+  const dom = await coldPage()
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    const cold = $("submit").textContent
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // It used to flip between "Start designing" and "Start app & designing" as
+    // the user typed — a control that changes identity under the hand reaching
+    // for it. Which of the two happens is the hint's job now, and it says so.
+    assert.equal($("submit").textContent, cold)
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("every async message has somewhere to be announced from", async () => {
+  const dom = await coldPage()
+  try {
+    const document = dom.window.document
+    // Measured at zero before this rework: the scan result, every refusal, the
+    // progress and the crash sentence all appeared with no focus move and no
+    // announcement of any kind.
+    for (const id of ["apps-note", "hint"]) {
+      assert.equal(document.getElementById(id).getAttribute("role"), "status", id)
+    }
+    /*
+     * The waiting heading is the exception, and deliberately so.
+     *
+     * It carried `role="status"` for a while. An explicit role replaces the
+     * implicit one, so that made it a live region and left the waiting view
+     * with no heading at all — while the comment above it in the document
+     * claimed a heading was exactly what it was. It bought nothing either: it
+     * sits inside `#waiting`, which is `hidden` until the state arrives, and a
+     * live region revealed with its text already in it does not reliably
+     * announce.
+     *
+     * What announces the sentence is `waitForEditor` moving focus to it, which
+     * is the same line that rescues the keyboard from being stranded. So the
+     * guarantee here is the heading and the focus target, not a role.
+     */
+    const progress = document.getElementById("progress")
+    assert.equal(progress.getAttribute("role"), null, "the waiting heading is not a live region")
+    assert.equal(progress.tagName, "H2")
+    assert.equal(progress.tabIndex, -1, "nothing can move focus to the waiting view")
+    for (const id of ["apps-error", "submit-error", "stopped"]) {
+      assert.equal(document.getElementById(id).getAttribute("role"), "alert", id)
+    }
+    // The field errors take the other route: tied to their field rather than
+    // announced loose, which is what `aria-describedby` on the input is for.
+    assert.match(
+      document.getElementById("folder-path").getAttribute("aria-describedby"),
+      /folder-error/
+    )
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("the card is navigable by heading, and says which face is up", async () => {
+  const dom = await coldPage()
+  try {
+    const document = dom.window.document
+    const headings = [...document.querySelectorAll("h1, h2")].map((node) => node.textContent.trim())
+    assert.equal(document.querySelectorAll("h1").length, 1)
+    assert.ok(headings.includes("designlayer"))
+    // The two faces of the card. Both are headings, so a non-visual reader can
+    // tell which one is up; they used to be `<p class="label">` and identical.
+    assert.ok(headings.includes("Now editing"))
+    // The list's own heading, which is also the radiogroup's accessible name.
+    // Matched on the word rather than the sentence: it was "Apps running on
+    // this machine" and is now two words, and either satisfies the guarantee.
+    assert.ok(headings.some((text) => /running/i.test(text)))
+  } finally {
+    dom.window.close()
+  }
+})
+
+// ── The list of running apps ────────────────────────────────────────────────
+
+console.log("\nThe list of running apps")
+
+await check("the list is one choice, not a row of independent switches", async () => {
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    assert.equal($("apps").getAttribute("role"), "radiogroup")
+    assert.equal($("apps").getAttribute("aria-labelledby"), "apps-label")
+    const rows = [...$("apps").children]
+    for (const row of rows) {
+      assert.equal(row.getAttribute("role"), "radio")
+      // `aria-pressed` announced "toggle button, pressed" — a promise of
+      // independent on/off per row, where picking one un-picks every other.
+      assert.equal(row.getAttribute("aria-pressed"), null)
+    }
+    assert.deepEqual(rows.map((row) => row.getAttribute("aria-checked")), ["true", "false"])
+    // One tab stop for the whole group, on the row the eye is already on —
+    // not one stop per detected app.
+    assert.deepEqual(rows.map((row) => row.tabIndex), [0, -1])
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("arrowing the list moves the choice, not just the cursor", async () => {
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    const rows = [...$("apps").children]
+    rows[0].focus()
+    rows[0].dispatchEvent(
+      new dom.window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // In a radiogroup the arrows carry the selection with the focus, so
+    // arrowing down the list is the same gesture as clicking down it.
+    assert.equal(dom.window.document.activeElement, rows[1])
+    assert.equal(rows[1].getAttribute("aria-checked"), "true")
+    assert.equal($("url").value, "http://127.0.0.1:3001")
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("a choice made for you is said out loud, not only tinted", async () => {
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    // The tint that used to be the only signal measured 1.44:1 against an
+    // unchosen row, and its border resolved to the same value as its fill.
+    assert.match($("apps-note").textContent, /picked/i)
+    assert.match($("apps-note").textContent, /Host App/)
+    // The non-color half, which is the one that survives forced-colors.
+    const chosen = $("apps").querySelector('[aria-checked="true"]')
+    assert.ok(chosen.querySelector(".app-check"), "nothing marks the chosen row but its fill")
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("an untitled server is named, not made to stutter its own address", async () => {
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    const row = [...$("apps").children][1]
+    // `scanLocalApps` labels a titleless server with its own address, and the
+    // row then appends the port: "127.0.0.1:3001:3001".
+    assert.equal(row.querySelector(".app-name").textContent, "Untitled app")
+    assert.equal(row.querySelector(".app-port").textContent, ":3001")
+    /*
+     * The SENTENCE names the same thing the row does, plus the one fact that
+     * tells two untitled servers apart.
+     *
+     * This asserted the bare address for a while, which was the other half of
+     * the same bug rather than a fix: the prose then said "127.0.0.1:3001"
+     * while the row it pointed at said "Untitled app", so the one name on
+     * screen and the one name in the sentence were different strings. Two
+     * untitled servers is the case that shows it, which is why the fixture has
+     * two.
+     */
+    row.click()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const said = $("folder-error").textContent
+    assert.match(said, /untitled app/i, "the sentence does not say what the row says")
+    assert.match(said, /3001/, "the sentence cannot be tied to one of two untitled rows")
+  } finally {
+    dom.window.close()
+  }
+})
+
+// ── Being told why, rather than being stopped ───────────────────────────────
+
+console.log("\nBeing told why")
+
+/** A folder the editor cannot do anything with, described honestly. */
+const brokenProject = (dir, over) => ({ ...projectSaid(dir), ...over })
+
+await check("a folder with no package.json is told so, not told about its scripts", async () => {
+  const dir = "/Users/someone/Projects"
+  const dom = await mountPage([], {
+    [dir]: brokenProject(dir, { hasPackageJson: false, devScripts: [], hasReact: false }),
+  })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    $("folder-path").value = dir
+    $("folder-path").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    /*
+     * It used to say "That folder has no dev script in its package.json." for
+     * this, which is a dead end AND untrue in the commonest case: pointing at a
+     * parent folder reported a missing script in a file that does not exist.
+     */
+    assert.match($("hint").textContent, /no package\.json/i)
+    assert.match($("hint").textContent, /node_modules/, "the sentence names nothing to look for")
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("a project the editor cannot edit says so before the press, not after", async () => {
+  const dir = "/Users/someone/Projects/svelte-thing"
+  const dom = await mountPage([], {
+    [dir]: brokenProject(dir, { hasReact: false, framework: "vite" }),
+  })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    $("folder-path").value = dir
+    $("folder-path").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    // Both facts arrive with the folder, a full round-trip before the press
+    // that used to be the first place either of them was mentioned.
+    assert.match($("hint").textContent, /neither React nor Angular/i)
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("a ready screen says what pressing the button will actually do", async () => {
+  const dom = await mountPage([], { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    $("folder-path").value = KNOWN
+    $("folder-path").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    assert.match($("hint").textContent, /npm run dev/)
+    assert.match($("hint").textContent, /opens the editor/i)
+    // The home directory never reaches the browser, so the tilde is the page's.
+    assert.doesNotMatch($("hint").textContent, /\/Users\/someone/)
+  } finally {
+    dom.window.close()
+  }
+})
+
+/*
+ * THE INVERSE, AND IT IS THE HALF THAT KEEPS THE SENTENCE MEANINGFUL.
+ *
+ * Pressing the button against a server that is already up starts no process, so
+ * there is nothing to warn about: the row carries a check, the two boxes carry
+ * the address and the folder, and the button says Start editing. The sentence
+ * that used to sit here — "Opens Host App at http://127.0.0.1:3000, editing
+ * ~/Projects/…" — read the screen back to the person reading it.
+ *
+ * With silence as the default, the one case that does speak says something by
+ * speaking: a command is about to run on this machine.
+ */
+await check("a running app that was picked needs no sentence about being picked", async () => {
+  const dom = await mountPage(ROWS, { [KNOWN]: projectSaid(KNOWN) })
+  try {
+    const $ = (id) => dom.window.document.getElementById(id)
+    assert.equal($("url").value, "http://127.0.0.1:3000")
+    assert.equal($("folder-path").value, KNOWN)
+    assert.equal($("hint").hidden, true, `the hint is narrating again: ${$("hint").textContent}`)
+    // The choice itself is still said out loud, once, where the choosing happened.
+    assert.match($("apps-note").textContent, /picked/i)
+    // And the how-to-get-a-path help goes with the question it answered: the
+    // row click already put a path in the box it sits under.
+    assert.equal($("folder-help").hidden, true, "help is captioning a solved problem")
+  } finally {
+    dom.window.close()
+  }
+})
+
+await check("a scan that could not run never claims nothing is running", async () => {
+  const dom = new JSDOM(startScreenPage(), {
+    runScripts: "outside-only",
+    url: "http://127.0.0.1:3455/",
+  })
+  try {
+    dom.window.fetch = async (target) => {
+      const url = new URL(target, "http://127.0.0.1:3455")
+      if (url.pathname === "/api/status") {
+        return { ok: true, status: 200, json: async () => ({ ready: false, editing: null, stopped: null }) }
+      }
+      // The scan itself is what fails here.
+      if (url.pathname === "/api/apps") throw new TypeError("Failed to fetch")
+      return { ok: false, status: 404, json: async () => null }
+    }
+    dom.window.eval(CLIENT)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    const $ = (id) => dom.window.document.getElementById(id)
+    /*
+     * "I found nothing" and "I could not look" are different sentences, and the
+     * page used to say the first whenever the second was true — sending the
+     * user to start an app that may already be up, on a port already taken.
+     */
+    assert.doesNotMatch($("apps-note").textContent, /no dev server is running/i)
+    assert.match($("apps-note").textContent, /could not check/i)
+    // And the failure itself names a recovery rather than a browser's phrasing.
+    assert.equal($("apps-error").hidden, false)
+    assert.match($("apps-error").textContent, /reload this page/i)
+    assert.doesNotMatch($("apps-error").textContent, /Failed to fetch/)
+  } finally {
+    dom.window.close()
+  }
+})
+
+/*
+ * The screen's own type scale, which is deliberately not the chrome's.
+ *
+ * The card is a full window and the editor is a 240px docked panel, so this
+ * surface runs a rung larger on purpose — `--size-body` at 13 against the
+ * token's 12, a 15px lede, a 16px address field. That decision is recorded in
+ * `start-screen-style.mjs` and these cases exist to hold it to its own terms
+ * rather than to undo it: a scale that is deliberately different still has to
+ * be internally consistent, and the three failures below were all cases of it
+ * not being.
+ */
+await check("the h1 is not out-sized by the h2 beneath it", async () => {
+  const css = startScreenStyle()
+  const page = startScreenPage()
+  // The markup this is about: one `h1.brand`, and `h2`s at `.label` and
+  // `.progress`. If the page stops spelling it that way the sizes below are
+  // measuring nothing, so the shape is asserted before the sizes are.
+  assert.match(page, /<h1 class="brand">/)
+  assert.match(page, /<h2 class="progress"/)
+
+  const step = (rule, property = "font-size") => {
+    const block = new RegExp(`(^|\\n)\\${rule} \\{([\\s\\S]*?)\\n\\}`, "m").exec(css)
+    assert.ok(block, `no rule for ${rule}`)
+    const found = new RegExp(`${property}: var\\((--size-[a-z]+)\\)`).exec(block[2])
+    assert.ok(found, `${rule} sets no ${property} from the scale`)
+    const declared = new RegExp(`${found[1]}: (?:\\$\\{[^}]+\\}|(\\d+)px)`).exec(css)
+    assert.ok(declared, `${found[1]} is not declared in :root`)
+    // `--size-label` is interpolated from the token rather than written out, and
+    // the token is the chrome's body rung.
+    return declared[1] ? Number(declared[1]) : 12
+  }
+
+  const brand = step(".brand")
+  const progress = step(".progress")
+  assert.ok(
+    brand >= progress,
+    `the h1 wordmark is ${brand}px under a ${progress}px h2 — a child heading outsizing its parent`
+  )
+  // And the label h2s stay clearly subordinate to both, which is the half of the
+  // hierarchy that was already right.
+  assert.ok(step(".label") < brand, "the section labels are not a step below the wordmark")
+})
+
+await check("the screen renders text the way the editor it launches does", async () => {
+  const css = startScreenStyle()
+  /*
+   * Smoothing is a PAIR. Only the `-webkit-` half was here, which is the half
+   * Chromium and WebKit read — so macOS Firefox kept subpixel antialiasing and
+   * drew this card a notch heavier than the editor it starts, in the one
+   * situation where a user has both open and can compare them.
+   */
+  assert.match(css, /-webkit-font-smoothing: antialiased/)
+  assert.match(css, /-moz-osx-font-smoothing: grayscale/)
+  /*
+   * Tabular figures for the port column. Three dev servers up is three
+   * `:3000`-shaped numbers in a flex list, and proportional digits gave each
+   * row its own width — a column that does not line up.
+   */
+  assert.match(css, /font-variant-numeric: tabular-nums/)
+  // And the controls, which reset `font-variant` via the UA's `font` shorthand
+  // and so do not inherit the line above.
+  assert.match(css, /:where\(input, textarea, select, button\) \{ font-variant-numeric: inherit; \}/)
+})
+
+await check("the screen's leading comes from the same scale as the chrome's", async () => {
+  const css = startScreenStyle()
+  /*
+   * It used to be one literal — a `/1.5` inside `body`'s `font` shorthand — and
+   * every other line of text on the screen was leaded by inheriting from it,
+   * which meant nothing here could be changed without guessing what depended
+   * on it. The roles come from `tokens.type` now, so the two surfaces cannot
+   * drift apart on what "body leading" means.
+   */
+  assert.match(css, /--leading-body: 1\.5;/)
+  assert.match(css, /--leading-row: 1\.4;/)
+  assert.match(css, /font: var\(--weight-body\) var\(--size-body\)\/var\(--leading-body\)/)
+  // No bare numeric leading left anywhere: a literal here is the start of the
+  // scale coming apart again.
+  const literal = css.match(/line-height:\s*[\d.]+/g)
+  assert.deepEqual(literal, null, `leading written as a number rather than a role: ${literal}`)
+})
+
+await check("the sentences on the screen are punctuated, not typed", async () => {
+  const page = startScreenPage()
+  /*
+   * The screen already curled its quotation marks — `“Copy as Pathname”` in the
+   * folder hint — and left every apostrophe straight, so one voice was
+   * punctuating two ways in the same paragraph. Possessives are the only
+   * apostrophes this page has.
+   *
+   * Scoped to the rendered markup, not the client script's source, because a
+   * straight quote is how JavaScript is written and this is about what a reader
+   * sees. The strings the script SHOWS are covered by the same sweep over the
+   * template the script is embedded in.
+   */
+  const rendered = page
+    .replace(/<script type="module">[\s\S]*?<\/script>/, "")
+    .replace(/<style>[\s\S]*?<\/style>/, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+  const straight = rendered.match(/[A-Za-z]'[A-Za-z]/g)
+  assert.deepEqual(straight, null, `straight apostrophes in rendered prose: ${straight}`)
+  // The quotation marks are curled too. This asserted a possessive apostrophe
+  // in a field label for a while; the labels are two words each now and carry
+  // none, so the check moved to the one quoted string left on the screen.
+  assert.match(rendered, /“Copy as Pathname”/)
+  assert.doesNotMatch(rendered, /"Copy as Pathname"/)
+  // The ellipsis is the single character, not three periods — already true, and
+  // pinned so the two conventions stay one convention.
+  assert.doesNotMatch(rendered, /\w\.\.\./)
+})
+
+/*
+ * WORST-CASE CONTENT, which is where this card was last found to break.
+ *
+ * These came out of a stress run that rendered the real document against
+ * content nobody had tried: twenty dev servers, a 200-character title, a
+ * 60-character word with no spaces, a path deep enough to escape the window.
+ * Four of the seven breaks it found were content overflow, and none of them was
+ * visible in any state the rest of this suite drives.
+ *
+ * Asserted against the STYLESHEET rather than by measuring a rendered box,
+ * because jsdom has no layout — so what these pin is that the defences are
+ * declared, and the rendered proof lives in `.demos/break/`.
+ */
+console.log("\nWorst-case content")
+
+await check("a sentence holding a path cannot push the card off the screen", () => {
+  // `#hint` prints `~/Projects/…` and `#folder-help` names package.json. At
+  // 320px a deep path escaped the card AND the window, and the page grew a
+  // horizontal scrollbar — the one thing a 320px layout may never do.
+  const rule = /\.note,\s*\.error\s*\{([^}]*)\}/s.exec(startScreenStyle())
+  assert.ok(rule, "the note and error rules are no longer declared together")
+  assert.match(rule[1], /overflow-wrap: break-word/)
+})
+
+await check("a list of twenty dev servers does not bury the fields below it", () => {
+  // Rendered against twenty, the card came out 1,327px with no scroll region,
+  // so the two fields and the button — the whole task — were pushed off the
+  // bottom by a list that is only a shortcut to filling them in.
+  const rule = /\.apps\s*\{([^}]*)\}/s.exec(startScreenStyle())
+  assert.ok(rule, ".apps is missing from the stylesheet")
+  assert.match(rule[1], /max-height:/)
+  assert.match(rule[1], /overflow-y: auto/)
+  // And a wheel that reaches the end of it must not scroll the card away.
+  assert.match(rule[1], /overscroll-behavior: contain/)
+})
+
+await check("losing contact stops the screen promising progress", async () => {
+  const dom = new JSDOM(startScreenPage(), {
+    runScripts: "outside-only",
+    url: "http://127.0.0.1:3455/",
+  })
+  try {
+    let asked = 0
+    dom.window.fetch = async (target) => {
+      const url = new URL(target, "http://127.0.0.1:3455")
+      if (url.pathname === "/api/apps") return { ok: true, status: 200, json: async () => ({ apps: [] }) }
+      if (url.pathname === "/api/project") {
+        return { ok: true, status: 200, json: async () => ({ project: projectSaid(KNOWN) }) }
+      }
+      if (url.pathname === "/api/start") return { ok: true, status: 200, json: async () => ({ ok: true }) }
+      // The editor never answers again once the start has been accepted.
+      asked += 1
+      if (asked > 1) throw new TypeError("Failed to fetch")
+      return { ok: true, status: 200, json: async () => ({ ready: false, editing: null, stopped: null }) }
+    }
+    dom.window.eval(CLIENT)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    const $ = (id) => dom.window.document.getElementById(id)
+    $("url").value = "http://127.0.0.1:3000"
+    $("url").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    $("folder-path").value = KNOWN
+    $("folder-path").dispatchEvent(new dom.window.Event("input", { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    $("form").dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }))
+    // Three misses at 500ms apart is when the screen gives up on the wait.
+    await new Promise((resolve) => setTimeout(resolve, 2200))
+
+    /*
+     * The failure used to be a muted note UNDER a heading still reading
+     * "Starting your app…", with the dot still pulsing — the two halves of the
+     * screen telling the reader opposite things, and the confident one louder.
+     */
+    assert.doesNotMatch($("progress-text").textContent, /Starting|Switching/i)
+    assert.match($("progress-text").textContent, /lost contact/i)
+    assert.ok(
+      $("progress").classList.contains("progress--stalled"),
+      "the dot goes on promising progress after the screen has given up"
+    )
+    // And the sentence is where this screen says failures, not in a footnote.
+    assert.equal($("stopped").hidden, false)
+    assert.equal($("stopped").getAttribute("role"), "alert")
   } finally {
     dom.window.close()
   }

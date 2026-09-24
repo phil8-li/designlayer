@@ -112,6 +112,10 @@ const editor = await import(
 )
 const { keymap, commands, store } = editor
 const { SHORTCUTS, chordLabel, matchShortcut, shortcutFor } = keymap
+// The attribute the editor marks its own chrome with, and the one a companion
+// declares its shadow host under. Spelled here rather than imported so a rename
+// of it is caught by this suite rather than silently agreed with.
+const CHROME_ATTR = "data-designlayer"
 
 /** A chord, spelled as the event a browser would dispatch for it. */
 function press(chord, target = window.document.getElementById("cta")) {
@@ -291,6 +295,96 @@ check("typing in a field is typing, hidden or not", () => {
   assert.equal(shortcutFor(press({ key: "v" }, field), false), null)
   assert.equal(shortcutFor(press({ key: "c" }, field), false), null)
   assert.equal(shortcutFor(press({ key: ".", mod: true }, field), false), null)
+})
+
+/*
+ * TYPING INSIDE A SHADOW ROOT IS STILL TYPING, and this is the case the guard
+ * above cannot see on its own.
+ *
+ * `event.target` is RETARGETED at a shadow boundary: a keystroke typed into a
+ * `<textarea>` inside somebody's shadow root arrives here as the host element,
+ * which is not a text field by any test. The editor read that as a bare key on
+ * the page and spent it on a tool.
+ *
+ * It is not hypothetical and it is not rare. A sentence typed into a companion
+ * toolbar came out as "Noe oggle read a a cha bubble" — every `a`, `c`, `h`,
+ * `s` and `t` eaten, five letters that are tools on the table above. Any host
+ * app with a shadow-DOM text field loses characters the same way, and loses
+ * them silently: the editor does exactly what it was asked, one keystroke at a
+ * time, and the user watches their sentence come out wrong.
+ *
+ * These two dispatch REAL events through a REAL shadow root rather than
+ * building one by hand, because the whole bug lives in what `composedPath()`
+ * reports versus what `target` does — a hand-made event would agree with
+ * whichever one the implementation happened to read.
+ */
+
+/** A `<textarea>` inside an open shadow root, and the host it hides behind. */
+function shadowField(hostAttributes = {}) {
+  const host = window.document.createElement("div")
+  for (const [name, value] of Object.entries(hostAttributes)) host.setAttribute(name, value)
+  window.document.body.append(host)
+  const field = window.document.createElement("textarea")
+  host.attachShadow({ mode: "open" }).append(field)
+  return { host, field }
+}
+
+/**
+ * Asks `question` about the key press from inside a window-capture listener,
+ * which is where the editor's own lanes ask it.
+ *
+ * It has to be answered DURING dispatch. `composedPath()` is defined to return
+ * an empty array once dispatch is over, so an event captured and examined
+ * afterwards reports only its retargeted `target` — the very thing these cases
+ * exist to see past. A harness that asked afterwards would report this bug as
+ * unfixed forever, and the fix as impossible.
+ */
+function whileTyping(field, key, question) {
+  let answer
+  const listener = (event) => {
+    answer = question(event)
+  }
+  window.addEventListener("keydown", listener, true)
+  field.dispatchEvent(
+    new window.KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true })
+  )
+  window.removeEventListener("keydown", listener, true)
+  return answer
+}
+
+check("a letter typed into a shadow-DOM field is never spent on a tool", () => {
+  const { host, field } = shadowField()
+  try {
+    for (const key of ["c", "v", "a", "h"]) {
+      assert.equal(
+        whileTyping(field, key, (event) => shortcutFor(event, false)),
+        null,
+        `"${key}" was taken as a shortcut out of a shadow-DOM text field`
+      )
+    }
+  } finally {
+    host.remove()
+  }
+})
+
+check("the canvas declines keys from inside a shadow root it does not own", () => {
+  // The other half: chrome is recognised through the HOST, which is where a
+  // companion's declared selector lives, while the field is a node a
+  // `closest()` from out here can never reach.
+  const { host, field } = shadowField({ [CHROME_ATTR]: "" })
+  try {
+    assert.equal(whileTyping(field, "ArrowLeft", keymap.ownsCanvasKeys), false)
+  } finally {
+    host.remove()
+  }
+
+  const plain = shadowField()
+  try {
+    // Not chrome, but still a text field: the canvas keeps its hands off.
+    assert.equal(whileTyping(plain.field, "ArrowLeft", keymap.ownsCanvasKeys), false)
+  } finally {
+    plain.host.remove()
+  }
 })
 
 check("the canvas keeps its own five, so they are documented and not dispatched", () => {

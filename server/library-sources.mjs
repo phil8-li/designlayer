@@ -157,6 +157,36 @@ function cssDeclarations(source) {
       else if (char === quote) quote = null
       continue
     }
+    /*
+     * A BACKSLASH ESCAPES THE NEXT CHARACTER ANYWHERE, not only inside a string
+     * — and missing that silently threw away most of every Tailwind stylesheet
+     * this editor was ever pointed at.
+     *
+     * The escape logic above runs only once `quote` is set, so out here a `\'`
+     * was read as an apostrophe OPENING a string. Nothing ever closed it, so
+     * from that character to the end of the file every brace and semicolon was
+     * treated as string content: no scopes pushed, no declarations pushed, no
+     * error — the stylesheet simply appeared to contain no tokens.
+     *
+     * It takes one class name to trigger, and Tailwind emits them by the dozen.
+     * Measured on a real compiled bundle, this selector —
+     *
+     *   .\[\&\>svg\:not\(\[class\*\=\'size-\'\]\)\]\:size-4
+     *
+     * appears 6KB before the `:root` block holding the design system, and cost
+     * the whole of it: 75 colours with light and dark values, 14 radii and 5
+     * text styles read as zero. The same file parsed perfectly from the `:root`
+     * block onwards, which is what made it look like a size limit rather than a
+     * quote.
+     *
+     * Skipping the escaped character outright is CSS's own rule and is all this
+     * needs: an escaped quote, brace, colon or bracket in a selector stops being
+     * punctuation, which is exactly what the backslash was there to say.
+     */
+    if (char === "\\") {
+      index += 1
+      continue
+    }
     if (char === '"' || char === "'") quote = char
     else if (char === "(") parens += 1
     else if (char === ")") parens = Math.max(0, parens - 1)
@@ -189,6 +219,18 @@ const BASE_SELECTOR = /^(:root|html|body|\*|:host)$/
 
 /** `dark` as a whole word, so `.dark`, `[data-theme="x-dark"]` and `darkroom` sort correctly. */
 const DARK_SELECTOR = /(^|[^a-z0-9])dark([^a-z0-9]|$)/
+
+/**
+ * The at-rules that put a CONDITION on the block inside them, as opposed to the
+ * ones that merely file it somewhere in the cascade.
+ *
+ * `@layer` and `@theme` are pointedly not here. A layer name is a bucket and a
+ * `@theme` block is where a Tailwind v4 host keeps its scale; neither says
+ * anything about WHEN the declarations inside apply, so neither makes the block
+ * conditional. `@media`, `@supports` and `@container` all do, and that
+ * distinction is the whole of what the tier rules below need from an at-rule.
+ */
+const CONDITIONAL_AT_RULE = /^@(media|supports|container)\b/
 
 /** One attribute, class or pseudo-class hung off a selector, with no combinator between. */
 const SELECTOR_QUALIFIER = "(\\([^()]*\\)|\\[[^\\]]*\\]|\\.[a-zA-Z0-9_-]+|::?[a-zA-Z-]+(\\([^()]*\\))?)"
@@ -251,6 +293,17 @@ const SELECTOR_PLUMBING = new Set([
   "is",
   "where",
   "not",
+  // A dark block spelled as a media query spends four words getting to the one
+  // that names the theme: `@media (prefers-color-scheme: dark)`. Without these,
+  // that block looks like a DISTINGUISHED dark theme next to a plain `.dark`
+  // — three words it does not share — and a system that ships both spellings of
+  // the same palette (Radix Colors does, and so does anything following the OS
+  // preference as well as a class toggle) would demote one of them to
+  // additive-only for no reason a designer could see.
+  "media",
+  "prefers",
+  "supports",
+  "container",
 ])
 
 /**
@@ -268,7 +321,14 @@ const SELECTOR_PLUMBING = new Set([
 function darkSelectorTerms(scopes) {
   for (const scope of scopes) {
     const text = scope.trim().toLowerCase()
-    if (!text || text.startsWith("@")) continue
+    if (!text) continue
+    // A conditional at-rule is read here for the same reason `declarationTheme`
+    // reads it: `@media (prefers-color-scheme: dark)` IS the selector that names
+    // the theme, and skipping every `@` scope left such a block with no terms at
+    // all, which ranked it as the plainest possible dark theme whatever else it
+    // carried. A `@layer` name is still skipped — it is a cascade bucket, not a
+    // condition, so the words in it distinguish nothing.
+    if (text.startsWith("@") && !CONDITIONAL_AT_RULE.test(text)) continue
     if (!DARK_SELECTOR.test(text)) continue
     let terms = null
     for (const part of text.split(",")) {
@@ -288,20 +348,47 @@ function darkSelectorTerms(scopes) {
  * `"dark"`, `"theme"` for a themed block that is neither — or null when it
  * belongs to none of them.
  *
- * Read outermost scope inwards, because an `@media` or `@layer` wrapper says
- * nothing about the theme and the selector inside it says everything, and
- * because CSS nesting means the innermost recognised selector is the one that
- * actually applies. `@theme` is treated as a base block in its own right: it is
- * where a Tailwind v4 host keeps its scale, and it is not a selector at all, so
- * the selector tests below would otherwise throw the whole file away.
+ * Read outermost scope inwards, because a `@layer` wrapper says nothing about
+ * the theme and the selector inside it says everything, and because CSS nesting
+ * means the innermost recognised selector is the one that actually applies.
+ * `@theme` is treated as a base block in its own right: it is where a Tailwind
+ * v4 host keeps its scale, and it is not a selector at all, so the selector
+ * tests below would otherwise throw the whole file away.
+ *
+ * A CONDITIONAL at-rule is the exception, and it is the reason this function
+ * was rewritten. Skipping every `@` scope meant a block wrapped in
+ * `@media (prefers-color-scheme: dark)` resolved by its inner `:root` to the
+ * unconditional base tier — where last-declaration-wins, and where a dark block
+ * is written LAST. So the dark palette quietly became the default palette and
+ * no dark values were produced at all: the inspector showed a designer a black
+ * swatch labelled as the light default, which is worse than showing nothing.
+ * Radix Colors, Open Props and USWDS all ship that spelling, as does every
+ * system that follows the OS preference instead of a class toggle.
+ *
+ * The other conditions are the same defect with a quieter symptom — a
+ * `@media print` or `@media (min-width: 900px)` override was also flattened
+ * into the base tier, so a real system's spacing scale came back as its
+ * wide-viewport variant. They resolve to the additive `"theme"` tier instead:
+ * present, offered, but never allowed to restate what the file says plainly.
+ *
+ * The condition is applied AFTER the selector inside it is understood, rather
+ * than short-circuiting on the at-rule. `@media (prefers-color-scheme: dark)`
+ * wrapping `.card` is still a component's private variables and still yields
+ * null — the condition changes which tier a recognised block belongs to, it
+ * does not make an unrecognised block worth reading.
  */
 function declarationTheme(scopes) {
   let theme = null
+  let condition = null
   for (const scope of scopes) {
     const text = scope.trim().toLowerCase()
     if (!text) continue
     if (text.startsWith("@")) {
       if (/^@theme\b/.test(text)) theme = theme ?? "light"
+      else if (CONDITIONAL_AT_RULE.test(text)) {
+        if (DARK_SELECTOR.test(text)) condition = "dark"
+        else if (condition === null) condition = "theme"
+      }
       continue
     }
     if (DARK_SELECTOR.test(text)) return "dark"
@@ -315,7 +402,9 @@ function declarationTheme(scopes) {
     }
     return null
   }
-  return theme
+  if (theme === null) return null
+  if (condition === "dark") return "dark"
+  return condition === "theme" && theme === "light" ? "theme" : theme
 }
 
 /** `var(--x)` / `var(--x, fallback)` as a whole value, with the fallback kept intact. */
@@ -391,6 +480,40 @@ const SINGLE_LENGTH = /^(-?\d*\.?\d+)(px|rem|em)?$/i
 const DURATION = /^(-?\d*\.?\d+)(ms|s)$/i
 const LENGTH_SOMEWHERE = /(^|[\s(,])-?\d*\.?\d+(px|rem|em)\b/i
 
+/** Two to four numbers, optionally percentages, optionally with a slashed alpha. */
+const BARE_CHANNELS = /^-?\d*\.?\d+%?([\s,]+-?\d*\.?\d+%?){1,3}(\s*\/\s*-?\d*\.?\d+%?)?$/
+
+/**
+ * A hue followed by two PERCENTAGES: `hsl()`'s argument list and nothing else's.
+ *
+ * The percentages are what make this safe to recognise without being told. A
+ * saturation and a lightness are percentages by definition, while the channel
+ * triple this module deliberately refuses — `31, 31, 31` under a `-rgb` name —
+ * is three bare 0-255 integers. So the shape identifies the function even when
+ * the file never names it, which is the only reason guessing is allowed here.
+ */
+const HSL_TRIPLE = /^-?\d*\.?\d+(deg)?[\s,]+\d*\.?\d+%[\s,]+\d*\.?\d+%(\s*\/\s*-?\d*\.?\d+%?)?$/
+
+/**
+ * Which colour function a variable is spliced into, learned from the file that
+ * declares it: `hsl(var(--background))` says `--background` is an `hsl`
+ * argument list.
+ *
+ * Read out of the source rather than guessed, because the guess is what makes
+ * the difference between reading a palette and inventing one. A file that never
+ * writes the wrapper gets no entry and its bare triples are dropped exactly as
+ * before.
+ */
+const COLOR_WRAPPER = /\b(rgba?|hsla?|oklch|oklab|lab|lch)\(\s*(?:from\s+)?var\(\s*(--[a-zA-Z0-9_-]+)/gi
+
+function colorWrappers(source) {
+  const wrappers = new Map()
+  for (const match of String(source).matchAll(COLOR_WRAPPER)) {
+    if (!wrappers.has(match[2])) wrappers.set(match[2], match[1].toLowerCase())
+  }
+  return wrappers
+}
+
 /**
  * Can this string be painted?
  *
@@ -400,13 +523,26 @@ const LENGTH_SOMEWHERE = /(^|[\s(,])-?\d*\.?\d+(px|rem|em)\b/i
  * written into `background-color` it paints nothing at all. Every other
  * unpaintable value the rule catches is a bonus; this is the one that motivated
  * it.
+ *
+ * Which was right in general and wrong about the single most-copied token
+ * layout in existence. Pre-Tailwind-v4 shadcn/ui writes its entire palette as
+ * bare triples — `--background: 0 0% 100%` — and consumes them as
+ * `hsl(var(--background))`, so a stylesheet a designer would describe as "my
+ * colours" read as zero colours and a lone radius. The refusal has therefore
+ * grown two ways out, and both RECOVER the function rather than assuming one:
+ * `wrapper` is the function the same file was seen splicing this variable into,
+ * and the fallback recognises `hsl()`'s own argument shape, which a 0-255
+ * triple cannot be mistaken for. A value that answers to neither is still
+ * dropped, so nothing this function accepted before has changed.
  */
-function paintableColor(value) {
+function paintableColor(value, wrapper = null) {
   const text = String(value).trim()
   if (!text) return null
   if (HEX_COLOR.test(text)) return text
   if (COLOR_FUNCTION.test(text) && text.endsWith(")")) return text
-  return NAMED_COLORS.has(text.toLowerCase()) ? text : null
+  if (NAMED_COLORS.has(text.toLowerCase())) return text
+  if (wrapper && BARE_CHANNELS.test(text)) return `${wrapper}(${text})`
+  return HSL_TRIPLE.test(text) ? `hsl(${text})` : null
 }
 
 /** A single length in px, or null. A multi-value shorthand is not a scalar and says so. */
@@ -479,8 +615,8 @@ function classifyName(segments) {
 }
 
 /** The value has the last word when the name had nothing to say. */
-function classifyValue(value) {
-  if (paintableColor(value)) return { group: "colors", category: "color", matchIndex: -1 }
+function classifyValue(value, wrapper = null) {
+  if (paintableColor(value, wrapper)) return { group: "colors", category: "color", matchIndex: -1 }
   if (/^-?\d*\.?\d+(px|rem|em)$/i.test(String(value).trim())) {
     return { group: "spacing", category: "spacing", matchIndex: -1 }
   }
@@ -709,9 +845,9 @@ function textStyleToken(entry, prefixRun = 0) {
  * triple and a gradient all arrive as perfectly well-formed declarations that
  * this editor has no honest way to apply.
  */
-function tokenValues(group, value) {
+function tokenValues(group, value, wrapper = null) {
   if (group === "colors") {
-    const color = paintableColor(value)
+    const color = paintableColor(value, wrapper)
     return color === null ? null : { light: color }
   }
   if (group === "spacing" || group === "radii" || group === "icons") {
@@ -730,11 +866,35 @@ function tokenValues(group, value) {
   return null
 }
 
+/**
+ * Custom properties that are a framework's working memory rather than anybody's
+ * design token.
+ *
+ * `--tw-*` is a reserved implementation namespace: the variables a utility
+ * framework writes at run time to compose a shadow out of its parts, or to hold
+ * the current gradient stop. They are declared on `*` with placeholder values,
+ * which makes them indistinguishable from tokens to everything downstream — so
+ * a compiled stylesheet contributed `tw-gradient-from`, `tw-ring-offset-color`
+ * and `tw-scrollbar-thumb` to the colour picker, sitting among the real ones
+ * with nothing to mark them as scaffolding.
+ *
+ * Dropped by prefix rather than by guessing at their shape, because the prefix
+ * is the contract: it is reserved precisely so that nothing else may use it,
+ * which makes this the one exclusion that cannot take a real token with it.
+ */
+const FRAMEWORK_INTERNAL = /^--tw-/
+
 function parseCssLibrary(text, name) {
-  const declarations = cssDeclarations(text)
+  const declarations = cssDeclarations(text).filter(
+    (declaration) => !FRAMEWORK_INTERNAL.test(declaration.name)
+  )
   if (declarations.length === 0) {
     throw new Error("This stylesheet declares no CSS custom properties, so it carries no tokens")
   }
+  // Read off the whole file, including the utility rules below the token block,
+  // because that is where a system that stores bare channels states what they
+  // are channels OF.
+  const wrappers = colorWrappers(text)
 
   const themed = declarations.map((declaration) => {
     const theme = declarationTheme(declaration.scopes)
@@ -866,17 +1026,20 @@ function parseCssLibrary(text, name) {
     // missing. On its own it is a fragment of a style, not a token.
     if (variable.slice(2).includes("--")) continue
     const segments = variable.slice(2).toLowerCase().split("-").filter(Boolean)
-    const verdict = classifyName(segments) ?? classifyValue(value)
+    const wrapper = wrappers.get(variable) ?? null
+    const verdict = classifyName(segments) ?? classifyValue(value, wrapper)
     if (!verdict || !verdict.group) continue
     // A text style is built from the family pass, not from one value, so the
     // only thing a lone declaration can contribute is a size. It still becomes
     // a style rather than nothing: a system that ships sizes and no leading is
     // a system whose leading is whatever the element inherits.
-    const values = verdict.group === "textStyles" ? null : tokenValues(verdict.group, value)
+    const values = verdict.group === "textStyles" ? null : tokenValues(verdict.group, value, wrapper)
     if (verdict.group !== "textStyles" && !values) continue
     if (verdict.group === "textStyles" && singleLength(value) === null) continue
     if (verdict.group === "colors") {
-      const darkValue = darkValues.has(variable) ? paintableColor(darkValues.get(variable)) : null
+      const darkValue = darkValues.has(variable)
+        ? paintableColor(darkValues.get(variable), wrapper)
+        : null
       if (darkValue) values.dark = darkValue
     }
     classified.push({ variable, value, verdict, values })
@@ -935,35 +1098,299 @@ function parseCssLibrary(text, name) {
 /* Design tokens (DTCG / Style Dictionary)                                    */
 /* ------------------------------------------------------------------------- */
 
-/** `$type` as the exporting tool spelled it, mapped onto this editor's axes. */
+/**
+ * `$type` as the exporting tool spelled it, mapped onto this editor's axes.
+ *
+ * The keys are already normalized — lower-cased, letters only — so one entry
+ * covers `borderRadius`, `border-radius` and `BORDERRADIUS`, which is three
+ * house styles for one idea.
+ *
+ * The entries mapping to a null group are the load-bearing half. A type this
+ * editor has no axis for is not the same as a type it has never heard of: a
+ * line height is `1.5`, a letter spacing is `-0.01em` and an opacity is `0.6`,
+ * and left unlisted every one of them falls through to the value sniffer and
+ * lands in the SPACING picker as a plausible-looking step. Naming them here
+ * spends one line each to say "recognised, and deliberately not offered" —
+ * the same bargain the easing rule strikes in the CSS classifier.
+ */
 const TOKEN_TYPE_GROUPS = {
   color: { group: "colors", category: "color" },
   dimension: { group: "spacing", category: "spacing" },
   spacing: { group: "spacing", category: "spacing" },
   size: { group: "spacing", category: "spacing" },
+  // A tool that keeps a separate sizing scale (Tokens Studio does) means the
+  // same axis by it: a length a designer picks a width or a gap from.
+  sizing: { group: "spacing", category: "spacing" },
+  borderwidth: { group: "spacing", category: "spacing" },
   borderradius: { group: "radii", category: "radius" },
   radius: { group: "radii", category: "radius" },
   shadow: { group: "effects", category: "shadow" },
   boxshadow: { group: "effects", category: "shadow" },
   duration: { group: "motion", category: "motion" },
   typography: { group: "textStyles", category: "typography" },
+  fontsize: { group: "textStyles", category: "typography" },
+  fontsizes: { group: "textStyles", category: "typography" },
+  lineheight: { group: null, category: null },
+  lineheights: { group: null, category: null },
+  letterspacing: { group: null, category: null },
+  paragraphspacing: { group: null, category: null },
+  fontweight: { group: null, category: null },
+  fontweights: { group: null, category: null },
+  fontfamily: { group: null, category: null },
+  fontfamilies: { group: null, category: null },
+  opacity: { group: null, category: null },
+  cubicbezier: { group: null, category: null },
+  textcase: { group: null, category: null },
+  textdecoration: { group: null, category: null },
 }
 
-function tokenLeaves(node, path, leaves) {
+/**
+ * The type a leaf inherits when it declares none of its own.
+ *
+ * The Design Tokens Format Module is explicit about this (§5.2.2): a token's
+ * type comes from the closest ancestor group that declares one, and a tool
+ * "MUST NOT attempt to guess the type of a token by inspecting the contents of
+ * its value". Reading the leaf alone did exactly that guess, and the guess is
+ * wrong in the same direction every time — a `borderRadius` group's `"4px"`
+ * sniffed as spacing, a `duration` group's `"120ms"` and a `shadow` group's
+ * composite sniffed as nothing at all and dropped. Group-level `$type` is how
+ * every hand-written DTCG file avoids repeating itself, so this is not an
+ * exotic spelling; it is the ordinary one.
+ *
+ * Only `$type` is inherited, never the bare `type` key. `type` at a GROUP level
+ * is as likely to be somebody's token named `type` as it is a declaration, and
+ * the older exporters that spell it without the dollar never inherited it
+ * anyway.
+ */
+function tokenLeaves(node, path, leaves, inherited = "") {
   if (leaves.length >= MAX_TOKEN_LEAVES || !isPlainObject(node)) return
+  const groupType = typeof node.$type === "string" ? node.$type : inherited
   for (const [key, value] of Object.entries(node)) {
     if (!isPlainObject(value)) continue
     const next = [...path, key]
     if (value.$value !== undefined || value.value !== undefined) {
+      const raw = value.$value !== undefined ? value.$value : value.value
       leaves.push({
         path: next,
-        value: value.$value !== undefined ? value.$value : value.value,
-        type: typeof value.$type === "string" ? value.$type : typeof value.type === "string" ? value.type : "",
+        // `{ "value": 4, "unit": "px" }` is the spec's object dimension, not a
+        // Style Dictionary leaf whose value happens to be 4. The sibling `unit`
+        // is the only thing that tells them apart, and reading `value` alone
+        // turned a 4px step into a bare 4 with no complaint.
+        value: typeof value.unit === "string" ? { value: raw, unit: value.unit } : raw,
+        type:
+          typeof value.$type === "string"
+            ? value.$type
+            : typeof value.type === "string"
+              ? value.type
+              : groupType,
       })
       continue
     }
-    tokenLeaves(value, next, leaves)
+    tokenLeaves(value, next, leaves, groupType)
   }
+}
+
+/**
+ * Every string or number leaf in the tree, named by the path that reaches it.
+ *
+ * The lane above requires a `$value` or a `value` key, which is the DTCG and
+ * Style Dictionary contract and is not how most JSON a designer has to hand is
+ * written. A theme object exported from a component library, the Material Theme
+ * Builder's `material-theme.json`, a Tailwind theme dumped to JSON, a palette
+ * package's `colors.json` — all of them are plain nested objects whose leaves
+ * are bare strings, and all of them read as zero tokens because every one of
+ * those leaves was skipped outright.
+ *
+ * Reading them costs nothing in accuracy, because the classifier downstream is
+ * the same one the CSS lane relies on and it refuses anything it cannot write.
+ * A leaf that is not a colour, a length or a duration simply produces no token,
+ * which is the same outcome as never having looked at it.
+ *
+ * `$`-prefixed keys are skipped because they are the file talking about itself —
+ * `$schema`, and the `$themes`/`$metadata` blocks a token manager writes beside
+ * its sets.
+ */
+function plainLeaves(node, path, leaves) {
+  if (leaves.length >= MAX_TOKEN_LEAVES || !isPlainObject(node)) return
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith("$")) continue
+    const next = [...path, key]
+    if (typeof value === "string" || typeof value === "number") {
+      leaves.push({ path: next, value, type: "" })
+      continue
+    }
+    plainLeaves(value, next, leaves)
+  }
+}
+
+/** 0–1 float RGBA, the only colour shape the Figma REST API emits, as hex. */
+function figmaColorHex(value) {
+  if (!isPlainObject(value)) return null
+  const channel = (raw) => {
+    const number = Number(raw)
+    if (!Number.isFinite(number)) return null
+    return Math.max(0, Math.min(255, Math.round(number * 255)))
+  }
+  const parts = [channel(value.r), channel(value.g), channel(value.b)]
+  if (parts.some((part) => part === null)) return null
+  const alpha = value.a === undefined ? 1 : Number(value.a)
+  if (Number.isFinite(alpha) && alpha < 1) parts.push(channel(alpha))
+  return `#${parts.map((part) => part.toString(16).padStart(2, "0")).join("")}`
+}
+
+/**
+ * `GET /v1/files/:key/variables/local`, read as tokens.
+ *
+ * This is the canonical machine-readable export of a design system held in
+ * Figma — the file a designer gets when they ask for their variables rather
+ * than for somebody's build output — and nothing else in this module could see
+ * it, because a variable carries neither a `$value` nor a nested value: its
+ * values live in `valuesByMode`, keyed by opaque mode ids, and its colours are
+ * 0–1 floats rather than anything CSS would accept.
+ *
+ * The modes are what make this worth a branch of its own rather than a plain
+ * walk. A collection's modes ARE the light and dark themes, named by whoever
+ * built the file, so the pair a colour picker wants is already in the export
+ * and only needs the default mode and the dark-named one picked out of it. With
+ * no collection metadata to read, the first mode is taken and no dark value is
+ * claimed — a guess about which of two unnamed modes is the dark one is exactly
+ * the guess that puts a black swatch under a light label.
+ */
+function figmaVariableLeaves(parsed) {
+  const meta = isPlainObject(parsed) ? parsed.meta : null
+  const variables = isPlainObject(meta) && isPlainObject(meta.variables) ? meta.variables : null
+  if (!variables) return null
+
+  const tiers = new Map()
+  const collections = isPlainObject(meta.variableCollections) ? meta.variableCollections : {}
+  for (const [id, collection] of Object.entries(collections)) {
+    if (!isPlainObject(collection)) continue
+    const modes = Array.isArray(collection.modes) ? collection.modes.filter(isPlainObject) : []
+    const dark = modes.find((mode) => DARK_SELECTOR.test(String(mode.name ?? "").toLowerCase()))
+    tiers.set(id, {
+      light:
+        typeof collection.defaultModeId === "string" ? collection.defaultModeId : modes[0]?.modeId,
+      dark: dark ? dark.modeId : null,
+    })
+  }
+
+  // An alias points at another variable and is read in the SAME mode, which is
+  // what makes a semantic layer resolve to its own dark value rather than to
+  // the primitive's default.
+  const read = (variable, modeId, depth = 0) => {
+    if (!isPlainObject(variable) || depth >= MAX_ALIAS_DEPTH) return undefined
+    const byMode = isPlainObject(variable.valuesByMode) ? variable.valuesByMode : {}
+    const chosen = modeId != null && modeId in byMode ? modeId : Object.keys(byMode)[0]
+    if (chosen === undefined) return undefined
+    const value = byMode[chosen]
+    if (isPlainObject(value) && value.type === "VARIABLE_ALIAS") {
+      return read(variables[value.id], modeId, depth + 1)
+    }
+    return value
+  }
+
+  const leaves = []
+  for (const variable of Object.values(variables)) {
+    if (leaves.length >= MAX_TOKEN_LEAVES) break
+    if (!isPlainObject(variable) || typeof variable.name !== "string") continue
+    const path = variable.name.split("/").map((part) => part.trim()).filter(Boolean)
+    if (path.length === 0) continue
+    const tier = tiers.get(variable.variableCollectionId) ?? {}
+    const raw = read(variable, tier.light)
+    const isColor = variable.resolvedType === "COLOR"
+    const value = isColor ? figmaColorHex(raw) : raw
+    if (value === null || value === undefined || typeof value === "boolean") continue
+    if (isPlainObject(value)) continue
+    const leaf = { path, value, type: isColor ? "color" : "" }
+    if (isColor && tier.dark) {
+      const dark = figmaColorHex(read(variable, tier.dark))
+      if (dark && dark !== value) leaf.dark = dark
+    }
+    leaves.push(leaf)
+  }
+  return leaves.length ? leaves : null
+}
+
+/**
+ * The object forms the current spec made normative, flattened back to the CSS
+ * string every validator in this module reads.
+ *
+ * Every one of these is the 2024-onwards Design Tokens Format Module spelling
+ * of something this editor already understood as a string, and collapsing a
+ * non-string value to `""` dropped all of them: an object dimension, an object
+ * colour, and the shadow composite — which is the whole of a system's elevation
+ * scale, since nobody writes a box-shadow as one string once their tool offers
+ * the parts.
+ */
+function tokenText(value) {
+  if (typeof value === "number") return String(value)
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    // A layered shadow is a list of shadows and joins the way CSS joins them.
+    // A list whose parts are not all readable is not a value at all, and says
+    // so rather than contributing half of itself.
+    const parts = value.map(tokenText)
+    return parts.every(Boolean) ? parts.join(", ") : ""
+  }
+  if (!isPlainObject(value)) return ""
+  if (value.value !== undefined && typeof value.unit === "string") {
+    return `${tokenText(value.value)}${value.unit}`
+  }
+  if (typeof value.hex === "string") return value.hex
+  if (typeof value.colorSpace === "string" && Array.isArray(value.components)) {
+    const alpha = typeof value.alpha === "number" && value.alpha < 1 ? ` / ${value.alpha}` : ""
+    return `color(${value.colorSpace} ${value.components.join(" ")}${alpha})`
+  }
+  if (value.offsetX !== undefined || value.offsetY !== undefined || value.blur !== undefined) {
+    return [
+      value.inset ? "inset" : "",
+      tokenText(value.offsetX ?? "0"),
+      tokenText(value.offsetY ?? "0"),
+      tokenText(value.blur ?? "0"),
+      tokenText(value.spread ?? ""),
+      tokenText(value.color ?? ""),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  }
+  return ""
+}
+
+/**
+ * A token path as the word segments `classifyName` compares against.
+ *
+ * A camel hump is a word boundary here, which a hyphen is in the CSS lane. JSON
+ * keys are written `borderRadius` and `fontSize` where a custom property is
+ * written `--border-radius` and `--font-size`, and a classifier that only knows
+ * the second spelling reads `borderRadius` as one unrecognised word and files
+ * the system's whole corner scale under spacing.
+ */
+function leafSegments(path) {
+  return path
+    .flatMap((part) =>
+      String(part)
+        .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+    )
+    .filter(Boolean)
+}
+
+/**
+ * Which axis a leaf belongs to: its declared type, then its name, then its
+ * value.
+ *
+ * The middle step is the one that was missing. The CSS lane has always read the
+ * name before the value, and skipping that step here meant every radius, icon
+ * size and font size in an untyped file landed in the SPACING picker, because
+ * by then all three are just a number with `px` on the end. The token's path is
+ * the name — it is right there in `leaf.path` and it is exactly the segment
+ * list the classifier wants — so the two lanes now sort a file the same way.
+ */
+function leafVerdict(leaf, text) {
+  const typed = TOKEN_TYPE_GROUPS[String(leaf.type).toLowerCase().replace(/[^a-z]/g, "")]
+  if (typed) return typed
+  return classifyName(leafSegments(leaf.path)) ?? classifyValue(text)
 }
 
 /**
@@ -971,23 +1398,99 @@ function tokenLeaves(node, path, leaves) {
  * shares, resolved here for the same reason CSS aliases are: a token file that
  * has been through a theming layer is mostly references, and reading only the
  * literals reads only the primitive ramp the designer never picks from.
+ *
+ * Two dialects, and the difference is one suffix. Style Dictionary v3 documents
+ * a reference as `{color.core.blue.500.value}` — the path all the way down to
+ * the leaf KEY — and v4 stops at the token. Looking the v3 spelling up verbatim
+ * never hits, so the raw `{…}` string fell through to the value sniffer, which
+ * refused it, and every alias in the file vanished. That is not a tail case: in
+ * a real system the semantic layer is nearly all aliases, so what was dropped
+ * was precisely the layer a designer picks from, leaving behind the primitive
+ * ramp nobody names a colour by.
+ *
+ * The literal path is tried first so that a system whose token really is called
+ * `value` still resolves; the suffix is only stripped when nothing answers.
  */
 function resolveTokenReference(value, byPath, depth = 0, trail = new Set()) {
   if (typeof value !== "string") return value
   const match = /^\{([^{}]+)\}$/.exec(value.trim())
   if (!match) return value
-  const key = match[1].trim()
+  const raw = match[1].trim()
+  const key = byPath.has(raw) ? raw : raw.replace(/\.\$?value$/, "")
   if (depth >= MAX_ALIAS_DEPTH || trail.has(key) || !byPath.has(key)) return value
   return resolveTokenReference(byPath.get(key), byPath, depth + 1, new Set([...trail, key]))
 }
 
-function parseTokenLibrary(parsed, name) {
-  if (!isPlainObject(parsed)) throw new Error("A token file must be an object of named tokens")
+/**
+ * Every path a reference in this file might be written against.
+ *
+ * One file, two coordinate systems, which is what a token manager's multi-set
+ * export looks like from here. The sets are top-level groups — `global`,
+ * `light`, `dark` — so a leaf's real path is `global.colors.primary`, but a
+ * reference inside the file is written against the RESOLVED set stack and says
+ * `{colors.primary}`. Indexed by full path alone, every cross-set alias missed
+ * and the themed half of the file came back empty.
+ *
+ * So each set contributes its paths a second time with the set name stripped,
+ * walked in the order `$metadata.tokenSetOrder` declares, which is the order the
+ * exporting tool resolves them in: a later set in the stack overrides an
+ * earlier one, exactly as it would in the tool. A stripped path never displaces
+ * a real full path, so a file whose sets happen to be named after its groups
+ * still resolves the way it reads.
+ */
+function tokenPathIndex(parsed, leaves) {
+  const byPath = new Map(leaves.map((leaf) => [leaf.path.join("."), leaf.value]))
+  const metadata = isPlainObject(parsed) ? parsed.$metadata : null
+  const order =
+    isPlainObject(metadata) && Array.isArray(metadata.tokenSetOrder)
+      ? metadata.tokenSetOrder.filter((entry) => typeof entry === "string")
+      : []
+  if (order.length === 0) return byPath
+  const full = new Set(byPath.keys())
+  for (const set of order) {
+    for (const leaf of leaves) {
+      if (leaf.path.length < 2 || leaf.path[0] !== set) continue
+      const key = leaf.path.slice(1).join(".")
+      if (!full.has(key)) byPath.set(key, leaf.value)
+    }
+  }
+  return byPath
+}
+
+/**
+ * The leaves of a token file, whichever of the three shapes it arrived in.
+ *
+ * Ordered rather than merged, because the shapes overlap and the first one that
+ * answers is the one the file was written in. A DTCG or Style Dictionary tree
+ * is unambiguous and goes first. A Figma variables response is next, keyed on a
+ * structure nothing else has. The plain walk is last and would claim any of
+ * them, which is exactly why it only runs when the other two found nothing.
+ *
+ * `plain` comes back with the leaves because it changes what an empty result
+ * MEANS. A DTCG file that yielded no usable token is still a token file and
+ * installs as one; a plain object that yielded none was never a token file at
+ * all, and saying so beats installing a card that brings nothing.
+ */
+function tokenFileLeaves(parsed) {
   const leaves = []
   tokenLeaves(parsed, [], leaves)
-  if (leaves.length === 0) throw new Error("No tokens found: every leaf needs a $value or a value")
+  if (leaves.length) return { leaves, plain: false }
+  const figma = figmaVariableLeaves(parsed)
+  if (figma) return { leaves: figma, plain: false }
+  plainLeaves(parsed, [], leaves)
+  return { leaves, plain: true }
+}
 
-  const byPath = new Map(leaves.map((leaf) => [leaf.path.join("."), leaf.value]))
+const NO_TOKENS =
+  "No tokens found. A token file is a tree of `$value` leaves (DTCG or Style Dictionary), " +
+  "a Figma variables export, or plain nested JSON whose leaves are colours, lengths or durations"
+
+function parseTokenLibrary(parsed, name) {
+  if (!isPlainObject(parsed)) throw new Error("A token file must be an object of named tokens")
+  const { leaves, plain } = tokenFileLeaves(parsed)
+  if (leaves.length === 0) throw new Error(NO_TOKENS)
+
+  const byPath = tokenPathIndex(parsed, leaves)
   const catalog = emptyCatalog(name)
   const seen = new Set()
   let tracking = false
@@ -995,16 +1498,22 @@ function parseTokenLibrary(parsed, name) {
   for (const leaf of leaves) {
     const label = leaf.path.join("/")
     const value = resolveTokenReference(leaf.value, byPath)
-    const typed = TOKEN_TYPE_GROUPS[leaf.type.toLowerCase().replace(/[^a-z]/g, "")]
+    const text = tokenText(value)
+    const verdict = leafVerdict(leaf, text)
+    if (!verdict || !verdict.group) continue
 
-    if (typed && typed.group === "textStyles") {
-      if (!isPlainObject(value)) continue
-      const fontSize = singleLength(value.fontSize)
+    if (verdict.group === "textStyles") {
+      // A scalar font size is a text style with nothing but a size, the same
+      // reading the CSS lane gives a lone `--text-sm`. A tool that ships a
+      // `fontSizes` scale and no composite is shipping a type ramp, and
+      // refusing it because it lacks a leading would drop the whole ramp.
+      const composite = isPlainObject(value) ? value : { fontSize: text }
+      const fontSize = singleLength(composite.fontSize)
       if (fontSize === null) continue
-      const lineHeight = singleLength(value.lineHeight)
-      const letterSpacing = Number.parseFloat(String(value.letterSpacing ?? 0))
-      const fontWeight = Number.parseFloat(String(value.fontWeight ?? ""))
-      if (/em$/i.test(String(value.letterSpacing ?? ""))) tracking = true
+      const lineHeight = singleLength(composite.lineHeight)
+      const letterSpacing = Number.parseFloat(String(composite.letterSpacing ?? 0))
+      const fontWeight = Number.parseFloat(String(composite.fontWeight ?? ""))
+      if (/em$/i.test(String(composite.letterSpacing ?? ""))) tracking = true
       const id = tokenId("typography", label)
       if (seen.has(id)) continue
       seen.add(id)
@@ -1024,17 +1533,30 @@ function parseTokenLibrary(parsed, name) {
       continue
     }
 
-    const text = typeof value === "number" ? String(value) : typeof value === "string" ? value : ""
-    const verdict = typed ?? classifyValue(text)
-    if (!verdict || !verdict.group) continue
     const values = tokenValues(verdict.group, text)
     if (!values) continue
+    // A source that carries its own themes — a variables export whose collection
+    // has a dark mode — pairs them here, exactly as a `.dark` block does in the
+    // CSS lane, so a colour is one row with two swatches rather than two rows.
+    if (verdict.group === "colors" && leaf.dark !== undefined) {
+      const dark = paintableColor(tokenText(resolveTokenReference(leaf.dark, byPath)))
+      if (dark) values.dark = dark
+    }
     const id = tokenId(verdict.category, label)
     if (seen.has(id)) continue
     seen.add(id)
     // No `cssVar`: these tokens are a build input, not a live custom property,
     // so there is no variable for the inspector to trace an authored value to.
     catalog[verdict.group].push({ id, name: label, category: verdict.category, values })
+  }
+
+  // A tree of `$value` leaves said what it was before anything was read out of
+  // it, so an empty catalog from one is a token file this editor could not use.
+  // A plain object said nothing — it is only a token file if tokens came out —
+  // so an empty one was the wrong file, and it is told so rather than installed
+  // as a card that brings nothing and explains nothing.
+  if (plain && Object.values(libraryCounts(catalog)).every((count) => count === 0)) {
+    throw new Error(NO_TOKENS)
   }
 
   catalog.trackingUnit = tracking ? "em" : "px"
@@ -1297,6 +1819,42 @@ const CSS_CUSTOM_PROPERTY = /--[a-zA-Z0-9_-]+\s*:/g
 const MIN_CSS_PROPERTIES = 4
 
 /**
+ * How many readable tokens a file with no marker of its own has to yield before
+ * it counts as a token file.
+ *
+ * The same floor, and the same argument, as the CSS one above: below it, what
+ * was found is a coincidence rather than a design system. Discovery walks every
+ * JSON file in a project through this function, so the cost of being generous
+ * is offering somebody a library built out of their build config.
+ */
+const MIN_PLAIN_TOKENS = 4
+
+/**
+ * How much of a plain nested file this module would actually read.
+ *
+ * Counted by running the real classifier rather than by pattern-matching the
+ * shape, which is what keeps the answer honest in both directions. A theme
+ * object is full of hex strings and rem lengths and passes easily; a
+ * `package.json` has a name, a version and a scripts block, none of which is a
+ * colour or a length, and scores zero without needing a rule that knows what a
+ * `package.json` is.
+ */
+function readableTokenCount(parsed) {
+  const leaves = []
+  plainLeaves(parsed, [], leaves)
+  let count = 0
+  for (const leaf of leaves) {
+    const text = tokenText(leaf.value)
+    const verdict = leafVerdict(leaf, text)
+    if (!verdict || !verdict.group) continue
+    if (verdict.group === "textStyles" ? singleLength(text) !== null : tokenValues(verdict.group, text)) {
+      count += 1
+    }
+  }
+  return count
+}
+
+/**
  * Which kind of design-system file this is, from its name and its text.
  *
  * Deterministic and ordered, because a file can honestly answer to two of these
@@ -1305,6 +1863,16 @@ const MIN_CSS_PROPERTIES = 4
  * than guessing when nothing matches: discovery walks a whole project through
  * this function, and a false positive there offers the user a library that will
  * fail the moment they add it.
+ *
+ * The manifest test is on the SHAPE and not on the mere presence of the key,
+ * which is the difference between reading that file and losing it. A manifest's
+ * `motion` is an array of motion tokens; a token file's `motion` is a group of
+ * duration tokens, and it is an entirely ordinary thing to write. Keyed on
+ * presence, the second was handed to the manifest normalizer, which refused it
+ * — correctly, it is not a manifest — and the throw reached the user as
+ * "nothing here read as a design system" about a file that was nothing but
+ * design tokens. Every marker key is an array in a real manifest, so requiring
+ * one costs the manifest lane nothing and hands the token lane its file back.
  */
 export function detectLibraryKind(relativePath, text) {
   const source = typeof text === "string" ? text : ""
@@ -1316,9 +1884,20 @@ export function detectLibraryKind(relativePath, text) {
   }
 
   if (parsed !== undefined) {
-    if (isPlainObject(parsed) && MANIFEST_KEYS.some((key) => parsed[key] !== undefined)) return "manifest"
+    if (isPlainObject(parsed) && MANIFEST_KEYS.some((key) => Array.isArray(parsed[key]))) {
+      return "manifest"
+    }
     if (looksLikeDrawings(parsed) || glyphList(parsed)) return "icons"
     if (hasTokenLeaf(parsed)) return "tokens"
+    // A variables export announces itself structurally — a `meta.variables` map
+    // of `resolvedType`/`valuesByMode` records is a shape nothing else has — so
+    // it is recognised outright rather than by the count below, which a small
+    // library would fall short of.
+    if (figmaVariableLeaves(parsed)) return "tokens"
+    // Last, because it is the only test here that reads a file's CONTENTS
+    // rather than a marker it put there on purpose, and anything it claimed
+    // early it would claim wrongly.
+    if (isPlainObject(parsed) && readableTokenCount(parsed) >= MIN_PLAIN_TOKENS) return "tokens"
     return null
   }
 

@@ -42,7 +42,7 @@
  * THIS surface is declared below.
  */
 
-import { tokens as t, accentFill, nest } from "../tokens"
+import { tokens as t, accentFillText, nest } from "../tokens"
 
 /**
  * The restored-finding row, and the button parked in its right-hand corner.
@@ -123,6 +123,13 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * header's actions track rather than beside a settings label, and sharing a
  * selector across the two would make the next change to either one a change to
  * both.
+ *
+ * Same glyph too, and for the same reason: \`InfoMark\`, which is Lucide's
+ * \`Info\` with its ring dropped, because THIS disc is the circle. The ringed
+ * drawing at ${t.icon.row}px in a ${HELP}px disc is two circles 1.4px apart with an
+ * illegible \`i\` between them — the note on \`.de-ann-help\` carries the
+ * measurements. The badges in \`css/lint-markers.ts\` keep the ringed \`Info\`: a
+ * rounded square plate over the app has no circle of its own to lend.
  */
 .de-lint-info {
   flex: none;
@@ -140,7 +147,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
 
 /* The line the whole feature is judged by. \`text\` rather than \`textDim\`: it is
    a count, not a caption, and the reader checks it against the canvas. */
-.de-lint-summary { color: ${t.color.text}; font-size: ${t.type.body}; line-height: 1.4; }
+.de-lint-summary { color: ${t.color.text}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
 .de-lint-summary:empty { display: none; }
 
 /* No scroller and no padding of its own: the panel body scrolls, and the
@@ -237,6 +244,26 @@ export const lintCss = `/* ---------- design system audit ---------- */
    */
   --de-lint-bg: transparent;
   background: var(--de-lint-bg);
+  /*
+   * BOTH ENDS OF THE CORRESPONDENCE MOVE, AND AT THE SAME SPEED.
+   *
+   * Hovering this row grows its badge on the page over \`snap\`
+   * (\`css/lint-markers.ts\`); hovering the badge used to light this row between
+   * two frames. That is one statement — "these two are the same finding" — said
+   * in two motion languages depending on which end you touch, and the instant
+   * end reads as a glitch beside the eased one.
+   *
+   * \`snap\` on both ends. The marker's side used to be a literal 100ms — one of
+   * two numbers borrowed from agentation when the plates were drawn — and this
+   * matched the literal rather than the ramp, on the reasoning that a pair has
+   * to agree with its other half before it agrees with the scale. That was the
+   * right order to fix them in: the marker is on \`snap\` now, so this is too,
+   * and the pair agrees on a rung instead of on a number.
+   *
+   * \`background-color\` rides along so the quiet-hover and ticked fills the row
+   * already switches between stop being the last untweened thing on it.
+   */
+  transition: box-shadow ${t.duration.snap} ${t.ease}, background-color ${t.duration.snap} ${t.ease};
 }
 /*
  * The ROW owns its severity tone and the dot spends it.
@@ -308,6 +335,32 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * \`margin-top\` is optical, not rhythm: the dot has to centre on the first LINE
  * of a message that may wrap to four, and a grid that aligned it to the box
  * would drop it to the middle of the paragraph.
+ *
+ * ## AND THE SHAPE, WHICH IS THE HALF THAT WAS MISSING
+ *
+ * This mark used to be a circle at both severities, separated only by
+ * \`--de-lint-tone\` — red against amber. That is meaning carried by hue alone,
+ * and this product has already ruled on it: \`css/lint-markers.ts\` draws the
+ * badge for the SAME finding on the canvas and its comment is explicit that
+ * severity is said with "hue AND corner, never hue alone", with
+ * \`ERROR_CORNER\`/\`WARNING_CORNER\` one ramp step apart. The panel was breaking
+ * its own sibling's rule about its own data.
+ *
+ * The corners cannot be borrowed literally, and the reason is arithmetic rather
+ * than taste: the badge is 20px, where \`radius.sm\` (4) and \`radius.md\` (8) are
+ * visibly different corners — but this mark is 8px, where \`radius.sm\` IS 50%.
+ * Every step on the ramp collapses to the same disc at this size.
+ *
+ * So the pair is the two ENDPOINTS instead: a square for the error, a disc for
+ * the warning. Neither is a ramp step pretending to be one — \`0\` is the absence
+ * of a corner and \`50%\` is the absence of a straight edge — and they are the
+ * two shapes that survive an 8px box, a greyscale print and a deuteranopia
+ * simulation. The severer thing gets the harder corner, which is the same
+ * direction the canvas badge runs in, so the two surfaces agree.
+ *
+ * The default stays a disc, matching \`--de-lint-tone\`'s own fallback and for
+ * the same stated reason: a row with no severity class is a row this section
+ * did not build, and the quieter shape is the safer thing to say about it.
  */
 .de-lint-dot {
   grid-column: 1; grid-row: 1;
@@ -315,6 +368,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
   border-radius: 50%;
   background: var(--de-lint-tone, ${t.color.lintWarning});
 }
+.de-lint-row--error .de-lint-dot { border-radius: 0; }
 /*
  * The line the row is FOR: the offending value, and what it becomes.
  *
@@ -332,7 +386,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
 .de-lint-headline {
   grid-column: 2; grid-row: 1;
   display: flex; flex-wrap: wrap; align-items: center; gap: ${t.space.sm}px;
-  min-width: 0; line-height: 1.45;
+  min-width: 0; line-height: ${t.type.leadingBody};
 }
 /*
  * A value, with the colour it actually is.
@@ -383,7 +437,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-hint {
   grid-column: 2;
-  color: ${t.color.textDim}; font-size: ${t.type.caption}; line-height: 1.4;
+  color: ${t.color.textDim}; font-size: ${t.type.caption}; line-height: ${t.type.leadingRow};
 }
 /*
  * Where it is, on exactly one line.
@@ -517,7 +571,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
   padding: ${t.space.sm}px 0;
   text-align: left;
   color: ${t.color.textDim};
-  font-size: ${t.type.caption}; line-height: 1.4;
+  font-size: ${t.type.caption}; line-height: ${t.type.leadingRow};
 }
 
 /* A run that failed is a sentence from the server, in the danger tone, where
@@ -525,7 +579,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
    this is the state the section is now in. */
 .de-lint-error {
   margin: 0; padding: ${t.space.sm}px 0;
-  color: ${t.color.danger}; font-size: ${t.type.body}; line-height: 1.4;
+  color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow};
 }
 
 /*
@@ -548,7 +602,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
 /* The toggle reports a state, so it takes the pressed fill the chips in
    \`css/options.ts\` take — markers hidden is a mode the panel is in, not an
    action it just performed. */
-.de-lint-toggle[aria-pressed="true"] { ${accentFill} }
+.de-lint-toggle[aria-pressed="true"] { ${accentFillText} }
 
 .de-lint-ignored { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
 /*
@@ -592,4 +646,70 @@ export const lintCss = `/* ---------- design system audit ---------- */
   color: ${t.color.textDim}; font-size: ${t.type.body};
 }
 
+
+/*
+ * AN AUDIT IN FLIGHT, SAID IN MOTION RATHER THAN IN A WORD.
+ *
+ * This is the only genuinely long-running operation in the editor — a round
+ * trip to a checker over the whole page — and it used to announce itself as the
+ * static string "Auditing…" in two places beside a \`ListChecks\` glyph that did
+ * not move. A disabled button wearing a word is also exactly what a button
+ * looks like when something has gone wrong.
+ *
+ * Two halves, one flag. The button gets a sweep, which is the standard
+ * indeterminate signal and the only one that says "still going" rather than
+ * "still like this"; the list gets rows where the findings will land, because
+ * the useful thing to say about a gap is its shape and not a sentence in the
+ * middle of it.
+ *
+ * The sweep rides a pseudo-element with \`overflow: hidden\` on the button, so it
+ * cannot disturb the label or the glyph, and it is the button's own ink at low
+ * alpha rather than a colour of its own — a progress indicator that introduces
+ * a new hue reads as a state change, which is the one thing this is not.
+ *
+ * SIX BASE RUNGS, not a number of its own: an indeterminate loop has no
+ * duration to be correct about, so it takes the ramp's slowest step multiplied
+ * rather than a literal, and stays in agreement with everything else if the
+ * ramp ever moves. Fast enough to read as activity, slow enough not to nag.
+ *
+ * Reduced motion keeps both statements and drops the movement — the sweep
+ * becomes a still wash and the rows a flat tint, so the surface still says "not
+ * yet" without anything travelling.
+ */
+.de-button[data-de-busy] { position: relative; overflow: hidden; }
+.de-button[data-de-busy]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, ${t.color.borderStrong}, transparent);
+  animation: de-lint-sweep calc(${t.duration.base} * 6) linear infinite;
+  pointer-events: none;
+}
+@keyframes de-lint-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* \`space.sm\`, matching \`.de-lib-scan\`. Two loading skeletons in adjacent
+   sections of one panel were running at two rhythms — 2px here against 4px
+   there — so the same "we are fetching" idea read as two different treatments
+   depending on which section you were looking at. Row HEIGHT can legitimately
+   differ (a lint row is one line, a library candidate is four); the pulse
+   cadence and the gap are the vocabulary and should not. */
+.de-lint-skeleton { display: flex; flex-direction: column; gap: ${t.space.sm}px; padding: ${t.space.sm}px 0; }
+.de-lint-skeleton-row {
+  height: ${t.size.sectionHeader}px;
+  border-radius: ${t.radius.lg};
+  background: ${t.color.bgHoverQuiet};
+  animation: de-lint-breathe calc(${t.duration.base} * 6) ${t.ease} infinite;
+}
+/* Staggered by a third of the loop each, so the three read as one group
+   waiting rather than three rows blinking in time. */
+.de-lint-skeleton-row:nth-child(2) { animation-delay: calc(${t.duration.base} * -2); }
+.de-lint-skeleton-row:nth-child(3) { animation-delay: calc(${t.duration.base} * -4); }
+@keyframes de-lint-breathe { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .de-button[data-de-busy]::after {
+    animation: none;
+    background: ${t.color.bgHoverQuiet};
+  }
+  .de-lint-skeleton-row { animation: none; opacity: 0.6; }
+}
 `

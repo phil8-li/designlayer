@@ -70,6 +70,23 @@ const HAIRLINE = 1
  */
 const BAR = nest({ of: ".de-toolbar", outer: t.radius.xl, inset: t.space.sm, hairline: HAIRLINE })
 
+/**
+ * The bar's height, stated once because something else now has to match it.
+ *
+ * The pill still declares no `height` — the sum below IS its height, built from
+ * the inside out, and that is the arrangement the note at the top of this file
+ * defends. What changed is that the sum is no longer private: the launcher disc
+ * is sized off it, so that the collapsed editor and the expanded one are the
+ * same object seen twice rather than two nearby sizes. A number the disc had to
+ * re-derive by hand is a number that drifts the first time `TOOL` moves.
+ *
+ * Exported rather than promoted to `tokens.ts` for the reason the constants
+ * above give: this is not shared vocabulary, it is one surface's geometry that
+ * one other surface quotes. The quote should point at the source.
+ */
+export const TOOLBAR_HEIGHT =
+  HAIRLINE + Number.parseFloat(BAR.padding) + TOOL + Number.parseFloat(BAR.padding) + HAIRLINE
+
 /** The lift, which is most of what makes this read as floating. */
 const LIFT = t.shadow.float
 
@@ -422,7 +439,7 @@ html.designlayer-chrome-hidden .de-toolbar {
  * Not on a disabled control. A button that cannot act must not answer a press
  * as though it did — that is the one case where the feedback would be a lie.
  */
-.de-toolbar .de-tool:active:not([disabled]) { transform: scale(0.94); }
+.de-toolbar .de-tool:active:not([disabled]) { transform: scale(0.96); }
 
 /*
  * The commit, armed: accent as INK, never as a fill.
@@ -452,14 +469,59 @@ html.designlayer-chrome-hidden .de-toolbar {
 .de-toolbar .de-tool--commit:not([disabled]) { color: ${t.color.accent}; }
 
 .de-button {
-  height: 24px;
+  /* The row rung, named. It was a bare 24 and would have stopped tracking the
+     scale silently the next time that rung moved. */
+  height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.md}px;
   display: inline-flex; align-items: center; gap: ${t.space.md}px;
   border: none; border-radius: ${t.radius.md};
   background: ${t.color.bgRaised}; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
   cursor: pointer;
+  transition: transform ${t.duration.snap} ${t.ease}, background ${t.duration.fast} ${t.ease};
 }
+/*
+ * THE PRESS, which this button did not answer at all.
+ *
+ * \`.de-tool\` above already carries this and already carries the argument: "on
+ * the toggles the only feedback for the press ITSELF was the state arriving,
+ * which lands a frame or two later and is indistinguishable from a click that
+ * missed". \`.de-button\` is the chrome's shared TEXT button — Fix and Ignore in
+ * the lint panel, Send and Write in the notes tab, the options actions — so it
+ * labels the things that write files and delete rows, and it was the one
+ * pressable surface in the editor that looked identical held down and at rest.
+ *
+ * Same value as the tool, deliberately: 0.96 is inside the sheet's 0.95–0.98
+ * band, and two different press depths in one bar would read as two different
+ * kinds of control.
+ *
+ * \`:not([disabled])\` because a disabled button must not answer a press it is
+ * not going to honour — the same guard \`.de-tool:active\` uses.
+ */
+.de-button:active:not([disabled]) { transform: scale(0.96); }
+/*
+ * A GLYPH CARRIES ITS OWN MARGIN, so the padding beside it has to come off.
+ *
+ * Symmetric padding on an icon+label button reads as MORE air on the icon side:
+ * the word starts where its ink starts, while a 12px glyph is drawn inside a
+ * 12px box with its own optical clearance already in it. The bar knew this
+ * once — the note further down this file records the pill that trimmed its
+ * leading pad and says the argument has to be remade by whatever puts a word
+ * back in the bar. This is that, generalised.
+ *
+ * \`:has()\` rather than a modifier class, so no call site has to opt in and a
+ * button that gains or loses a glyph cannot forget to change its class.
+ *
+ * It is a whole STEP down rather than the nudge the rule asks for, and that is
+ * the kit's ramp talking rather than a preference: \`space\` goes 2, 4, 8, and
+ * the 6px this wants does not exist. \`token-cases.mjs\` rejects it on sight,
+ * and it is right to — the alternative is one exempted literal that every later
+ * off-scale value gets to point at. So \`sm\`, and the trim reads as deliberate
+ * instead of as a rounding error. A 12px glyph carries roughly a pixel of its
+ * own clearance inside its box, so 4px of padding still leaves about 5px of
+ * apparent air against the word's 8.
+ */
+.de-button:has(> svg[data-de-glyph]:first-child) { padding-left: ${t.space.sm}px; }
 /*
  * A hover has to move AWAY from the surface it lifts off, and in dark this one
  * used to move toward it.
@@ -501,7 +563,22 @@ html.designlayer-chrome-hidden .de-toolbar {
  */
 .de-button--primary { ${accentFillText} }
 .de-button--primary:hover { ${accentFillTextHover} }
-.de-button--danger:hover { background: ${t.color.danger}; }
+/*
+ * The fill AND the ink, because swapping one without the other is the bug.
+ *
+ * This declared the background alone, so the label kept \`.de-button\`'s
+ * \`color: text\` — white — and \`danger\` is a light coral on this chrome.
+ * "Delete" and "Remove default" measured 2.31:1 dark and 2.93:1 light for the
+ * whole of the hover: the word vanished at exactly the moment the button became
+ * destructive, which is the moment it most needs reading.
+ *
+ * \`onSemantic\` is the ink for a semantic fill, and it flips with the theme the
+ * way these hues do. 7.52:1 dark, 5.94:1 light. Emitted as a pair rather than
+ * left to inheritance, which is what \`accentFillText\` does two lines up and for
+ * the same reason: a fill and its ink are one decision, and a rule that makes
+ * half of it hands the other half to whatever happened to be inherited.
+ */
+.de-button--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 /*
  * No pressed treatment for the text pill any more.
  *

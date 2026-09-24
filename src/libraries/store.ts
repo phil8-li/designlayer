@@ -133,9 +133,63 @@ function challengeOf(value: unknown): LibraryChallenge | null {
     origin: text("origin"),
     audience: text("audience"),
     realm: text("realm"),
+    // An older server does not send it; "" then means "nobody named", which is
+    // exactly how the panel treats an unrecognised provider anyway.
+    location: text("location"),
     hint: text("hint"),
     url: text("url"),
   }
+}
+
+/**
+ * THE ONE SERVER SENTENCE A DESIGNER MUST NEVER BE SHOWN, and what to say
+ * instead.
+ *
+ * `routes.mjs` answers an unknown path with "No designlayer route for POST
+ * /__designlayer/…". That is the correct thing to tell a developer and the
+ * worst thing to tell the person this editor is for: it names an internal
+ * routing table, it reads like a crash, and it gives no action.
+ *
+ * It is also not a rare case. The browser bundle is re-read from `dist/` on
+ * every page load, so the UI is always current; the server's routes are loaded
+ * into the Node process ONCE, at launch. Pull a change that adds a route, reload
+ * the page, and the two halves are a version apart — a new button calling an
+ * endpoint the running server has never heard of. Measured exactly that way
+ * here: an editor started before `library-signin.mjs` existed serves the newest
+ * sign-in UI and answers its route with a 404, so "Sign in to this site" fails
+ * with a sentence about routing.
+ *
+ * Detected by the shape of the message rather than by the status, because a 404
+ * is also how "no such library" comes back and that one IS about the user's
+ * own action. This names the single string the router writes for a path it does
+ * not know.
+ */
+const STALE_SERVER =
+  "This page is newer than the editor process serving it, so that feature is not wired up yet. " +
+  "Restart designlayer in your terminal and try again."
+
+function isStaleServer(message: string): boolean {
+  return /^No designlayer route for /i.test(message)
+}
+
+/**
+ * Whether a failure that reached a panel is THAT one, so a surface can treat it
+ * as news about the process rather than about the button that was pressed.
+ *
+ * The substitution above happens deep inside `failure()`, and what comes out
+ * the other side is an ordinary `Error` carrying a sentence — indistinguishable,
+ * at the call site, from "that credential was refused". The two want different
+ * handling: a refused credential belongs on the dialog that asked for it and
+ * dies with that dialog, while "your server is a version behind" is true of the
+ * whole editor, survives every dialog being closed, and is fixed in a terminal.
+ * The sign-in flow toasts it as well as printing it for exactly that reason.
+ *
+ * Compared against the constant rather than re-testing the wire shape, because
+ * by this point the wire's own words are gone — `failure()` replaced them. One
+ * string, one comparison, and no second regex to keep in step with the first.
+ */
+export function isStaleServerNotice(message: string): boolean {
+  return message === STALE_SERVER
 }
 
 /**
@@ -167,6 +221,7 @@ async function failure(response: Response): Promise<Error> {
   } catch {
     // A body that is not JSON has nothing in it a person can act on.
   }
+  if (isStaleServer(stated)) return new Error(STALE_SERVER)
   const said = stated || `HTTP ${response.status}`
   return challenge ? new LibraryAuthError(said, challenge) : new Error(said)
 }
@@ -286,23 +341,6 @@ export function addLibrary(
   }).then((payload) => adopt(payload.library))
 }
 
-/**
- * Re-fetch a URL library's catalog.
- *
- * There is nothing to refresh on a local library: the list endpoint re-parses
- * every file it points at on every call, so `refreshLibraries` above is already
- * the whole answer for them. A URL library is the one kind whose catalog is
- * cached on the server — a network round trip per repaint would put a
- * stranger's latency on every inspector render — so renewing it is a verb a
- * person has to press, and this is that press.
- */
-export function refreshLibrary(apiBase: string, id: string): Promise<Library> {
-  return send<{ library: Library }>(endpoint(apiBase, `/${encodeURIComponent(id)}`), {
-    method: "PATCH",
-    body: JSON.stringify({ refresh: true }),
-  }).then((payload) => adopt(payload.library))
-}
-
 export function setLibraryEnabled(
   apiBase: string,
   id: string,
@@ -377,6 +415,71 @@ export function signInToLibrary(
     method: "POST",
     body: JSON.stringify(input),
   })
+}
+
+/**
+ * Signs in by opening the SITE'S OWN sign-in in a browser window, and comes
+ * back when the session that produces has been verified and stored.
+ *
+ * The long wait is the point rather than a flaw: the promise is outstanding for
+ * as long as the person is in front of the provider's login, which can be a
+ * minute of typing a password and approving a phone prompt. So the panel shows
+ * a waiting state instead of a spinner-and-hope, and the server bounds the wait
+ * rather than leaving the request open forever.
+ *
+ * Unlike `signInToLibrary`, a refusal comes back as `ok: false` with a sentence
+ * rather than as a rejection. Closing the window is an ordinary thing a person
+ * does, and an exception is the wrong shape for "you changed your mind".
+ *
+ * ## The signal is not optional politeness, it is the only way out
+ *
+ * This is the longest request the editor makes by a wide margin — the server
+ * budgets twenty seconds to launch a browser, forty-five to try the saved
+ * profile silently, another twenty to launch again, four minutes for a human at
+ * their provider, and fifteen for the verification fetch afterwards, which is
+ * the better part of six minutes with nothing coming back down the wire. A
+ * caller with no `signal` has precisely two options while that runs: wait, or
+ * lie to the user about having stopped. The first is what shipped and is the
+ * "the dialog is stuck" report; the second is worse, because the browser window
+ * is still up and the credential may still land.
+ *
+ * Passing it through `init` rather than adding a parameter to `send`: `fetch`
+ * already takes `signal` on the init object, `send` spreads whatever it is
+ * given, so the abort reaches the transport with no new plumbing. The rejection
+ * that comes back on abort is the platform's `AbortError`, which is NOT a
+ * sentence to show anybody — the caller knows it asked, and says its own thing.
+ */
+export function openProviderSignIn(
+  apiBase: string,
+  url: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{ ok: boolean; reason?: string; provider?: string; origin?: string; scheme?: LibraryCredentialScheme; addedAt?: number }> {
+  return send(`${authEndpoint(apiBase)}/signin`, {
+    method: "POST",
+    body: JSON.stringify({ url }),
+    signal: options.signal,
+  })
+}
+
+/**
+ * Whether this machine has a browser the editor can open a sign-in in.
+ *
+ * UNKNOWN COUNTS AS YES, and that asymmetry is deliberate. Hiding the offer
+ * costs the designer the whole point of the flow — they are left with the token
+ * fold, which is the thing this replaced — while showing one that turns out to
+ * be impossible costs a press and an honest sentence from the server. So only
+ * an explicit `available: false` withdraws it; a request that failed, or a
+ * server too old to know the route, leaves it standing.
+ */
+export async function canOpenProviderSignIn(apiBase: string): Promise<boolean> {
+  try {
+    const answer = await send<{ available?: boolean }>(`${authEndpoint(apiBase)}/signin`, {
+      method: "GET",
+    })
+    return answer?.available !== false
+  } catch {
+    return true
+  }
 }
 
 /**

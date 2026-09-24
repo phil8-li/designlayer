@@ -47,21 +47,52 @@
  * The ground every surface below is a step off.
  *
  * Near-black, not the host app's `--sem-background-chrome` slate (`#363c44`)
- * this used to borrow. The editor is chrome AROUND someone else's product, not
- * a panel inside one, and a mid-slate bar over a white page read as a fourth
- * colour competing with the design under review. Near-black recedes: it stops
- * looking like part of the app and starts looking like the frame around it.
+ * this used to borrow, and not the `#2c2c2c` neutral grey it was after that.
+ * The editor is chrome AROUND someone else's product, not a panel inside one,
+ * and any grey bar over a page reads as a fourth colour competing with the
+ * design under review. Near-black recedes: it stops looking like part of the
+ * app and starts looking like the frame around it.
  *
- * Not pure `#000` on purpose. A true black leaves the panel edge invisible
- * against a dark app and gives `lift()` no room to cut a quiet step that is
- * still distinguishable from the ground.
+ * IT IS THE SAME VALUE AS `INK`, and that is the symmetry rather than a
+ * collision. The note on `INK` states the rule this kit is built on — each
+ * theme paints with the other's ground — and until now that was true only
+ * approximately. The two constants are kept separate anyway, because they are
+ * separate decisions that happen to agree: `INK` means "what the light theme
+ * writes with", `CHROME` means "the ground the dark theme is built on", and
+ * moving one must not silently move the other.
+ *
+ * NOT PURE `#000`, WHICH THIS BRIEFLY WAS, and the reason is measurable rather
+ * than aesthetic. The sRGB ramp compresses near black, so `lift()` buys less
+ * separation the lower the ground sits. In L*, against the ground:
+ *
+ *                #2c2c2c   #000000   #1a1a1a
+ *   sunken        +5.97     +4.31     +6.85
+ *   hoverQuiet    +8.65     +7.74    +10.14
+ *   hover        +11.29    +11.76    +12.90
+ *   raised       +13.46    +14.20    +15.16
+ *   raisedHover  +16.88    +18.94    +19.15
+ *
+ * On black the control surface — the rung every field, track and pad in the
+ * chrome is drawn on — lost a quarter of its step off the ground. `#1a1a1a`
+ * does not merely recover that, it beats both alternatives on every rung: dark
+ * enough to recede behind the product, high enough that a percentage of white
+ * still cuts a visible step. `borderInteractive` lands at 3.22:1 here, its best
+ * of the three and clear of the 3:1 WCAG 1.4.11 asks of a control's boundary,
+ * where on black it scraped 3.00.
+ *
+ * THE PANEL EDGE does not depend on any of this. Against a dark app the ground
+ * may sit within a point or two of the page, so the edge is drawn by
+ * `color.borderStrong` — white cut to alpha — which is the whole reason the
+ * hairlines are alpha rather than a mixed grey. It survives on any ground.
  *
  * Every derived step follows from here, which is the point of routing them all
  * through `lift`/`rule`: moving this one constant restyles the whole chrome,
  * and the white-on-chrome contrast ratios documented below only IMPROVE as the
- * ground darkens.
+ * ground darkens — white on this ground is 17.4:1 against 13.97:1 on the old
+ * `#2c2c2c`, so the tightest of them, `textDim` at 70% on a hovered control,
+ * sits further clear of its floor rather than nearer it.
  */
-const CHROME = "#2c2c2c"
+const CHROME = "#1a1a1a"
 /** `--sem-fixed-always-light`. Also the substance every quiet step is cut from. */
 const ON_CHROME = "#ffffff"
 /**
@@ -132,14 +163,21 @@ const rule = (percent: number) => `color-mix(in srgb, ${ON_CHROME} ${percent}%, 
 // ────────────────────────────────────────────────── the light theme ────────
 
 /**
- * The light ground, and it is not `#ffffff` for the reason `CHROME` is not
- * `#000000`.
+ * The light ground, and it IS `#ffffff` — which is not the mirror of `CHROME`
+ * stopping short of `#000`, and the asymmetry is deliberate.
  *
- * Most of the apps this editor is pointed at are white. A pure-white chrome
- * over a white page leaves the panel edge invisible — the same failure the dark
- * ground avoids from the other end — and it spends the whole top of the range,
- * so a raised panel has nowhere left to go. One step down from white leaves
- * `#ffffff` free to mean "raised", which is what it means below.
+ * This comment used to say the opposite, and described an off-white `#f4f5f7`
+ * that had already been replaced. The reasoning then was that a pure-white
+ * chrome over a white page leaves the panel edge invisible, and that white
+ * should be kept free to mean "raised". Both halves were overtaken by the same
+ * change: Figma's light panel measures `#ffffff` with its controls a step DOWN
+ * at `#f5f5f5`, so `press()` does the stepping and the ground does not have to.
+ * A popover is told apart by its shadow, which is what a shadow is for.
+ *
+ * The dark end cannot borrow that trick, which is why it stops at `#1a1a1a`
+ * rather than going to `#000`: `lift()` has to cut its steps UPWARD out of the
+ * ground, and the sRGB ramp gives it less to work with the lower it starts. See
+ * the L* table on `CHROME`.
  */
 const PAPER = "#ffffff"
 /**
@@ -220,8 +258,10 @@ const PALETTE = {
      *
      * `lift(14)` rather than the `lift(6)` it was, because `lift(6)` is now the
      * control surface itself: a chip drawn at the same value as the track it
-     * rides in is not a chip. 14 puts it a clear step above at `#4a4a4a`, which
-     * is the separation Figma's own selected segment has from its rail.
+     * rides in is not a chip. 14 puts it a clear step above — `#3a3a3a` on this
+     * ground — which is the separation Figma's own selected segment has from
+     * its rail, the same eight rungs it was when the ground was `#2c2c2c` and
+     * this landed on `#4a4a4a`.
      *
      * Light keeps `#ffffff`. Its control surface stepped DOWN to `#f5f5f5`, so
      * the ground is already the raised value and the chip returning to white is
@@ -249,8 +289,12 @@ const PALETTE = {
      *
      * Both are the same rule, which is why they are derived rather than
      * literal: move AWAY from the ground, whichever way the ground leaves free.
-     * `lift(6)` lands on `#383838` and `press(4)` on `#f5f5f5` — Figma's two
-     * values exactly, from one relationship.
+     * `press(4)` lands on `#f5f5f5`, Figma's light value exactly. `lift(6)`
+     * used to land on Figma's `#383838` and now lands on `#282828`, because the
+     * ground moved down to `#1a1a1a` under it — the same six rungs off the
+     * ground, lower down. The relationship is what is being kept here, not the
+     * swatch: a control still reads as a step up from the panel it sits in, and
+     * at ΔL* 6.85 it reads as a slightly clearer one than it did on the slate.
      *
      * The name is now half wrong and is kept anyway: every call site says
      * `bgSunken` and the role it names — "the surface a control is drawn on" —
@@ -258,8 +302,9 @@ const PALETTE = {
      * say nothing new.
      */
     bgSunken: { dark: lift(6), light: press(4) },
-    /* `lift(12)` is `#454545`; Figma's hover and its dividers both measure
-       `#444444`. The quiet rung sits between the control surface and it. */
+    /* Six rungs above the control surface — `#353535` on this ground, where on
+       the old `#2c2c2c` it was `#454545` against Figma's measured `#444444`.
+       The quiet rung sits between the control surface and it. */
     bgHover: { dark: lift(12), light: press(9) },
     bgHoverQuiet: { dark: lift(9), light: press(6) },
     bgActive: { dark: RAIL, light: INDIGO },
@@ -338,6 +383,33 @@ const PALETTE = {
     /** The same fill for a surface with a WORD on it. See `RAIL_FILL_TEXT`. */
     accentSurfaceText: { dark: RAIL_FILL_TEXT, light: INDIGO_TEXT },
     /**
+     * The accent as INK ON A PANEL, where the thing it writes is a word.
+     *
+     * The third rung of the same split `accentSurface` and `accentSurfaceText`
+     * already make, and it was the missing one. `accent` is Figma's published
+     * `icon-brand`, tuned to be a STROKE — a focus ring, a border, a chosen
+     * glyph — all of which owe 3:1 and all of which it clears. A word owes 4.5,
+     * and measured on the three panel grounds it does not have it in light:
+     *
+     *            bg     bg-raised   bg-sunken
+     *   dark    7.39      4.72        6.14      accent, fine everywhere
+     *   light   4.23      4.23        3.91      accent, short on all three
+     *   light   5.40      5.40        4.99      this role
+     *
+     * Dark keeps `RAIL` because it already passes and because the accent a
+     * reader sees as text should be the accent they see as a stroke wherever
+     * that is legible. Light drops to `INDIGO_TEXT`, the rung below on Figma's
+     * own published ramp, which is the same value `accentSurfaceText` takes —
+     * the two are the same colour arrived at from opposite directions, one as
+     * ink on paper and one as a fill under white.
+     *
+     * Found by the contrast sweep rather than by eye, on the annotation badge
+     * reading "Ready" at 4.23:1. That is the kind of pair that survives review:
+     * accent-on-panel looks systematic, both halves came out of the palette,
+     * and nobody measures a colour that was already approved.
+     */
+    accentText: { dark: RAIL, light: INDIGO_TEXT },
+    /**
      * Hover on a filled accent moves AWAY from its own ink, whichever way that
      * is: lighter on the dark theme's light fill, darker on the light theme's
      * dark one. Mixing white into the light theme's fill would have walked it
@@ -383,16 +455,62 @@ const PALETTE = {
      * on, in whichever direction that theme lifts.
      */
     bgRaisedHover: { dark: lift(18), light: press(6) },
-    /** Ink for anything sitting on `accentSurface`. */
+    /**
+     * Ink for anything sitting on `accentSurface`.
+     *
+     * White in both themes, which is right, because the accent fill is a Figma
+     * blue in both — `RAIL_FILL` dark, `INDIGO` light — and both are dark
+     * enough to carry it. This role does not flip and must not.
+     */
     onAccent: { dark: ON_RAIL, light: ON_CHROME },
+    /**
+     * Ink for a SEMANTIC fill: `success`, `danger`, `lintWarning`, `component`,
+     * `guide`, `autoLayout`. The half of `onAccent` that was lost, split back
+     * out into its own role.
+     *
+     * The two were one role until the accent moved to Figma's published blues.
+     * That move was right for the accent and silently wrong for everything else
+     * sharing the ink. The blues are dark fills in both themes, so `onAccent`
+     * correctly became `#ffffff` in both; the six semantic hues did NOT move,
+     * and they are pale in dark and deep in light precisely so they can be read
+     * as INK on their own ground. White landed on the pale ones.
+     *
+     * Measured, every hue, both themes — the numbers this was retuned from:
+     *
+     *   role         dark fill  white  near-black    light fill  white
+     *   success      #7ee2a8     1.58      11.05     #0e6e40      6.32
+     *   danger       #ff8a65     2.31       7.52     #b83408      5.94
+     *   lintWarning  #f5b74e     1.78       9.75     #8a5a00      5.93
+     *   component    #c9b8ff     1.78       9.77     #6435cc      7.18
+     *   guide        #ff6b9a     2.68       6.48     #c41149      5.96
+     *
+     * Unanimous in both directions, which is what makes this one role and not
+     * six: near-black on every dark-theme hue, white on every light-theme one,
+     * and the worst pair either way is 5.93:1 — past the 4.5:1 a label owes.
+     *
+     * The failures it replaces were not marginal, and three of them were
+     * regressions against a fix already recorded in the file. `css/panels.ts`,
+     * `css/options.ts` and `css/annotations.ts` each carry a comment naming
+     * "white on it measures about 2.3:1" as the bug they had fixed, and each had
+     * gone back to exactly 2.31:1. The "In your files" badge measured 1.58:1.
+     *
+     * `INK` rather than `CHROME` for the dark end, and the two are now the
+     * SAME VALUE — `#1a1a1a` both — which makes the choice of name look
+     * arbitrary and is exactly when it stops being. `INK` is what this palette
+     * means by "the dark theme's ink"; `CHROME` means "the ground the dark
+     * theme is built on". A fill's ink is the first of those. They agree today
+     * and nothing holds them together, so the day the ground moves again this
+     * has to follow the ink and not the ground.
+     */
+    onSemantic: { dark: INK, light: ON_CHROME },
     /**
      * Ink for a fill the USER picked, which is the one fill the theme does not
      * get to flip.
      *
-     * `onAccent` is near-black in dark and white in light, and that is right for
-     * every fill the stylesheet owns, because those flip with it: `success` is a
-     * pale mint in dark and a deep green in light, so its ink has to swap ends
-     * to stay on the fill. A note pin's colour is one of the seven
+     * `onSemantic` above is near-black in dark and white in light, and that is
+     * right for every fill the stylesheet owns, because those flip with it:
+     * `success` is a pale mint in dark and a deep green in light, so its ink has
+     * to swap ends to stay on the fill. A note pin's colour is one of the seven
      * `MARKER_PRESETS` and is the same hex in both themes, so an ink that swaps
      * is an ink that is wrong in one of them. It was: the numeral on a green pin
      * measured 5.7:1 in dark and 3.4:1 in light — same pin, same green, and the
@@ -534,7 +652,6 @@ const PALETTE = {
     lintWarning: { dark: "#f5b74e", light: "#8a5a00" },
     guide: { dark: "#ff6b9a", light: "#c41149" },
     measure: { dark: "#ff6b9a", light: "#c41149" },
-    autoLayout: { dark: "#c9b8ff", light: "#6435cc" },
   },
   /**
    * Syntax tints for the Code tab, and only there.
@@ -634,6 +751,53 @@ export function themeDeclarations(theme: ThemeName, indent = "  "): string {
     .join("\n")
 }
 
+/**
+ * `@property` registrations for every palette role, so the theme can CROSSFADE.
+ *
+ * A plain custom property is an untyped token as far as the cascade is
+ * concerned: the browser has no idea `--de-color-bg` holds a colour, so it
+ * cannot interpolate one value into another and a `transition` naming it is a
+ * no-op. That is why flipping the theme repainted the entire chrome between two
+ * frames — not an oversight in the stylesheet, but a thing the stylesheet could
+ * not express.
+ *
+ * Registering each role with `syntax: "<color>"` is what makes them animatable.
+ * Nothing else changes: the values, the fallbacks and the two-selector split in
+ * `css/base.ts` are all exactly as they were, and `css/base.ts` is still the
+ * only place that decides WHICH theme is up.
+ *
+ * `inherits: true` because that is what these already do and what every
+ * `var()` call site depends on — a popover mounted on `<body>` resolves the
+ * palette by inheriting it from `:root`.
+ *
+ * The initial value is the DARK one, matching the `references()` fallback above
+ * and for the same reason: dark is what the editor is when nothing has said
+ * otherwise. Generated from the same `PALETTE` row rather than restated, so a
+ * registration cannot drift from the declaration it types.
+ *
+ * Shadows and code tints are registered too — they are colours, they are in
+ * `PALETTE`, and a crossfade that took the surfaces but left the casts behind
+ * would be a worse artefact than no crossfade at all.
+ *
+ * A malformed registration is dropped by the parser rather than throwing, and
+ * an unregistered property still works exactly as it does today; so a browser
+ * that does not support `@property` loses the crossfade and keeps the theme.
+ */
+export function themeRegistrations(): string {
+  return Object.entries(PALETTE)
+    .flatMap(([group, roles]) =>
+      Object.entries(roles).map(
+        ([role, value]) =>
+          `@property ${customProperty(group, role)} {\n` +
+          `  syntax: "<color>";\n` +
+          `  inherits: true;\n` +
+          `  initial-value: ${value.dark};\n` +
+          `}`
+      )
+    )
+    .join("\n")
+}
+
 /** Every custom property the palette defines, for the suite that pins them. */
 export const themeProperties = (): string[] =>
   Object.entries(PALETTE).flatMap(([group, roles]) =>
@@ -716,8 +880,29 @@ export const tokens = {
      * over live product pixels of an unknown colour, where a tight cast reads
      * as a rectangle pasted on rather than as something in front. Wide, and
      * hung below the element, is what puts air underneath.
+     *
+     * TWO LAYERS, like `popover`, and the second one is the edge.
+     *
+     * It was one layer for a long time, and the consequence was that its three
+     * users each solved the edge themselves: the launcher and the bar added a
+     * real `border: 1px solid border`, and the drag ghost added nothing and had
+     * no edge at all. A wide soft cast fades to nothing at the rim, so on a page
+     * whose colour happens to sit near `color.bg` the surface has no boundary —
+     * which is the failure a `float` surface is most exposed to, because the
+     * page under it belongs to someone else and cannot be tuned.
+     *
+     * A border is the wrong instrument for it anyway, and this kit says so
+     * twice already: `shadow.marker` replaced a pin's border with an inset
+     * hairline because a real border grew the 22px disc to 24 and laid a hard
+     * line between the fill and the page, and `css/annotations.ts` fixed the
+     * same problem on the note hint by reaching for `popover`'s ring. A
+     * `0 0 0 0.5px` layer costs no layout, cannot be knocked off the pixel grid
+     * by a radius, and rides the cast instead of fighting it.
+     *
+     * Same `ring` tint as `popover`, not a new value: these are the same
+     * decision — "where does this surface end" — made for two distances.
      */
-    float: `0 8px 30px ${castSoft}`,
+    float: `0 8px 30px ${castSoft}, 0 0 0 0.5px ${ring}`,
     /**
      * The note pin's lift and its edge, in one declaration — Agentation's pair.
      *
@@ -773,6 +958,80 @@ export const tokens = {
     weightBody: 400,
     weightValue: 500,
     weightSection: 600,
+    /*
+     * AND THE LEADING, WHICH THIS SCALE DID NOT HAVE.
+     *
+     * A type scale that ships three sizes and no line-heights is two thirds of
+     * a scale: a role is "a size, a leading and a weight" and only two of those
+     * were ever a decision anybody could look up. What the stylesheets did
+     * instead is exactly what happens when there is nothing to name — a survey
+     * of `css/` found `1`, `1.4`, `1.45`, `1.5`, `1.55`, `14px`, `15px` and
+     * `16px` in 40 declarations, which is not five roles, it is eight numbers
+     * that happen to be near each other. 1.4 and 1.45 differ by 0.6px at the
+     * body rung and nothing anywhere said which of them a wrapping sentence was
+     * supposed to take.
+     *
+     * UNITLESS, so a line box scales with the size it is set on. The four
+     * px-valued leadings this replaces did the opposite: the root's `16px`
+     * inherited down onto a `micro` eyebrow as 1.6 and onto `body` as 1.33, so
+     * the tightest leading in the chrome landed on the rung that reads
+     * sentences and the loosest on the rung that never wraps at all.
+     *
+     * Four roles, and the boundary between the first two is the one that
+     * matters — `better-typography` puts the floor for anything wrapping to
+     * three lines at 1.4 even in a height-constrained row, and every value
+     * below that floor in this chrome was on prose.
+     */
+    /** A single line centred in a box of its own: a numeral in a disc, a chip. */
+    leadingFlush: 1,
+    /**
+     * The chrome's default, and the floor for text that wraps inside a row of
+     * fixed height. 16.8px at the body rung, against the 16px flat it replaces.
+     */
+    leadingRow: 1.4,
+    /**
+     * Prose: a hint, a description, an empty state, a composer. The bottom of
+     * the 1.5–1.6 band a reader wants, picked rather than the top because a
+     * 240px panel pays for every pixel of leading twice — once per line and
+     * again in how much of the list is left on screen under it.
+     */
+    leadingBody: 1.5,
+    /**
+     * Code, which wants more air than prose and not less.
+     *
+     * Monospace sets denser than the UI face at the same size — every glyph is
+     * the width of the widest one — so a code slab at body leading reads as a
+     * block rather than as lines. This is also the only leading in the chrome
+     * applied to text that is WRAPPED but must still be counted in logical
+     * lines, and a wrapped continuation has to be visibly nearer its own line
+     * than the next one.
+     */
+    leadingCode: 1.55,
+    /**
+     * THE MEASURE, which this scale did not have either.
+     *
+     * A role is a size, a leading, a weight — and, for anything anybody reads a
+     * SENTENCE of, a maximum line length. Past roughly 75 characters the eye
+     * loses the start of the next line on the return sweep, which is why the
+     * long-standing advice is 60–75; 62 is inside that band and is already the
+     * number this chrome picked once, by hand, on `.de-shortcut-note`.
+     *
+     * It matters more here than it does on a web page, because these panels are
+     * RESIZABLE. `size.panelMax` lets the inspector out to 38% of the viewport,
+     * so a component description that reads at a comfortable 55 characters on a
+     * 1280px laptop is ~87 on a 1440 and ~155 on a 2560 — and it is the reader
+     * with the biggest display who gets the least readable prose, which is
+     * backwards.
+     *
+     * `ch` rather than `px` on purpose: the cap is a statement about characters
+     * per line, and `ch` is the one unit that keeps meaning that if the type
+     * scale ever moves.
+     *
+     * For PROSE only. A row, a label, a value and a path all want the width
+     * they are given — capping those would leave a panel with a ragged right
+     * edge and no reason for it.
+     */
+    measure: "62ch",
   },
   /**
    * The design kit's spacing scale: 2, 4, 8, 12, 14, 16, 18, 20, 24, 30, 36.

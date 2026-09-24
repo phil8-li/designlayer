@@ -13,13 +13,15 @@
  * store whether the answer is already known (see `sourceOf`), and otherwise
  * report no file rather than a guess.
  *
- * SERIALIZE is `buildChangePrompt`'s sibling and deliberately reads like it: a
- * statement of what is true, where, and what to do about it, with no chat
- * around it. The one thing this says that the change prompt never has to is
- * WHICH KIND of thing each line is. A brief that mixes "the designer already
- * did this" with "the designer wants this" is how an agent ends up reverting
- * work that is already in the file it just opened, so the two never share a
- * heading.
+ * SERIALIZE writes Agentation's `## Page Feedback` format — the same header,
+ * the same `### N.` items, the same `**Location:**` / `**Source:**` /
+ * `**Feedback:**` fields at the same four detail levels. Agentation runs beside
+ * this editor as a companion, and a designer using both should not hand an
+ * agent two different documents for the same kind of note. The one thing this
+ * says that Agentation never has to is WHICH KIND of edit each item is. A brief
+ * that mixes "the designer already did this" with "the designer wants this" is
+ * how an agent ends up reverting work that is already in the file it just
+ * opened, so the two kinds of edit never share a heading.
  */
 
 import { owningComponentName } from "../core/angular"
@@ -29,14 +31,24 @@ import {
   type RewriteElementInfo,
   type RewriteStack,
 } from "../core/bridge"
-import { sanitizeChangePrompt } from "../core/change-prompt"
+import { shortenAbsolutePaths } from "../core/change-prompt"
 import { config } from "../core/config"
 import { nthOfType } from "../core/element-target"
 import { getState } from "../core/store"
+import {
+  accessibilitySummary,
+  classSummary,
+  elementName,
+  fullDomPath,
+  locationPath,
+  nearbyElements,
+  nearbyText,
+} from "./identify"
 import { edits, isEditQueued } from "./journal"
 import { annotations, annotationSettings } from "./store"
 import type {
   AnnotationRecord,
+  AnnotationRect,
   AnnotationTarget,
   EditRecord,
   OutboxItem,
@@ -61,28 +73,52 @@ const MAX_PATH_CLASSES = 2
  * The properties a designer would name, out of the three hundred
  * `getComputedStyle` resolves.
  *
- * Chosen to answer the questions a note actually raises — how is it laid out,
- * how big is it, what colour is it, how much room is around it. Everything
- * else is noise that pushes the note itself off the top of the agent's
- * context.
+ * Chosen to answer the questions a note actually raises — what colour is it,
+ * how is the type set, how big is it, how is it laid out, what is drawn on it.
+ * Everything else is noise that pushes the note itself off the top of the
+ * agent's context. Only the forensic brief prints these, as
+ * `**Computed Styles:**`, and it skips the values that change nothing.
  */
 const INTERESTING_STYLES = [
-  "display",
-  "position",
   "color",
   "background-color",
+  "border-color",
   "font-size",
   "font-weight",
+  "font-family",
   "line-height",
-  "margin",
-  "padding",
+  "letter-spacing",
+  "text-align",
   "width",
   "height",
-  "border-radius",
+  "padding",
+  "margin",
   "border",
-  "opacity",
+  "border-radius",
+  "display",
+  "position",
   "z-index",
+  "flex-direction",
+  "justify-content",
+  "align-items",
+  "gap",
+  "opacity",
+  "overflow",
+  "box-shadow",
+  "transform",
 ] as const
+
+/** Computed values that mean "nothing set here", left out of `**Computed Styles:**`. */
+const NO_OP_STYLES = new Set([
+  "none",
+  "normal",
+  "auto",
+  "0px",
+  "rgba(0, 0, 0, 0)",
+  "transparent",
+  "static",
+  "visible",
+])
 
 /* -------------------------------------------------------------------------
  * Capture
@@ -196,12 +232,24 @@ function reactStack(element: Element): string[] {
  * `src_components_0w_i7fl._.js:953` sends an agent to open a file that is not
  * source.
  */
-function sourceOf(element: Element): { filePath: string | null; lineNumber: number | null } {
+interface SourceFacts {
+  filePath: string | null
+  lineNumber: number | null
+  columnNumber: number | null
+}
+
+function sourceOf(element: Element): SourceFacts {
   const known = getState().selection.find((entry) => entry.element === element)?.source
-  if (known?.filePath) return { filePath: known.filePath, lineNumber: known.lineNumber || null }
+  if (known?.filePath) {
+    return {
+      filePath: known.filePath,
+      lineNumber: known.lineNumber || null,
+      columnNumber: known.columnNumber || null,
+    }
+  }
 
   const info = reactInfo(element)
-  if (!info) return { filePath: null, lineNumber: null }
+  if (!info) return { filePath: null, lineNumber: null, columnNumber: null }
   const frames: Array<RewriteElementInfo | RewriteStack> = [
     info,
     ...(Array.isArray(info.stack) ? info.stack : []),
@@ -209,9 +257,9 @@ function sourceOf(element: Element): { filePath: string | null; lineNumber: numb
   for (const frame of frames) {
     const filePath = normalizeSourcePath(frame.filePath)
     if (!isProjectSourcePath(filePath)) continue
-    return { filePath, lineNumber: frame.lineNumber || null }
+    return { filePath, lineNumber: frame.lineNumber || null, columnNumber: frame.columnNumber || null }
   }
-  return { filePath: null, lineNumber: null }
+  return { filePath: null, lineNumber: null, columnNumber: null }
 }
 
 /**
@@ -241,6 +289,15 @@ function computedStyles(element: Element): Record<string, string> {
     if (value) styles[property] = value
   }
   return styles
+}
+
+/** One of `identify.ts`'s readings, or an empty answer if the node refuses. */
+function attempt(read: () => string): string {
+  try {
+    return read()
+  } catch {
+    return ""
+  }
 }
 
 /**
@@ -303,9 +360,10 @@ function ancestryOf(element: Element): AnnotationTarget["ancestry"] {
  * still `outputDetail`'s call, in `renderTarget`.
  */
 export function describeElement(element: Element): AnnotationTarget {
-  const { filePath, lineNumber } = sourceOf(element)
+  const { filePath, lineNumber, columnNumber } = sourceOf(element)
+  const tagName = element.tagName.toLowerCase()
   return {
-    tagName: element.tagName.toLowerCase(),
+    tagName,
     componentName: componentNameOf(element),
     className: classAttribute(element),
     id: element.getAttribute("id"),
@@ -313,9 +371,16 @@ export function describeElement(element: Element): AnnotationTarget {
     text: visibleText(element),
     filePath,
     lineNumber,
+    columnNumber,
     ancestry: ancestryOf(element),
     computed: computedStyles(element),
     components: componentStack(element),
+    name: attempt(() => elementName(element)) || tagName,
+    path: attempt(() => locationPath(element)),
+    fullPath: attempt(() => fullDomPath(element)),
+    nearbyText: attempt(() => nearbyText(element)),
+    nearbyElements: attempt(() => nearbyElements(element)),
+    accessibility: attempt(() => accessibilitySummary(element)),
   }
 }
 
@@ -500,57 +565,118 @@ export function owedCount(): number {
  * ---------------------------------------------------------------------- */
 
 /**
- * Whose components these are.
+ * Whose components these are, as the field is named.
  *
- * Resolved from the host rather than hard-coded, because the label is the only
- * part of the line an agent acts on: told to look for a React component in an
- * Angular project it will search for a file that was never going to exist, and
- * conclude the brief is describing a different application. Saying nothing
- * would be better than saying the wrong framework, so this never guesses.
+ * Agentation calls the line `**React:**` because React is all it reads. This
+ * editor also reads Angular, and the label is the part of the line an agent
+ * acts on: told to look for a React component in an Angular project it will
+ * search for a file that was never going to exist, and conclude the brief is
+ * describing a different application. So the field keeps Agentation's shape
+ * and takes the host's name.
  */
 function componentsLabel(): string {
-  return config.host.framework === "angular" ? "Angular components" : "React components"
+  return config.host.framework === "angular" ? "Angular" : "React"
 }
 
 /**
- * The path as it is safe to show.
+ * `<Routes> <Shell> <Home> <Card>` — OUTERMOST first, the order Agentation
+ * prints. The stack is captured innermost first (see `componentStack`), so it
+ * is reversed here, at the one place that prints it.
  *
- * `sanitizeBrief` shortens an absolute path to its `src/` tail, but only when
+ * With no stack, the owning component alone is a stack of one. The journal
+ * captures only that, and so does a note whose file never resolved — where the
+ * component name is the one thing the agent has left to search for.
+ */
+function componentsLine(target: AnnotationTarget | null): string | null {
+  const stack = Array.isArray(target?.components) ? target.components : []
+  const names = stack.length ? stack : target?.componentName ? [target.componentName] : []
+  if (!names.length) return null
+  return `**${componentsLabel()}:** ${[...names].reverse().map((name) => `<${name}>`).join(" ")}`
+}
+
+/**
+ * The path as it is safe to show, with the line and column.
+ *
+ * `shortenAbsolutePaths` cuts an absolute path to its `src/` tail, but only when
  * there IS an `src/` in it — a monorepo package laid out as `packages/ui/lib`
  * comes through absolute. The last two segments are what the Design tab shows
  * for the same case, and they carry no home directory.
  */
-function sourceLabel(filePath: string, lineNumber: number | null): string {
-  const shortened = sanitizeChangePrompt(filePath)
+function sourceLabel(
+  filePath: string,
+  lineNumber: number | null,
+  columnNumber: number | null
+): string {
+  const shortened = shortenAbsolutePaths(filePath)
   const path = shortened.startsWith("/") ? shortened.split("/").slice(-2).join("/") : shortened
-  return lineNumber ? `${path}:${lineNumber}` : path
+  if (!lineNumber) return path
+  return columnNumber ? `${path}:${lineNumber}:${columnNumber}` : `${path}:${lineNumber}`
 }
 
-/** `<button class="...">`, the same way the change prompt spells an element. */
-function elementLabel(target: AnnotationTarget | null): string {
-  // Not "the page". An edit with no target is an edit whose element the journal
-  // could not describe, and saying "the page" would send an agent looking for a
-  // layout-level change that nobody made.
-  if (!target) return "an element the editor could not describe"
-  return target.className
-    ? `\`<${target.tagName} class="${target.className}">\``
-    : `\`<${target.tagName}>\``
+function sourceOfTarget(target: AnnotationTarget | null): string | null {
+  if (!target?.filePath) return null
+  return sourceLabel(target.filePath, target.lineNumber, target.columnNumber ?? null)
 }
 
-/** The short form: what the reader needs to picture the thing being talked about. */
-function targetHeadline(note: AnnotationRecord): string {
-  if (note.kind === "text") {
-    const quoted = truncate((note.selectedText ?? "").replace(/\s+/g, " ").trim())
-    return quoted ? `the text “${quoted}”` : "a text selection"
-  }
-  if (!note.target) {
-    // A region over empty space is the one note with nothing to name, and its
-    // size is the only thing that distinguishes "this gap" from "this column".
-    return `an empty region, ${Math.round(note.rect.width)}×${Math.round(note.rect.height)}`
-  }
-  const { target } = note
-  const name = target.componentName ? `${target.componentName} (\`${target.tagName}\`)` : `\`${target.tagName}\``
-  return target.text ? `${name} — “${target.text}”` : name
+function stringFact(value: unknown): string {
+  return typeof value === "string" ? value : ""
+}
+
+/**
+ * The heading for a target captured before names were.
+ *
+ * A note stored by an older build has its tag and text and nothing else this
+ * needs, and the brief still has to call it something.
+ */
+function targetName(target: AnnotationTarget): string {
+  const name = stringFact(target.name)
+  if (name) return name
+  const text = stringFact(target.text)
+  return text ? `${target.tagName} "${text.slice(0, 40)}"` : target.tagName
+}
+
+/**
+ * The page the notes are on: path, query and hash, like Agentation's header.
+ * Never the origin — the agent already knows which dev server it is in.
+ */
+function pageLabel(): string {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`
+}
+
+/**
+ * Which app, in the words the Agentation companion uses for the same page.
+ *
+ * Both tools read `config.app.name` and fall back to the port, so a note from
+ * either one names the app identically. Escaped because it is a package name
+ * printed inside markdown, and `my_app` is otherwise an italic.
+ */
+function appLabel(): string {
+  const name = (config.app.name ?? "").replace(/[\r\n\t]+/g, " ").trim()
+  const label = name || `app on ${window.location.host}`
+  return label.replace(/[\\`*_[\]<>]/g, "\\$&")
+}
+
+function viewportLabel(): string {
+  return `${window.innerWidth}×${window.innerHeight}`
+}
+
+/**
+ * The block that answers "it looks fine on my machine". Forensic only, and once
+ * per brief rather than once per note, because every note in a brief was made
+ * in the same tab at the same size.
+ */
+function environmentBlock(): string[] {
+  return [
+    "",
+    "**Environment:**",
+    `- Viewport: ${viewportLabel()}`,
+    `- URL: ${window.location.href}`,
+    `- User Agent: ${navigator.userAgent}`,
+    `- Timestamp: ${new Date().toISOString()}`,
+    `- Device Pixel Ratio: ${window.devicePixelRatio}`,
+    "",
+    "---",
+  ]
 }
 
 /**
@@ -578,124 +704,163 @@ function editPhrase(edit: EditRecord): string {
 }
 
 /**
- * The context bullets under an item, which is where the four levels differ.
+ * One numbered item, note or edit, before it is printed.
  *
- * Compact never reaches here at all — it prints one line per item and stops.
- * Standard says where the thing is; detailed says what it looks like and what
- * it sits inside; forensic adds the box. Each level is a superset of the one
- * before, so a reader who asked for more never loses a line they had.
+ * `target` answers `**Source:**` and the component line; `facts` answers
+ * everything that describes the element itself. They differ only for a region:
+ * the element under the middle of the box is a fair guess at which file the
+ * box is in, and no description at all of the box.
  */
-function targetBullets(target: AnnotationTarget | null, detail: OutputDetail): string[] {
-  if (!target || detail === "compact") return []
-  const lines: string[] = [`- Selector: \`${target.selector}\``]
+interface BriefItem {
+  name: string
+  location: string
+  target: AnnotationTarget | null
+  facts: AnnotationTarget | null
+  rect: AnnotationRect | null
+  selectedText: string
+  /** `Feedback` for a note, `Change` for an edit — the item's last line. */
+  field: "Feedback" | "Change"
+  body: string
+}
 
-  if (target.filePath) {
-    // NOT spelled `**Source:**`. `sanitizeBrief` deletes a line that starts
-    // that way — it is how the app's own copy path drops the resolver's
-    // half-right attribution — and this line is one we stand behind, because
-    // `isProjectSourcePath` already threw out the chunk filenames.
-    lines.push(`- Source: \`${sourceLabel(target.filePath, target.lineNumber)}\``)
+function noteItem(note: AnnotationRecord): BriefItem {
+  const { target } = note
+  const region = note.kind === "region"
+  return {
+    name: region ? "Area selection" : target ? targetName(target) : "text selection",
+    location: region
+      ? `region at (${Math.round(note.rect.x)}, ${Math.round(note.rect.y)})`
+      : target
+        ? stringFact(target.path) || target.selector
+        : "unknown",
+    target,
+    facts: region ? null : target,
+    rect: note.rect,
+    selectedText: (note.selectedText ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+    field: "Feedback",
+    body: note.comment.trim() || "(no comment)",
   }
-  if (target.components.length) {
-    lines.push(`- ${componentsLabel()}: ${target.components.map((name) => `\`${name}\``).join(" in ")}`)
-  }
+}
 
-  if (detail === "detailed" || detail === "forensic") {
-    const computed = Object.entries(target.computed)
-    if (computed.length) {
-      lines.push(`- Computed: ${computed.map(([key, value]) => `\`${key}: ${value}\``).join(", ")}`)
-    }
-    if (target.ancestry.length) {
-      const chain = target.ancestry.map((step) => {
-        const classes = step.className.split(/\s+/).filter(Boolean).slice(0, MAX_PATH_CLASSES)
-        return `\`${step.tagName}${classes.map((name) => `.${name}`).join("")}\``
-      })
-      lines.push(`- Inside: ${chain.join(" in ")}`)
-    }
+function editItem(edit: EditRecord): BriefItem {
+  const { target } = edit
+  return {
+    // Not "the page". An edit with no target is an edit whose element the
+    // journal could not describe, and saying "the page" would send an agent
+    // looking for a layout-level change that nobody made.
+    name: target ? targetName(target) : "an element the editor could not describe",
+    location: target ? stringFact(target.path) || target.selector : "unknown",
+    target,
+    facts: target,
+    rect: null,
+    selectedText: "",
+    field: "Change",
+    body: editPhrase(edit),
   }
+}
 
-  return lines
+/** `color: rgb(…); font-size: 14px` — the styles that set something. */
+function computedLine(target: AnnotationTarget | null): string {
+  const computed = target?.computed && typeof target.computed === "object" ? target.computed : {}
+  return Object.entries(computed)
+    .filter(([, value]) => typeof value === "string" && value && !NO_OP_STYLES.has(value))
+    .map(([property, value]) => `${property}: ${value}`)
+    .join("; ")
 }
 
 /**
- * Viewport, URL, agent, clock.
+ * One item, at one detail level, in Agentation's field order.
  *
- * Forensic only, and once per brief rather than once per note, because every
- * note in a brief was made in the same tab at the same size. This is the block
- * that answers "it looks fine on my machine": a 1440-wide capture at 2× on
- * Safari is a different page from the one the agent is about to open.
+ * Compact is one line and stops. Standard says where the thing is; detailed
+ * adds its classes, its box and the words around it; forensic swaps the short
+ * location for the full DOM path and adds styles, accessibility and
+ * neighbours. Every field is skipped rather than printed empty.
  */
-function environmentBlock(): string[] {
-  return [
-    "## Environment",
-    "",
-    `- URL: ${window.location.href}`,
-    `- Viewport: ${window.innerWidth}×${window.innerHeight} CSS px at ${window.devicePixelRatio}× device pixel ratio`,
-    `- User agent: ${navigator.userAgent}`,
-    `- Captured: ${new Date().toISOString()}`,
-  ]
-}
+function renderItem(index: number, item: BriefItem, detail: OutputDetail): string[] {
+  const { facts, rect, selectedText } = item
+  const source = sourceOfTarget(item.target)
 
-function noteSection(notes: AnnotationRecord[], detail: OutputDetail): string[] {
-  const lines: string[] = [
-    "## Notes — what the designer is asking for",
-    "",
-    `${notes.length} ${notes.length === 1 ? "note was" : "notes were"} pinned to the running page. Nothing in this section has been changed; each one is a place that needs work.`,
-    "",
-  ]
+  if (detail === "compact") {
+    const quote = selectedText
+      ? ` (re: "${selectedText.slice(0, 30)}${selectedText.length > 30 ? "..." : ""}")`
+      : ""
+    return [`${index}. **${item.name}**${source ? ` (${source})` : ""}: ${item.body}${quote}`]
+  }
 
-  notes.forEach((note, index) => {
-    const comment = note.comment.trim() || "(no comment)"
-    if (detail === "compact") {
-      lines.push(`${index + 1}. **${targetHeadline(note)}** — ${comment}`)
-      return
-    }
+  const lines = [`### ${index}. ${item.name}`]
+  const components = componentsLine(item.target)
+  const classes = facts?.className ? classSummary(stringFact(facts.className)) : ""
+  const context = !selectedText ? stringFact(facts?.nearbyText).slice(0, 100) : ""
+  const selected = selectedText ? `**Selected text:** "${selectedText}"` : null
 
-    lines.push(`### ${index + 1}. ${targetHeadline(note)}`, "", comment, "")
-    const bullets = targetBullets(note.target, detail)
-    if (detail === "forensic") {
-      bullets.push(
-        `- Box: ${Math.round(note.rect.width)}×${Math.round(note.rect.height)} at (${Math.round(note.rect.x)}, ${Math.round(note.rect.y)}) in page coordinates`,
-        // "Noted", not "written": in this brief "written" means "already in the
-        // source file", and using it for a timestamp would blur the one
-        // distinction the whole document is built around.
-        `- Noted: ${note.createdAt}`
+  if (detail === "forensic") {
+    // A target stored before the full path was captured still says where it
+    // is — under the label that is true of what it has.
+    const fullPath = stringFact(facts?.fullPath)
+    if (fullPath) lines.push(`**Full DOM Path:** ${fullPath}`)
+    else if (facts) lines.push(`**Location:** ${item.location}`)
+    if (classes) lines.push(`**CSS Classes:** ${classes}`)
+    if (rect) {
+      lines.push(
+        `**Position:** x:${Math.round(rect.x)}, y:${Math.round(rect.y)} (${Math.round(rect.width)}×${Math.round(rect.height)}px)`,
+        `**Annotation at:** ${((rect.x / Math.max(window.innerWidth, 1)) * 100).toFixed(1)}% from left, ${Math.round(rect.y)}px from top`
       )
     }
-    if (bullets.length) lines.push(...bullets, "")
-  })
+    if (selected) lines.push(selected)
+    if (context) lines.push(`**Context:** ${context}`)
+    const styles = computedLine(facts)
+    if (styles) lines.push(`**Computed Styles:** ${styles}`)
+    const accessibility = stringFact(facts?.accessibility)
+    if (accessibility) lines.push(`**Accessibility:** ${accessibility}`)
+    const neighbours = stringFact(facts?.nearbyElements)
+    if (neighbours) lines.push(`**Nearby Elements:** ${neighbours}`)
+    if (source) lines.push(`**Source:** ${source}`)
+    if (components) lines.push(components)
+  } else {
+    lines.push(`**Location:** ${item.location}`)
+    if (source) lines.push(`**Source:** ${source}`)
+    if (components) lines.push(components)
+    if (detail === "detailed") {
+      if (classes) lines.push(`**Classes:** ${classes}`)
+      if (rect) {
+        lines.push(
+          `**Position:** ${Math.round(rect.x)}px, ${Math.round(rect.y)}px (${Math.round(rect.width)}×${Math.round(rect.height)}px)`
+        )
+      }
+    }
+    if (selected) lines.push(selected)
+    if (detail === "detailed" && context) lines.push(`**Context:** ${context}`)
+  }
 
-  if (detail === "compact") lines.push("")
+  lines.push(`**${item.field}:** ${item.body}`, "")
   return lines
 }
 
 function editSection(
   entries: EditRecord[],
+  firstIndex: number,
   heading: string,
   preamble: string,
   detail: OutputDetail
 ): string[] {
   const lines: string[] = [heading, "", preamble, ""]
-  for (const edit of entries) {
-    lines.push(`- ${elementLabel(edit.target)} — ${editPhrase(edit)}`)
-    const bullets = targetBullets(edit.target, detail)
-    // Indented under the edit rather than flattened beside it: an edit's
-    // selector belongs to that edit, and at four edits a flat list of twelve
-    // bullets is unreadable.
-    for (const bullet of bullets) lines.push(`  ${bullet}`)
-  }
-  lines.push("")
+  entries.forEach((edit, offset) => {
+    lines.push(...renderItem(firstIndex + offset, editItem(edit), detail))
+  })
+  if (detail === "compact") lines.push("")
   return lines
 }
 
 /**
- * The whole session as markdown an agent can act on.
+ * The whole session as markdown an agent can act on, in Agentation's format.
  *
- * Three sections, in the order the reader needs them: what is wanted, what is
- * already done, and what is done but not yet real. The middle one is the
- * section that exists to prevent a specific failure — an agent that reads the
- * notes, opens the file, sees the padding change already applied, and applies
- * it a second time because nothing told it the designer had got there first.
+ * The notes are exactly what Agentation would copy for the same notes. The
+ * edits follow in two sections of their own, numbered on from the notes so
+ * every item in the brief has one number: what is already done, and what is
+ * done but not yet real. The first of those exists to prevent a specific
+ * failure — an agent that reads the notes, opens the file, sees the padding
+ * change already applied, and applies it a second time because nothing told it
+ * the designer had got there first.
  */
 export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): string {
   const detail = annotationSettings().outputDetail
@@ -716,26 +881,19 @@ export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): strin
     return "Nothing to hand over yet. Pin a note on the page, or make a change, and it lands here."
   }
 
-  const counts = [
-    notes.length ? `${notes.length} ${notes.length === 1 ? "note" : "notes"}` : "",
-    changes.length ? `${changes.length} ${changes.length === 1 ? "change" : "changes"}` : "",
-  ].filter(Boolean)
+  const lines: string[] = [`## Page Feedback: ${pageLabel()}`, `**App:** ${appLabel()}`]
+  if (detail === "forensic") lines.push(...environmentBlock())
+  else if (detail !== "compact") lines.push(`**Viewport:** ${viewportLabel()}`)
+  lines.push("")
 
-  const lines: string[] = [
-    "# Design review from the browser",
-    "",
-    `${counts.join(" and ")} from a session on \`${window.location.pathname}\`, oldest first.`,
-  ]
-
-  if (detail === "forensic") lines.push("", ...environmentBlock())
-
-  if (notes.length) lines.push("", ...noteSection(notes, detail))
+  notes.forEach((note, offset) => lines.push(...renderItem(offset + 1, noteItem(note), detail)))
+  if (notes.length && detail === "compact") lines.push("")
 
   if (written.length) {
     lines.push(
-      "",
       ...editSection(
         written,
+        notes.length + 1,
         "## Already written to source — do not apply these again",
         `${written.length} ${written.length === 1 ? "change is" : "changes are"} already in the files below. They are done. Applying them a second time is a conflict, not a fix.`,
         detail
@@ -745,9 +903,9 @@ export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): strin
 
   if (pending.length) {
     lines.push(
-      "",
       ...editSection(
         pending,
+        notes.length + written.length + 1,
         "## Showing in the browser only — these still need writing",
         `${pending.length} ${pending.length === 1 ? "change exists" : "changes exist"} as a live preview and in no file. This is the work: the next reload eats ${pending.length === 1 ? "it" : "them"}.`,
         detail
@@ -755,21 +913,21 @@ export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): strin
     )
   }
 
-  // Collapse the blank lines the sections leave where they join.
-  return `${lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()}\n`
+  // Collapse the blank lines the sections leave where they join, and end where
+  // the last item ends, as Agentation's copy does.
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
 }
 
 /**
  * What is safe to put on someone's clipboard.
  *
- * `sanitizeChangePrompt` is imported rather than copied. Both rules it applies
- * are exactly the rules a brief needs — drop the resolver's half-right
- * `**Source:**` attribution, and shorten an absolute path to its `src/` tail so
- * a screen-shared brief does not carry the user's home directory and their name
- * — and duplicating two regexes here would mean the next fix to either one
- * lands in one of the two copies. The brief's own source line is spelled
- * `- Source:` precisely so it survives the first rule.
+ * Only the path rule of `sanitizeChangePrompt`: an absolute path is cut to its
+ * `src/` tail so a screen-shared brief does not carry the user's home directory
+ * and their name. The other rule — dropping `**Source:**` lines — is NOT
+ * applied, because in this brief `**Source:**` is Agentation's field name and
+ * every path on it already passed `isProjectSourcePath`. The helper is imported
+ * rather than copied so the next fix to the regex lands in one place.
  */
 export function sanitizeBrief(text: string): string {
-  return sanitizeChangePrompt(text)
+  return shortenAbsolutePaths(text)
 }

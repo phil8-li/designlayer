@@ -5,7 +5,8 @@
  * other lane owns the stylesheet for the surface it draws.
  */
 
-import { tokens as t, accentFill } from "../tokens"
+import { tokens as t, accentFillText } from "../tokens"
+import { CONTROL_RADIUS } from "./panels"
 
 export const tokenPickerCss = `/* ---------- token field ---------- */
 /*
@@ -36,10 +37,10 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
   display: flex; align-items: center; gap: ${t.space.md}px;
   width: 100%; height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.sm}px;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.md};
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${CONTROL_RADIUS};
   background: transparent; color: ${t.color.text};
   font: inherit; font-size: ${t.type.body}; text-align: left;
-  cursor: default;
+  cursor: pointer;
   transition: background ${t.duration.fast} ${t.ease};
 }
 .de-token-field:hover { background: ${t.color.bgHover}; }
@@ -68,7 +69,7 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
  */
 .de-token-swatch--color { box-shadow: inset 0 0 0 1px ${t.color.border}; }
 .de-token-swatch--radius { box-shadow: inset 0 0 0 1px ${t.color.borderInteractive}; }
-.de-token-swatch--text { font-weight: ${t.type.weightValue}; line-height: 1; }
+.de-token-swatch--text { font-weight: ${t.type.weightValue}; line-height: ${t.type.leadingFlush}; }
 /* The mark carries its own weight; the slot only has to not crop it. */
 .de-token-swatch--glyph { color: ${t.color.text}; }
 .de-token-swatch--glyph svg { display: block; }
@@ -110,7 +111,19 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
   color: ${t.color.text};
   font: inherit; font-size: ${t.type.body};
 }
+/*
+ * Removed WITH a replacement, which is the half these two inputs were missing.
+ *
+ * Both sit in a bordered shell that draws the field, so a UA outline around the
+ * input alone would paint a second box inside the first — that is why it was
+ * taken off. But focus arrives here by SCRIPT: the popover opens and moves the
+ * caret into the search box, so a keyboard user's first frame in this surface
+ * is one where nothing says where they are. \`outline-offset: -2px\` draws the
+ * ring just inside the input's own edge, which is the shell's inner line rather
+ * than a box beside it.
+ */
 .de-token-search-input:focus { outline: none; }
+.de-token-search-input:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
 .de-token-search-input::placeholder { color: ${t.color.textDim}; }
 
 .de-token-list { max-height: 320px; overflow-y: auto; padding-bottom: ${t.space.sm}px; }
@@ -157,22 +170,26 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
   border: none; background: transparent;
   color: ${t.color.text};
   font: inherit; font-size: ${t.type.body}; text-align: left;
-  cursor: default;
+  cursor: pointer;
 }
 .de-token-row-name {
   flex: 1; min-width: 0;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.de-token-row-detail { flex: none; color: ${t.color.textDim}; font-variant-numeric: tabular-nums; }
+.de-token-row-detail { flex: none; color: ${t.color.textDim}; }
 .de-token-row-check { flex: none; display: flex; align-items: center; }
-.de-token-row:hover { background: ${t.color.bgHover}; }
+/* \`bgRaisedHover\`, not \`bgHover\`: this popover is \`bgRaised\`, and \`bgHover\` is
+   a rung BELOW it — pointing at a row used to darken it. The field that opens
+   this list keeps \`bgHover\` and is right to: it sits on the panel ground,
+   where that value is a genuine lift. Same rule, two grounds. */
+.de-token-row:hover { background: ${t.color.bgRaisedHover}; }
 /*
  * The keyboard cursor is not the pointer cursor. Given the same wash, the two
  * are indistinguishable the moment a hand is on each — so the active row keeps
  * the wash and adds a rule to say which row Enter would actually take.
  */
 .de-token-row[data-active="true"] {
-  background: ${t.color.bgHover};
+  background: ${t.color.bgRaisedHover};
   box-shadow: inset 0 0 0 1px ${t.color.accent};
 }
 /*
@@ -180,7 +197,7 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
  * indigo, so the ink flips instead of the surface darkening — white text here
  * would land at 1.7:1 and vanish.
  */
-.de-token-row[aria-selected="true"] { ${accentFill} }
+.de-token-row[aria-selected="true"] { ${accentFillText} }
 .de-token-row[aria-selected="true"] .de-token-row-detail { color: ${t.color.onAccent}; }
 /* An accent rule on the accent is no rule at all, so the ink draws it instead. */
 .de-token-row[aria-selected="true"][data-active="true"] {
@@ -233,7 +250,9 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
   font: inherit; font-size: ${t.type.body};
   text-align: right;
 }
+/* Same pair, same argument, as the search input above. */
 .de-token-custom-input:focus { outline: none; }
+.de-token-custom-input:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
 .de-token-custom-input::placeholder { color: ${t.color.textDim}; }
 
 `

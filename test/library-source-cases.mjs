@@ -144,6 +144,67 @@ check("only the five manifest marker keys claim a JSON file", () => {
   }
 })
 
+/*
+ * A MARKER KEY IS A SHAPE, NOT A WORD — and reading it as a word lost whole
+ * files.
+ *
+ * `motion` is a manifest's array of motion tokens. It is also the obvious name
+ * for a DTCG group of durations, which is a thing people write: the fragment
+ * below is an ordinary token file and nothing else. Claimed as a manifest, it
+ * reached `normalizeDesignSystemManifest`, which refused it — correctly, it is
+ * not a manifest — and the throw surfaced to the designer as "nothing here read
+ * as a design system" about a file that was nothing but design tokens. Same for
+ * a top-level `textStyles` group, which is how a type ramp gets named.
+ *
+ * Testing the shape costs the manifest lane nothing, because every marker key
+ * is an array in a real manifest — which is what the check above pins.
+ */
+check("a token group that shares a manifest key's name is still a token file", () => {
+  const durations = JSON.stringify({
+    motion: { fast: { $value: "120ms", $type: "duration" } },
+    color: { brand: { $value: "#ff0000", $type: "color" } },
+  })
+  assert.equal(detectLibraryKind("tokens.json", durations), "tokens")
+  const catalog = parseLibrary("tokens", durations)
+  assert.equal(catalog.motion.length, 1, "the duration group was lost")
+  assert.equal(catalog.colors.length, 1)
+
+  assert.equal(
+    detectLibraryKind(
+      "type.json",
+      JSON.stringify({ textStyles: { body: { $value: "16px", $type: "fontSize" } } })
+    ),
+    "tokens"
+  )
+})
+
+/*
+ * Plain nested JSON, which is most of the JSON a designer actually has.
+ *
+ * A theme object exported from a component library, a Tailwind theme dumped to
+ * JSON, the Material Theme Builder's `material-theme.json`, a palette package's
+ * `colors.json` — none of them wrap a leaf in `{ "value": … }`, so every one of
+ * them read as zero tokens.
+ *
+ * The floor is what keeps that from claiming every JSON file in the project.
+ * Detection counts the leaves this module would actually turn into tokens, so a
+ * theme object passes on its colours and lengths while a `package.json` scores
+ * nothing — without a rule that has to know what a `package.json` is.
+ */
+check("a plain nested theme object is a token file, and a build config is not", () => {
+  const theme = JSON.stringify({
+    colors: { brand: { 500: "#0066cc", 600: "#0052a3" }, surface: "#ffffff" },
+    spacing: { 4: "1rem", 6: "1.5rem" },
+    borderRadius: { md: "0.375rem" },
+  })
+  assert.equal(detectLibraryKind("theme.json", theme), "tokens")
+  assert.equal(
+    detectLibraryKind("package.json", '{"name":"app","version":"1.0.0","scripts":{"dev":"next"}}'),
+    null
+  )
+  assert.equal(detectLibraryKind("tsconfig.json", '{"compilerOptions":{"target":"ES2022"}}'), null)
+})
+
 check("a file that is not a design system is not a library", () => {
   assert.equal(
     detectLibraryKind("README.md", "# Nimbus\n\nA design system for the web.\n"),
@@ -395,6 +456,181 @@ check("every block a design system is declared in is read, and the last word win
   assert.equal(byVar(catalog.radii, "--radius-card").values.default, 16)
 })
 
+/*
+ * THE ONE READING THAT WAS WRONG RATHER THAN MISSING.
+ *
+ * A dark block does not have to be a class. Radix Colors ships one as
+ * `@media (prefers-color-scheme: dark)` in its distributed CSS, and so do Open
+ * Props, USWDS and every system that follows the OS preference instead of a
+ * toggle. The scanner skipped any scope starting with `@` before it tested for
+ * dark, so the block resolved by its inner `:root` to the UNCONDITIONAL tier —
+ * where the last declaration wins, and where a dark block is written last.
+ *
+ * So the dark palette became the default palette and no dark values were
+ * produced at all. Every other gap in this module hands a designer less than
+ * their system has; this one handed them a black swatch labelled as the light
+ * default, which they have no way to tell from the truth.
+ */
+check("a dark block written as a media query is the dark theme, not the default", () => {
+  const catalog = parseLibrary(
+    "css",
+    [
+      ":root {",
+      "  --gray-1: #fcfcfc;",
+      "  --gray-12: #202020;",
+      "  --accent-9: #3e63dd;",
+      "  --radius-3: 8px;",
+      "}",
+      "@media (prefers-color-scheme: dark) {",
+      "  :root {",
+      "    --gray-1: #111111;",
+      "    --gray-12: #eeeeee;",
+      "    --accent-9: #3d63dd;",
+      "  }",
+      "}",
+    ].join("\n")
+  )
+  assert.deepEqual(byName(catalog.colors, "gray-1").values, { light: "#fcfcfc", dark: "#111111" })
+  assert.deepEqual(byName(catalog.colors, "gray-12").values, { light: "#202020", dark: "#eeeeee" })
+  assert.deepEqual(byName(catalog.colors, "accent-9").values, { light: "#3e63dd", dark: "#3d63dd" })
+  // The block inside the media query is `:root`, so nothing else in the file
+  // may be collateral: the radius declared beside the light palette survives.
+  assert.equal(catalog.radii.length, 1)
+})
+
+/*
+ * A system that ships both spellings of the same palette — the class for an
+ * explicit toggle, the media query for the OS preference — must not have one of
+ * them demoted.
+ *
+ * Plainness is decided by comparing dark selectors against each other, and a
+ * media query spends four words getting to the one that names the theme. Left
+ * unaccounted for, `@media (prefers-color-scheme: dark)` looked like a
+ * DISTINGUISHED dark theme standing next to a plain `.dark` — three words it
+ * does not share — which makes it additive-only, so whichever of the two the
+ * author wrote second would silently stop being able to restate a colour.
+ */
+check("both spellings of dark rank as the same plain dark theme", () => {
+  const catalog = parseLibrary(
+    "css",
+    [
+      ":root { --color-bg: #ffffff; --color-fg: #111111; --spacing-md: 16px; --radius-sm: 4px; }",
+      ".dark, .dark-theme { --color-bg: #101319; }",
+      "@media (prefers-color-scheme: dark) { :root { --color-bg: #0b0d12; } }",
+      "@media (prefers-color-scheme: dark) and (prefers-contrast: more) {",
+      "  :root { --color-bg: #000000; }",
+      "}",
+      ".dark { --color-fg: #e6e8ee; }",
+    ].join("\n")
+  )
+  // Two plain dark blocks, so the later one wins — the same last-word rule the
+  // light tier follows. The media query only gets that standing if the words it
+  // spends reaching `dark` are read as plumbing rather than as a distinction.
+  assert.deepEqual(byName(catalog.colors, "bg").values, { light: "#ffffff", dark: "#0b0d12" })
+  // And a dark block that really IS distinguished — dark AND high contrast —
+  // still may only add, so an accessibility variant never becomes the theme.
+  assert.deepEqual(byName(catalog.colors, "fg").values, { light: "#111111", dark: "#e6e8ee" })
+})
+
+/*
+ * The same root cause, with a quieter symptom and a wider blast radius.
+ *
+ * Every other `@media` condition was flattened into the unconditional tier too,
+ * so a wide-viewport override became THE spacing step and a print colour became
+ * THE background. They belong in the additive tier instead: a conditional block
+ * is a real declaration site and may contribute a name nothing else declares,
+ * but it may never restate what the file says plainly.
+ */
+check("a conditional media query may add, but may not restate the default", () => {
+  const catalog = parseLibrary(
+    "css",
+    [
+      ":root { --space-lg: 24px; --color-bg: #ffffff; --color-fg: #111111; --radius-sm: 4px; }",
+      "@media (min-width: 900px) { :root { --space-lg: 32px; } }",
+      "@media print { :root { --color-bg: #cccccc; } }",
+      "@supports (color: oklch(0 0 0)) { :root { --color-vivid: oklch(0.62 0.15 264); } }",
+    ].join("\n")
+  )
+  assert.equal(byName(catalog.spacing, "lg").values.default, 24, "a breakpoint override became the step")
+  assert.deepEqual(byName(catalog.colors, "bg").values, { light: "#ffffff" }, "print became the default")
+  // Additive, not ignored: a name only the conditional block declares is a
+  // token that exists nowhere else, so taking it beats losing it.
+  assert.ok(byName(catalog.colors, "vivid"), "a token declared only under @supports was dropped")
+})
+
+/*
+ * The most-copied token layout in existence, and it read as zero colours.
+ *
+ * Pre-Tailwind-v4 shadcn/ui writes its whole palette as bare channel triples
+ * and consumes them as `hsl(var(--background))`, so a `globals.css` a designer
+ * would describe as "my colours" produced a catalog of one radius. The refusal
+ * that caused it is right in general — a `-rgb` triple spliced into
+ * `rgba(var(--x), .5)` genuinely paints nothing on its own — so the way out
+ * RECOVERS the function rather than assuming one: two percentages after a hue
+ * is `hsl()`'s own argument shape and a 0-255 triple cannot be mistaken for it.
+ */
+check("a palette stored as bare channel triples is read as colours", () => {
+  const catalog = parseLibrary(
+    "css",
+    [
+      "@layer base {",
+      "  :root {",
+      "    --background: 0 0% 100%;",
+      "    --foreground: 222.2 84% 4.9%;",
+      "    --primary: 221.2 83.2% 53.3%;",
+      "    --radius: 0.5rem;",
+      "  }",
+      "  .dark {",
+      "    --background: 222.2 84% 4.9%;",
+      "    --foreground: 210 40% 98%;",
+      "    --primary: 217.2 91.2% 59.8%;",
+      "  }",
+      "}",
+    ].join("\n")
+  )
+  assert.deepEqual(byName(catalog.colors, "background").values, {
+    light: "hsl(0 0% 100%)",
+    dark: "hsl(222.2 84% 4.9%)",
+  })
+  assert.deepEqual(catalog.colors.map((token) => token.name), [
+    "background",
+    "foreground",
+    "primary",
+  ])
+  // The value stored is the one a browser would paint, so the picker writes a
+  // colour rather than three numbers.
+  assert.equal(byName(catalog.colors, "primary").values.light, "hsl(221.2 83.2% 53.3%)")
+  assert.equal(byName(catalog.radii, "radius").values.default, 8)
+})
+
+/*
+ * The other half of the same rule: the wrapper is LEARNED, never guessed.
+ *
+ * A file that splices a variable into `rgb(var(--x))` has told this module what
+ * the numbers are, and one that does not has told it nothing — so the refusal
+ * the audit was right about stays exactly where it was.
+ */
+check("a channel triple is recovered only when the file says what it is", () => {
+  const declared = parseLibrary(
+    "css",
+    [
+      ":root { --brand-rgb: 59 130 246; --ink: #111111; --paper: #ffffff; --gap: 8px; }",
+      ".button { background: rgb(var(--brand-rgb)); }",
+    ].join("\n")
+  )
+  assert.equal(byName(declared.colors, "brand-rgb").values.light, "rgb(59 130 246)")
+
+  const bare = parseLibrary(
+    "css",
+    ":root { --brand-rgb: 59, 130, 246; --ink: #111111; --paper: #ffffff; --gap: 8px; }"
+  )
+  assert.deepEqual(
+    bare.colors.map((token) => token.name),
+    ["ink", "paper"],
+    "an unpaintable channel triple was offered as a colour"
+  )
+})
+
 check("a file with no blocks at all is still read", () => {
   const catalog = parseLibrary(
     "css",
@@ -403,6 +639,74 @@ check("a file with no blocks at all is still read", () => {
   assert.equal(catalog.colors.length, 2)
   assert.equal(catalog.spacing.length, 1)
   assert.equal(catalog.radii.length, 1)
+})
+
+/*
+ * THE ONE CHARACTER THAT USED TO EAT A WHOLE STYLESHEET.
+ *
+ * The scanner honoured a backslash only once it was already inside a string, so
+ * an escaped quote in a SELECTOR opened one that nothing ever closed: from that
+ * character to the end of the file, every brace and semicolon was read as
+ * string content. No error and no partial answer — the file simply appeared to
+ * declare no tokens at all.
+ *
+ * It is not an exotic input. A utility framework emits selectors like this by
+ * the dozen for arbitrary variants, and one of them sat six kilobytes before
+ * the `:root` block of a real design system, costing all of it: 75 colours with
+ * light and dark values, 14 radii and 5 text styles, read as zero. It reached a
+ * designer as "I added the library and no styles showed up".
+ *
+ * The other escapes are here because the fix is "skip the character after a
+ * backslash, always", and an escaped brace or semicolon in a selector would
+ * break the walk the same way if the rule were written for quotes alone.
+ */
+check("an escaped character in a selector does not swallow the rest of the file", () => {
+  const tokens = ":root{--color-a:#fff;--color-b:#000;--spacing-sm:8px;--radius-sm:4px}"
+  const hostile = [
+    // An arbitrary variant carrying an escaped apostrophe — the measured case.
+    String.raw`.\[\&\>svg\:not\(\[class\*\=\'size-\'\]\)\]\:size-4>svg{display:none}`,
+    // An escaped double quote: the same trap with the other delimiter.
+    String.raw`.content-\"x\"{color:red}`,
+    // Escaped punctuation that would otherwise be read as structure.
+    String.raw`.w-1\/2{width:50%}`,
+    String.raw`.brace-\{\}{color:blue}`,
+    String.raw`.semi-\;{color:green}`,
+  ]
+  for (const selector of hostile) {
+    const catalog = parseLibrary("css", `${selector}${tokens}`, { name: "T" })
+    assert.equal(catalog.colors.length, 2, `lost the colours after ${selector}`)
+    assert.equal(catalog.spacing.length, 1, `lost the spacing after ${selector}`)
+    assert.equal(catalog.radii.length, 1, `lost the radii after ${selector}`)
+  }
+  // And a genuine string still ends where it ends: the brace and semicolon
+  // inside these quotes are content, and the tokens after them are still found.
+  const quoted = parseLibrary("css", `.a::after{content:"}{;"}${tokens}`, { name: "T" })
+  assert.equal(quoted.colors.length, 2, "a brace inside a real string was read as structure")
+})
+
+/*
+ * A framework's working memory is not a design token.
+ *
+ * `--tw-*` is a reserved implementation namespace — the variables a utility
+ * framework writes at run time to hold the current gradient stop or to compose
+ * a shadow out of its parts. They are declared on `*` with placeholder values,
+ * so nothing downstream can tell them from tokens, and a compiled stylesheet
+ * duly offered `tw-gradient-from` and `tw-ring-offset-color` in the colour
+ * picker beside the real ones.
+ */
+check("a framework's reserved internals are not offered as tokens", () => {
+  const catalog = parseLibrary(
+    "css",
+    "*{--tw-gradient-from:#0000;--tw-ring-offset-color:#fff;--tw-shadow:0 0 #0000}" +
+      ":root{--color-brand:#123456;--color-ink:#000;--spacing-m:8px}",
+    { name: "T" }
+  )
+  assert.deepEqual(
+    catalog.colors.map((color) => color.name).sort(),
+    ["brand", "ink"],
+    "a reserved framework variable was offered as a design token"
+  )
+  assert.equal(catalog.spacing.length, 1)
 })
 
 // ── Manifest ───────────────────────────────────────────────────────────────
@@ -537,6 +841,289 @@ check("a DTCG file brings no components, drawings or attribute", () => {
   assert.deepEqual(dtcg.iconDrawings, [])
   assert.equal(dtcg.iconAttribute, "")
   assert.equal(dtcg.name, "Nimbus Tokens")
+})
+
+/*
+ * Style Dictionary v3 spells a reference with the leaf key on the end.
+ *
+ * `{color.core.blue.500.value}` is the syntax its own documentation gives, and
+ * v4 drops the suffix. Looked up verbatim, the v3 spelling never matched, the
+ * raw `{…}` string fell through to the value sniffer, and every alias in the
+ * file disappeared — which in a real system means the SEMANTIC layer, the only
+ * layer a designer picks a colour from, leaving the primitive ramp nobody names
+ * a token by.
+ */
+check("a v3 reference resolves, trailing .value and all", () => {
+  const catalog = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      color: {
+        core: { blue: { 500: { value: "#0b5fff" } } },
+        semantic: { action: { value: "{color.core.blue.500.value}" } },
+      },
+    })
+  )
+  assert.equal(catalog.colors.length, 2, "the alias was dropped")
+  assert.equal(byName(catalog.colors, "color/semantic/action").values.light, "#0b5fff")
+  // v4's spelling of the same reference keeps working.
+  const v4 = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      color: {
+        core: { blue: { 500: { $value: "#0b5fff", $type: "color" } } },
+        semantic: { action: { $value: "{color.core.blue.500}", $type: "color" } },
+      },
+    })
+  )
+  assert.equal(byName(v4.colors, "color/semantic/action").values.light, "#0b5fff")
+})
+
+/*
+ * A group's `$type` reaches the tokens under it.
+ *
+ * The spec is explicit (Design Tokens Format Module §5.2.2): a token's type
+ * comes from the closest ancestor group that declares one, and a tool "MUST NOT
+ * attempt to guess the type of a token by inspecting the contents of its
+ * value". Reading the leaf alone did exactly that guess, and the guess fails in
+ * the same direction every time — a duration and a shadow composite are neither
+ * a colour nor a bare length, so both were dropped outright.
+ *
+ * The group names below are deliberately ones the name classifier has no
+ * opinion about, so the only thing that can sort them is the inherited type.
+ */
+check("a group's $type reaches the leaves under it", () => {
+  const catalog = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      pace: { $type: "duration", swift: { $value: "120ms" }, steady: { $value: "240ms" } },
+      lift: { $type: "shadow", card: { $value: "0 2px 8px rgba(12, 16, 20, 0.16)" } },
+    })
+  )
+  assert.deepEqual(catalog.motion.map((token) => token.name), ["pace/swift", "pace/steady"])
+  assert.equal(catalog.motion[0].values.default.visualDuration, 0.12)
+  assert.deepEqual(catalog.effects.map((token) => token.name), ["lift/card"])
+})
+
+/*
+ * The object forms the current spec made normative.
+ *
+ * A non-string value collapsed to `""`, which dropped all three of these: the
+ * 2024-onwards object dimension, the object colour, and the shadow composite —
+ * and a shadow composite is a system's whole elevation scale, since nobody
+ * writes a box-shadow as one string once their tool offers it as parts.
+ *
+ * The `legacy` entry is the older `{ "value": 4, "unit": "px" }` spelling, which
+ * is the one that could be read as a Style Dictionary leaf whose value happens
+ * to be 4. The sibling `unit` is the only thing that tells them apart.
+ */
+check("the object forms of a token value are read, not collapsed", () => {
+  const catalog = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      size: { gap: { $type: "dimension", $value: { value: 8, unit: "px" } } },
+      legacy: { pad: { value: 4, unit: "px", type: "dimension" } },
+      palette: {
+        red: { $type: "color", $value: { colorSpace: "srgb", components: [1, 0, 0], hex: "#ff0000" } },
+        blue: { $type: "color", $value: { colorSpace: "srgb", components: [0, 0.4, 1], alpha: 0.5 } },
+      },
+      lift: {
+        card: {
+          $type: "shadow",
+          $value: { color: "#00000029", offsetX: "0", offsetY: "2px", blur: "8px", spread: "0" },
+        },
+      },
+    })
+  )
+  assert.equal(byName(catalog.spacing, "size/gap").values.default, 8)
+  assert.equal(byName(catalog.spacing, "legacy/pad").values.default, 4, "the unit was read off the wrong key")
+  assert.equal(byName(catalog.colors, "palette/red").values.light, "#ff0000")
+  assert.equal(byName(catalog.colors, "palette/blue").values.light, "color(srgb 0 0.4 1 / 0.5)")
+  assert.match(byName(catalog.effects, "lift/card").values.default, /2px 8px/)
+})
+
+/*
+ * The JSON lane sorts by NAME before it sorts by value, exactly as the CSS lane
+ * always has.
+ *
+ * Skipping the name step meant that in any file without usable types — which is
+ * most of them — every radius, icon size and font size landed in the SPACING
+ * picker, because by the time the value is all you have, all three are a number
+ * with `px` on the end. The token's path is the name and it was already in
+ * hand.
+ *
+ * A camel hump counts as a word boundary here, because a JSON key is written
+ * `borderRadius` where a custom property is written `--border-radius`, and a
+ * classifier that only knows the second spelling files a whole corner scale
+ * under spacing.
+ */
+check("an untyped token sorts by its path before its value", () => {
+  const catalog = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      borderRadius: { md: { value: "6px" }, lg: { value: "12px" } },
+      iconSize: { sm: { value: "16px" } },
+      space: { 4: { value: "16px" } },
+    })
+  )
+  assert.deepEqual(catalog.radii.map((token) => token.name), ["borderRadius/md", "borderRadius/lg"])
+  assert.deepEqual(catalog.icons.map((token) => token.name), ["iconSize/sm"])
+  assert.deepEqual(catalog.spacing.map((token) => token.name), ["space/4"])
+})
+
+/*
+ * A token manager's multi-set export: one file, two coordinate systems.
+ *
+ * Tokens Studio writes its sets as top-level groups, so a leaf's real path is
+ * `global.colors.primary` — but a reference inside the file is written against
+ * the RESOLVED set stack and says `{colors.primary}`. Indexed by full path
+ * alone, every cross-set alias missed and the themed half of the file came back
+ * empty. `$metadata.tokenSetOrder` is the stack, and it is in the file.
+ *
+ * The type vocabulary is the other half. `fontSizes` and `lineHeights` were
+ * unmapped, so a font size fell through to the value sniffer and landed in
+ * spacing, and a line height — a bare `1.25` — went looking for an axis it has
+ * no business being on.
+ */
+check("a token manager's sets resolve against the stack they are written for", () => {
+  const source = JSON.stringify({
+    $metadata: { tokenSetOrder: ["global", "light"] },
+    $themes: [
+      { id: "1", name: "Light", selectedTokenSets: { global: "source", light: "enabled" } },
+    ],
+    global: { colors: { primary: { value: "#0b5fff", type: "color" } } },
+    light: {
+      bg: { value: "{colors.primary}", type: "color" },
+      heading: { value: "24px", type: "fontSizes" },
+      card: { value: "12px", type: "borderRadius" },
+      leadingTight: { value: "1.25", type: "lineHeights" },
+    },
+  })
+  assert.equal(detectLibraryKind("tokens.json", source), "tokens")
+  const catalog = parseLibrary("tokens", source)
+  assert.equal(byName(catalog.colors, "light/bg").values.light, "#0b5fff", "a set-relative alias missed")
+  assert.deepEqual(catalog.textStyles.map((token) => token.name), ["light/heading"])
+  assert.equal(catalog.textStyles[0].values.default.fontSize, 24)
+  assert.deepEqual(catalog.radii.map((token) => token.name), ["light/card"])
+  // A line height is not an axis this editor writes, and naming it is what
+  // stops it being sniffed into the spacing picker as a plausible-looking step.
+  assert.deepEqual(catalog.spacing, [])
+})
+
+/*
+ * Plain nested JSON — the shape most of the JSON a designer has is written in.
+ *
+ * A theme object exported from a component library, a Tailwind theme dumped to
+ * JSON, the Material Theme Builder's `material-theme.json`: none of them wraps
+ * a leaf in `{ "value": … }`, and a leaf that was not a plain object was skipped
+ * outright, so all of them read as zero tokens.
+ */
+check("a plain nested theme object yields tokens named by their path", () => {
+  const catalog = parseLibrary(
+    "tokens",
+    JSON.stringify({
+      colors: { brand: { 500: "#0066cc", 600: "#0052a3" }, surface: "#ffffff" },
+      spacing: { 4: "1rem", 6: "1.5rem" },
+      borderRadius: { md: "0.375rem" },
+      fontFamily: { sans: "Inter, sans-serif" },
+    }),
+    { name: "Theme" }
+  )
+  assert.deepEqual(catalog.colors.map((token) => token.name), [
+    "colors/brand/500",
+    "colors/brand/600",
+    "colors/surface",
+  ])
+  assert.equal(byName(catalog.spacing, "spacing/4").values.default, 16)
+  assert.equal(byName(catalog.radii, "borderRadius/md").values.default, 6)
+  // Still nothing this editor can bind a font stack to.
+  assert.equal(allTokens(catalog).some((token) => token.name === "fontFamily/sans"), false)
+  // And a plain object that yielded nothing was never a token file: it is
+  // refused rather than installed as a card that brings nothing.
+  assert.throws(() => parseLibrary("tokens", '{"name":"app","scripts":{"dev":"next"}}'))
+})
+
+/*
+ * The canonical machine-readable export of a design system held in Figma —
+ * `GET /v1/files/:key/variables/local`.
+ *
+ * Nothing else in this module could see it. A variable carries no `$value` and
+ * no nested value: its values live in `valuesByMode` under opaque mode ids, its
+ * colours are 0-1 floats rather than anything CSS accepts, and its semantic
+ * layer is aliases by variable id.
+ *
+ * The modes are the part worth having. A collection's modes ARE the light and
+ * dark themes, named by whoever built the file, so the pair a colour picker
+ * wants is already in the export — and an alias is read in the SAME mode, which
+ * is what makes a semantic colour resolve to its own dark value rather than to
+ * the primitive's default.
+ */
+check("a Figma variables export is read, modes and aliases included", () => {
+  const source = JSON.stringify({
+    status: 200,
+    error: false,
+    meta: {
+      variableCollections: {
+        "VariableCollectionId:1:1": {
+          id: "VariableCollectionId:1:1",
+          name: "Core",
+          modes: [
+            { modeId: "1:0", name: "Light" },
+            { modeId: "1:1", name: "Dark" },
+          ],
+          defaultModeId: "1:0",
+        },
+      },
+      variables: {
+        "VariableID:1:2": {
+          id: "VariableID:1:2",
+          name: "color/surface",
+          variableCollectionId: "VariableCollectionId:1:1",
+          resolvedType: "COLOR",
+          valuesByMode: {
+            "1:0": { r: 1, g: 1, b: 1, a: 1 },
+            "1:1": { r: 0.0627, g: 0.0745, b: 0.098, a: 1 },
+          },
+        },
+        "VariableID:1:3": {
+          id: "VariableID:1:3",
+          name: "space/4",
+          variableCollectionId: "VariableCollectionId:1:1",
+          resolvedType: "FLOAT",
+          valuesByMode: { "1:0": 16 },
+        },
+        "VariableID:1:4": {
+          id: "VariableID:1:4",
+          name: "color/page/background",
+          variableCollectionId: "VariableCollectionId:1:1",
+          resolvedType: "COLOR",
+          valuesByMode: {
+            "1:0": { type: "VARIABLE_ALIAS", id: "VariableID:1:2" },
+            "1:1": { type: "VARIABLE_ALIAS", id: "VariableID:1:2" },
+          },
+        },
+        "VariableID:1:5": {
+          id: "VariableID:1:5",
+          name: "flags/beta",
+          variableCollectionId: "VariableCollectionId:1:1",
+          resolvedType: "BOOLEAN",
+          valuesByMode: { "1:0": true },
+        },
+      },
+    },
+  })
+  assert.equal(detectLibraryKind("variables.json", source), "tokens")
+  const catalog = parseLibrary("tokens", source)
+  assert.deepEqual(byName(catalog.colors, "color/surface").values, {
+    light: "#ffffff",
+    dark: "#101319",
+  })
+  assert.deepEqual(byName(catalog.colors, "color/page/background").values, {
+    light: "#ffffff",
+    dark: "#101319",
+  })
+  assert.equal(byName(catalog.spacing, "space/4").values.default, 16)
+  // A boolean is not a design token in any axis this editor offers.
+  assert.equal(allTokens(catalog).some((token) => token.name === "flags/beta"), false)
 })
 
 // ── Icons ──────────────────────────────────────────────────────────────────

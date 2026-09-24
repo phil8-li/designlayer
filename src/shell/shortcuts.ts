@@ -54,6 +54,7 @@ import {
 import { hasCommand, registerCommand, runCommand } from "../core/commands"
 import { arrange, arrangeRef, siblingLines } from "../core/arrange"
 import { el } from "../core/dom"
+import { smoothScroll } from "../core/motion"
 import { getResolver } from "../core/resolve"
 import { annotationSettings, markersVisible, updateSettings } from "../annotations/store"
 import { createWriter } from "../core/writer"
@@ -197,7 +198,21 @@ export function installShortcuts(context: EditorContext): void {
    */
   registerCommand("select.reveal", () => {
     const primary = context.primarySelection()
-    primary?.element.scrollIntoView?.({ block: "center", inline: "center", behavior: "smooth" })
+    /*
+     * The one smooth scroll in the editor, and the one motion no stylesheet can
+     * reach: `behavior` is an argument, not a property, so the reduced-motion
+     * blanket in `css/base.ts` cannot clamp it. Asked here instead.
+     *
+     * `auto` rather than dropping the call — the element still has to come into
+     * view, and a reader who has asked for less motion has asked for less
+     * travel, not for a command that quietly does nothing.
+     *
+     */
+    primary?.element.scrollIntoView?.({
+      block: "center",
+      inline: "center",
+      behavior: smoothScroll(),
+    })
   })
 
   /* ── Arrange ────────────────────────────────────────────────────────────── */
@@ -328,7 +343,10 @@ const GROUPS: ShortcutGroup[] = ["Tools", "View", "Selection", "Arrange", "Edit"
  * 900px card in the middle of the screen is how every other product prints one.
  */
 function shortcutsPanel(): ShortcutsPanel {
-  let root: HTMLElement | null = null
+  // `HTMLDialogElement`, so `showModal`/`close` are reachable without a cast.
+  // The card IS the root now — the scrim it used to be wrapped in is gone, and
+  // `::backdrop` is not a node this code has to own.
+  let root: HTMLDialogElement | null = null
   let returnFocus: Element | null = null
 
   const row = (keys: string, label: string, lineage: string) =>
@@ -385,7 +403,7 @@ function shortcutsPanel(): ShortcutsPanel {
     return tab ? `${shortcut.label} (${tab.textContent?.trim()})` : shortcut.label
   }
 
-  const build = (): HTMLElement => {
+  const build = (): HTMLDialogElement => {
     const groups = GROUPS.map((group) => {
       const rows = SHORTCUTS.filter(
         (shortcut) => shortcut.group === group && live(shortcut)
@@ -409,13 +427,34 @@ function shortcutsPanel(): ShortcutsPanel {
     close.addEventListener("click", () => hide())
 
     const card = el(
-      "div",
+      /*
+       * A REAL `<dialog>`, and this change is a deletion rather than an
+       * addition.
+       *
+       * It was a `<div role="dialog" aria-modal="true" tabindex="-1">` inside a
+       * scrim div, and those two attributes were a claim the code did not keep:
+       * nothing trapped focus and nothing was made inert, so Tab from the close
+       * button walked straight out into the app behind a scrim that had just
+       * dimmed it — the focus ring landing on a control the reader cannot see,
+       * while `aria-modal="true"` had already told a screen reader the rest of
+       * the document was unavailable. A dialog that claims modality without
+       * enforcing it is worse than one that claims nothing, and this is the
+       * HELP surface: the one a keyboard user reaches when already lost.
+       *
+       * `showModal()` supplies all of it — the focus trap, the top layer, the
+       * inertness, `::backdrop`, and Escape. So `role`, `aria-modal`,
+       * `tabindex`, the scrim element and its click handler all go, and what is
+       * left is a platform element doing its own job. `aria-label` stays,
+       * because a dialog still needs a name.
+       *
+       * Built fresh on every open, so the entrance needs no re-arming: a node
+       * that has just been appended runs its animation once, which is exactly
+       * the number of times this sheet appears.
+       */
+      "dialog",
       {
-        class: "de-shortcuts",
-        role: "dialog",
-        "aria-modal": "true",
+        class: "de-shortcuts de-arrive",
         "aria-label": "Keyboard shortcuts",
-        tabindex: "-1",
       },
       [
         el("header", { class: "de-shortcut-head" }, [
@@ -431,25 +470,95 @@ function shortcutsPanel(): ShortcutsPanel {
       ]
     )
 
-    const scrim = el("div", { class: "de-shortcuts-scrim" }, [card])
-    // The scrim closes, the card does not: a click inside a dialog is a click
-    // in the dialog, whatever it lands on.
-    scrim.addEventListener("click", (event) => {
-      if (event.target === scrim) hide()
+    /*
+     * A press on the backdrop closes, a press inside does not.
+     *
+     * `::backdrop` is not an element, so it cannot carry a listener of its own
+     * and the old `event.target === scrim` test has nothing to compare against
+     * — a click on the backdrop is reported with the DIALOG as its target. The
+     * geometry is what distinguishes them: the dialog's own box is the card, so
+     * a pointer outside that rectangle landed on the backdrop.
+     *
+     * `getBoundingClientRect` rather than `contains(event.target)` because the
+     * card is one element with padding, not a tree with a gap in it, and a
+     * press in that padding is a press in the dialog.
+     */
+    card.addEventListener("click", (event) => {
+      const box = card.getBoundingClientRect()
+      const outside =
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom
+      // A keyboard-activated close reports 0,0 and must not be read as a press
+      // in the corner of the screen — `detail` is 0 for those.
+      if (outside && event.detail > 0) hide()
     })
-    return scrim
+    /*
+     * Escape reaches this dialog before any listener in the editor does, and
+     * the platform's answer is to close it — which is the right outcome and the
+     * wrong route: `hide()` owns removing the node and restoring focus, and a
+     * native close would leave a detached open dialog and `root` still set.
+     * Cancelling the default and running our own path keeps one way out.
+     */
+    card.addEventListener("cancel", (event) => {
+      event.preventDefault()
+      hide()
+    })
+    return card
   }
 
   const show = (): void => {
     if (root) return
     returnFocus = document.activeElement
-    root = build()
-    document.body.append(root)
-    root.querySelector<HTMLElement>(".de-shortcuts")?.focus()
+    const card = build()
+    root = card
+    document.body.append(card)
+    /*
+     * `showModal`, not `show` and not `append` alone. It is what puts the card
+     * in the top layer — above every z-index in the document, including the
+     * 2147483000s this chrome and the vendor overlay trade in — and it is what
+     * makes everything behind it inert.
+     *
+     * Guarded because JSDOM implements `<dialog>` without it. Falling back to
+     * the `open` attribute keeps the suites able to build and query the sheet:
+     * they assert the markup, and modality is a browser behaviour there is
+     * nothing to assert against in a DOM with no layout.
+     */
+    if (typeof card.showModal === "function") card.showModal()
+    else card.setAttribute("open", "")
+    // The card takes focus itself rather than handing it to the first control:
+    // this is a document to read, and landing on Close would be an answer to a
+    // question nobody asked. `showModal` already does this when nothing inside
+    // is autofocused, so the call only matters on the JSDOM path.
+    card.focus()
   }
 
   const hide = (): void => {
     if (!root) return
+    /*
+     * IT ARRIVES BUT IT DOES NOT LINGER, and the asymmetry is deliberate.
+     *
+     * NO popover in this chrome plays an exit — the class that did was built and
+     * taken back out, and `css/base.ts` records why. This one could not have
+     * kept one regardless: it is a modal with a full-bleed backdrop, and a
+     * backdrop still painted is still a surface over the whole page. For the
+     * length of a fade it keeps taking clicks, and — the part that actually
+     * bites — it is still the front-most dismissible thing, so a second Escape
+     * would be spent closing a sheet that had already closed instead of
+     * reaching the editor behind it.
+     *
+     * A dismissal has to be complete at the instant it is asked for. The
+     * entrance is where the motion belongs in any case: a card appearing wants
+     * to be seen arriving, and a card dismissed wants to be gone.
+     *
+     * `close()` before `remove()`, and both. Removing an open modal leaves the
+     * document's top-layer bookkeeping holding a node that is no longer in it,
+     * which in some engines leaves the page inert with nothing on screen to
+     * explain why — the worst possible failure for the surface a lost keyboard
+     * user just opened.
+     */
+    if (typeof root.close === "function" && root.open) root.close()
     root.remove()
     root = null
     // Back where it came from, which is the only way a key-driven dialog can be

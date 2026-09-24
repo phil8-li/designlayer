@@ -2,7 +2,8 @@
  * The vendored glyph set renders as legal SVG.
  *
  * The source data is authored for React, so it spells presentation attributes
- * `strokeWidth` and carries `var(--instagram-icon-stroke-width, 2)` as an
+ * `strokeWidth` and carries a custom property — `var(--acme-icon-stroke-width, 2)`
+ * in the host set this was first found on — as an
  * attribute value. Both are silent failures: `setAttribute` accepts any name,
  * and custom properties do not resolve in an attribute, so the eight
  * stroke-drawn glyphs drew at the UA's 1px default instead of the 2-unit weight
@@ -500,6 +501,19 @@ check("chrome glyphs are marked, and host icons are not", () => {
       icon(name, 16).hasAttribute("data-de-glyph"),
       `${name} is unmarked, so the pressed-state rule will not reach it`
     )
+    /*
+     * The marker also NAMES the glyph, which is what lets a stylesheet say
+     * something about one mark rather than about all of them. Asserted per
+     * glyph rather than once, because the failure is silent in both
+     * directions: every rule that reads the attribute matches on presence, so
+     * a name that stopped being written would break only the optical
+     * correction below and nothing would report it.
+     */
+    assert.equal(
+      icon(name, 16).getAttribute("data-de-glyph"),
+      name,
+      `${name}'s marker does not carry its own name`
+    )
   }
   const host = drawHostIcon({ nodes: [["path", { d: "M4 4h16v16H4z" }]], rootFill: "currentColor" }, 16)
   assert.equal(
@@ -507,6 +521,39 @@ check("chrome glyphs are marked, and host icons are not", () => {
     false,
     "a host icon is marked as ours, so the chrome will re-weight it on selection"
   )
+})
+
+/*
+ * THE ONE OPTICAL CORRECTION IN THE SET, AND THE MEASUREMENT BEHIND IT.
+ *
+ * `css/icons.ts` nudges `Cursor` by 6.3% of its own box, because its ink
+ * centroid sits that far up and left of the middle — a solid arrowhead at one
+ * end and two thin tails at the other. The number came from rasterising the
+ * glyph and taking the alpha-weighted centroid of the ink, which is not
+ * something jsdom can do; what CAN be checked here is the part that rots.
+ *
+ * Two ways this goes wrong silently. The rule could be dropped, and geometric
+ * centring looks fine until it is put beside a centred neighbour. Or the set
+ * could gain a second lopsided glyph and quietly not get one — so the case also
+ * pins that `Cursor` is still the only name mentioned, which is the claim the
+ * comment makes and the reason there is a rule instead of a pipeline.
+ */
+check("the arrow is optically centred, and it is the only glyph that is", () => {
+  const corrections = [...shellCss.matchAll(/svg\[data-de-glyph="([A-Za-z]+)"\]\s*\{([^}]*)\}/g)]
+  assert.deepEqual(
+    corrections.map((match) => match[1]),
+    ["Cursor"],
+    "a second per-glyph rule appeared; if the set has grown lopsided marks, the " +
+      "comment in css/icons.ts arguing for one rule over a pipeline needs re-making"
+  )
+  assert.match(
+    corrections[0][2],
+    /transform:\s*translate\(6\.3%,\s*6\.3%\)/,
+    "the arrow's optical nudge is gone or has changed without its measurement"
+  )
+  // A percentage, so one number holds at every rung. A px value here would be
+  // correct at exactly one size and wrong at the other five.
+  assert.doesNotMatch(corrections[0][2], /translate\([^)]*px/)
 })
 
 /*

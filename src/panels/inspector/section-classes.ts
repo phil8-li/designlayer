@@ -6,6 +6,12 @@
  */
 
 import { el } from "../../core/dom"
+import { prefersReducedMotion } from "../../core/motion"
+import { tokens } from "../../core/tokens"
+
+/** The chip's own exit, off the ramp and clamped for reduced motion. */
+const CHIP_LEAVE_MS = (): number =>
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
 import { icon } from "../../core/icons"
 import { tokens as t } from "../../core/tokens"
 import { section, textField } from "./field"
@@ -58,7 +64,7 @@ export const classesSection: InspectorSection = ({ editor, selection, writer, in
   }
 
   const chips = names.map((name) =>
-    el("span", { style: CHIP_STYLE, title: name }, [
+    el("span", { class: "de-class-chip", style: CHIP_STYLE, title: name }, [
       el("span", { style: "overflow:hidden;text-overflow:ellipsis;white-space:nowrap" }, [name]),
       el(
         "button",
@@ -68,7 +74,26 @@ export const classesSection: InspectorSection = ({ editor, selection, writer, in
           style: "opacity:1",
           title: `Remove ${name}`,
           "aria-label": `Remove class ${name}`,
-          onclick: () => remove(name),
+          /*
+           * A chip leaves SIDEWAYS, which is why it does not use `leaveRow`.
+           *
+           * That helper collapses a row's height, which is right for a stacked
+           * list and wrong here: chips wrap inside one row, so the thing that
+           * closes over a removed chip is the gap beside it, not the space
+           * under it. `.de-chip--leaving` in `css/panels.ts` takes the width
+           * instead, and the pinned width is measured for the same reason
+           * `leaveRow` measures a height — there is no value for CSS to animate
+           * from otherwise.
+           */
+          onclick: (event: Event) => {
+            const chip = (event.currentTarget as HTMLElement).closest(".de-class-chip")
+            if (!(chip instanceof HTMLElement) || chip.offsetWidth === 0) return remove(name)
+            chip.style.maxWidth = `${chip.offsetWidth}px`
+            requestAnimationFrame(() => {
+              chip.classList.add("de-chip--leaving")
+              setTimeout(() => remove(name), CHIP_LEAVE_MS())
+            })
+          },
         },
         [icon("X", t.icon.row)]
       ),

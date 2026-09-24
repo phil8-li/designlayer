@@ -23,6 +23,7 @@
 import { isAngularHost, owningComponentName } from "../core/angular"
 import { nthOfType } from "../core/element-target"
 import type { LayerElement } from "../core/types"
+import { elementName, fullDomPath, locationPath } from "./identify"
 import type { AnnotationTarget, EditRecord } from "./types"
 
 /** Long enough to recognise the element, short enough not to be the row. */
@@ -164,6 +165,20 @@ function describeEditTarget(element: Element): AnnotationTarget {
     ancestry: [],
     computed: {},
     components: [],
+    // The brief's heading, `**Location:**` and forensic DOM path, the same as a
+    // note's. All three read attributes and text nodes only — no style
+    // recalculation in the write.
+    name: attempt(() => elementName(element)) || element.tagName.toLowerCase(),
+    path: attempt(() => locationPath(element)),
+    fullPath: attempt(() => fullDomPath(element)),
+  }
+}
+
+function attempt(read: () => string): string {
+  try {
+    return read()
+  } catch {
+    return ""
   }
 }
 

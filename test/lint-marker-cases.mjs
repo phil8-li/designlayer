@@ -937,7 +937,7 @@ await check("the group heading is the problem in English, with the id on hover",
   const heads = Array.from(panel.node.querySelectorAll(".de-lint-group-rule"))
   const named = heads.find((n) => n.getAttribute("title") === "design-tokens/no-raw-colors")
   assert.ok(named, "the raw-colour group is missing")
-  assert.equal(named.textContent.trim(), "Hardcoded colours")
+  assert.equal(named.textContent.trim(), "Hardcoded colors")
   // A rule this editor ships no wording for keeps its id, rather than being
   // renamed by guesswork into something that sounds authoritative and is wrong.
   const unknown = heads.find((n) => n.getAttribute("title") === "design-tokens/no-hardcoded-color")
@@ -1077,6 +1077,80 @@ await check("a clean run collapses the group back to Audit", async () => {
   server.findings = kept
   await audit()
   assert.ok(one("fix-all"), "the group did not grow back when findings came back")
+})
+
+// ── What the section says when it has nothing to list ──────────────────────
+
+console.log("\nEvery answer with no rows in it points somewhere")
+
+await check("the row and its hover give the missing fix one name, not two", () => {
+  const hint = textOf("ghost", ".de-lint-hint")
+  const title = row("ghost").querySelector('[data-de-lint="select"]').getAttribute("title") ?? ""
+  // The hover exists to EXPAND the row. It opened "No safe automatic fix" over a
+  // row reading "No automatic fix", which is one state wearing two names — and
+  // the extra word invites the reader to wonder what the unsafe fix would have
+  // been, when there is no such thing on this surface.
+  assert.ok(title.includes(hint), `the hover restates the hint differently: ${hint} / ${title}`)
+  assert.doesNotMatch(title, /No safe automatic/, "the hover still spells it its own way")
+  // And it still ends somewhere the reader can act, which is the whole reason
+  // the sentence is longer than the hint.
+  assert.match(title, /inspector/)
+})
+
+await check("a run that failed is announced, not quietly swapped into the list", async () => {
+  const answering = globalThis.fetch
+  const warn = console.warn
+  const warned = []
+  console.warn = (...args) => warned.push(args)
+  globalThis.fetch = async (input, init = {}) =>
+    String(input).endsWith("/lint/run")
+      ? { ok: false, status: 500, json: async () => ({}) }
+      : answering(input, init)
+  try {
+    await editor.runAudit(API).catch(() => {})
+    panel.update()
+    await settle()
+  } finally {
+    globalThis.fetch = answering
+    console.warn = warn
+  }
+
+  const line = one("failure")
+  assert.ok(line, "a failed run has nowhere to be said")
+  assert.equal(line.hidden, false, "the failure is in the document and not shown")
+  // The press that started the audit moved no focus and the button has already
+  // gone back to reading "Audit", so without this a screen-reader user is never
+  // told the thing they asked for did not happen.
+  assert.equal(line.getAttribute("role"), "alert")
+  // It cannot live inside the list it stands in for: `body` is cleared on every
+  // render, and a live region rebuilt each paint either announces a sentence
+  // that has not changed or is inserted already-populated and announces nothing.
+  assert.equal(line.closest(".de-lint-body"), null, "the alert is rebuilt with the list")
+
+  const said = line.textContent
+  assert.doesNotMatch(said, /HTTP \d/, `the section handed a designer a status code: ${said}`)
+  assert.match(said, /terminal running designlayer/, `the failure names no recovery: ${said}`)
+  assert.ok(warned.length, "the status was dropped rather than logged for whoever runs the server")
+
+  await audit()
+  assert.equal(one("failure").hidden, true, "the failure line outlived the run that worked")
+})
+
+await check("with everything ignored, the sentence names the control that undoes it", async () => {
+  for (const id of rowIds()) {
+    click(row(id).querySelector('[data-de-lint="ignore"]'))
+    await settle(2)
+  }
+  assert.deepEqual(rowIds(), [], "something is still open, so this is not the empty state")
+
+  const disclosure = one("show-ignored")
+  assert.ok(disclosure, "nothing offers the ignored list, so none of this can be undone")
+  const said = panel.node.querySelector(".de-empty")?.textContent ?? ""
+  // It gave the count and not the control, which is one line below it. A reader
+  // told that five things are hidden and not told what hides them reads the
+  // sentence as a statistic rather than as a door.
+  const label = disclosure.textContent.replace(/\s*\(\d+\)\s*$/, "").trim()
+  assert.ok(said.includes(label), `the empty state never names “${label}”: ${said}`)
 })
 
 /*

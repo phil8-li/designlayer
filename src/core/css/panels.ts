@@ -63,8 +63,43 @@ import { tokens as t } from "../tokens"
  * `radius.md` track, and with both now at `sm` there is no offset left to
  * compute.
  */
-const CONTROL_RADIUS = t.radius.sm
+/**
+ * The corner every INPUT-SHAPED control in the chrome draws.
+ *
+ * Exported because four controls outside this file were drawing `radius.md`
+ * instead — the token field, the layers filter, the Controls filter and the
+ * library field — so a filter box and the field two inches below it in the same
+ * panel had visibly different corners. Each was independently reasonable and
+ * the set was not a system.
+ *
+ * Cards and popovers keep `radius.lg` / `radius.xl`; this is the control rung
+ * alone, and importing the constant rather than re-typing `t.radius.sm` is what
+ * makes the next move of the rung reach all ten call sites.
+ */
+export const CONTROL_RADIUS = t.radius.sm
 
+/**
+ * THE CURSOR RULE, stated once because it was being decided per file.
+ *
+ * Every ENABLED interactive control in this chrome takes `cursor: pointer`.
+ * `cursor: default` is for a disabled state and for surfaces that are not
+ * controls at all. There is no third category.
+ *
+ * It needed saying because the split had grown to 40 rules against 15 with no
+ * principle between them, and the disagreements were between neighbours rather
+ * than between surfaces: `.de-token-field` is a button that opens a popover and
+ * said `default` while `.de-select` — the same job, the same row in
+ * `.de-paint-row` — said `pointer`. A layer row said `default` while the eye
+ * button inside it said `pointer`. A reader cannot learn a vocabulary whose
+ * two halves contradict each other an inch apart.
+ *
+ * Pointer won on the count and on the argument. `better-layout` asks that a
+ * control read as a control, and a chrome that withholds the one free
+ * affordance the platform offers — on some controls, unpredictably — is paying
+ * that cost for nothing. The Figma-style no-pointer chrome is a defensible
+ * alternative, but it is a decision about ALL of them, and it was never taken;
+ * what existed was an accident with 40 votes on one side.
+ */
 export const panelsCss = `/* ---------- panels ---------- */
 /*
  * The row the two panels and the canvas between them are laid out in.
@@ -153,8 +188,9 @@ export const panelsCss = `/* ---------- panels ---------- */
  * Every other rule in this file separates two surfaces we painted. This one
  * separates the editor from the product, and since the ground went near-black
  * it can no longer lean on a value step to do that: a dark-mode app sits within
- * a point or two of \`bg\`, and at \`border\` the boundary was the faintest line on
- * the screen — thinner-looking than the divider between two rows of the same
+ * a point or two of \`bg\` — \`#1a1a1a\` is squarely in the range other people's
+ * dark themes pick from — and at \`border\` the boundary was the faintest line on
+ * the screen, thinner-looking than the divider between two rows of the same
  * panel, for the one edge that has to say where the tool stops. Against a light
  * app the step is enormous either way, so the heavier rung costs nothing there.
  */
@@ -354,7 +390,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: ${t.space.sm}px;
 }
-.de-selection-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.de-selection-count { white-space: nowrap; }
 /* The bottom step is the heavier one on purpose: the header carries the air
    above the first row, and the 12 below the last one is the whole rest between
    this section's rows and the next section's hairline. */
@@ -362,8 +398,119 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   padding: ${t.space.sm}px ${t.space.md}px ${t.space.lg}px;
   display: flex; flex-direction: column; gap: ${t.space.md}px;
 }
-/* An author \`display\` beats the UA [hidden] rule, so restate it. */
+/* An author \`display\` beats the UA [hidden] rule, so restate it. This is the
+   fold for a body that has NO \`.de-section-fold\` around it — the identity
+   header's source line is one — and the wrapped case overrides it below. */
 .de-section-body[hidden] { display: none; }
+
+/*
+ * THE FOLD, AND IT USED TO BE A \`display\` SWAP.
+ *
+ * Pressing a section header turned the chevron over 120ms and replaced the
+ * body between two frames. The mark said a section was closing and the section
+ * said it had always been shut; everything below it jumped by the height of
+ * whatever had just ceased to exist, and the eye had nothing to follow to work
+ * out what moved where. A disclosure is the canonical case for a height
+ * transition and this was half of one.
+ *
+ * ## Why a grid row and not \`revealGroup\`
+ *
+ * \`core/leave.ts\` measures a height in JavaScript, and its own header says
+ * what that is for: a group REBUILT on every render, where the collapsed state
+ * has to be written inline at build time because the node is new. A section is
+ * rebuilt too — but the fold is not pressed during a rebuild, it is pressed
+ * against a node that has been sitting on screen, and the three things
+ * \`.de-lib-drawer\` lists apply here word for word:
+ *
+ *  - it shuts as well as it opens, where \`revealGroup\` only opens;
+ *  - a section body CHANGES while it is open (a scrub commit rewrites rows, a
+ *    \`+\` adds one), and \`1fr\` re-resolves to whatever the section is now,
+ *    where a measured pixel height would have to be measured again;
+ *  - no JavaScript runs on the fold, so there is no timer to keep in step with
+ *    the reduced-motion clamp in \`css/base.ts\`.
+ *
+ * A rebuild does not animate, and that matters as much as the press does: a
+ * transition does not run on a node's FIRST style, so a section rebuilt shut
+ * is simply shut and one rebuilt open is simply open. Only the attribute flip
+ * on a node already in the document plays.
+ *
+ * ## Why this is a wrapper and not the body itself
+ *
+ * The body is padded, and a border box squeezed to zero still paints its
+ * padding — 20px of section left behind after the fold has finished closing.
+ * The clip layer has to be a box with no padding of its own, which is this
+ * one. Same arrangement as \`.de-lib-drawer\` around \`.de-lib-panel\`.
+ *
+ * \`minmax(0, 0fr)\` rather than \`0fr\`: a bare \`0fr\` is \`minmax(auto, 0fr)\`,
+ * and that automatic minimum is the item's own minimum contribution, which for
+ * a padded flex column is its padding plus the tallest thing it holds. Naming
+ * a floor of zero is what lets the track actually close; the body's
+ * \`min-height: 0\` below is the other half and is just as load-bearing.
+ *
+ * \`base\` and not \`drawer\`: 240ms is a whole panel crossing the screen edge,
+ * and this is a disclosure opening inside one — the same rung \`.de-entering\`
+ * and the libraries drawer take for the same statement.
+ */
+.de-section-fold {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  transition: grid-template-rows ${t.duration.base} ${t.ease};
+}
+/*
+ * Driven by the body's own \`hidden\`, not by the toggle's \`aria-expanded\`.
+ *
+ * Both are written in the same statement so either would work today. This one
+ * ties the drawing to the fold's STATE: \`hidden\` is what the body IS, while
+ * \`aria-expanded\` is what the button CLAIMS about it, and if the two ever
+ * drift the box should follow the one that decides whether the controls inside
+ * can be reached.
+ */
+.de-section-fold:has(> .de-section-body[hidden]) { grid-template-rows: minmax(0, 0fr); }
+/*
+ * THE BODY IS CLIPPED, NOT SQUASHED, and \`align-self\` is the whole of it.
+ *
+ * A grid item stretches to its row by default, so at \`0.4fr\` the body was 40%
+ * of its own height — and a body is a flex COLUMN, whose children shrink along
+ * the main axis, which here is the vertical one. Every row inside it therefore
+ * re-laid-out on every frame of the fold: labels closed up on their fields,
+ * the swatch grid lost its rows, and what the eye saw was the section being
+ * crushed rather than rolled away. Measured at 90ms into a close, the fields
+ * had already collapsed into each other while the box still had 45px to go.
+ *
+ * \`start\` takes the item out of the stretch, so it keeps its natural height
+ * throughout and the shrinking row simply reveals less of it. Nothing inside
+ * moves relative to anything else inside — the only thing that changes is how
+ * much of the body there is to see, which is what a disclosure IS.
+ *
+ * And no fade rides along. One was tried: content dimming ahead of the box
+ * left an empty dark band closing on its own for the back half of the gesture,
+ * which is a worse artefact than the hard edge it was meant to soften. A clip
+ * that travels this far over 180ms does not need help reading as a clip.
+ *
+ * \`min-height: 0\`: see \`.de-section-fold\`. A grid item's automatic minimum is
+ * its content, and without a floor of zero on the item as well as on the track
+ * the fold never shuts.
+ */
+.de-section-fold > .de-section-body {
+  align-self: start;
+  min-height: 0;
+}
+/*
+ * Inside the fold the body is never \`display: none\` — a box that is not laid
+ * out has no height for the row above it to animate away from.
+ *
+ * \`visibility\` does the part of \`hidden\`'s job that still has to be done: it
+ * takes a shut section's fields out of the tab order and off the accessibility
+ * tree. Delayed by the length of the close, so the content is still there to
+ * be seen going; immediate on the way back, or the section would open onto
+ * nothing for 180ms.
+ */
+.de-section-fold > .de-section-body[hidden] {
+  display: flex;
+  visibility: hidden;
+  transition: visibility 0s linear ${t.duration.base};
+}
 
 /*
  * Hover is one rung up from the element's OWN resting ground, and a full-bleed
@@ -421,7 +568,15 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 }
 .de-section-actions {
   grid-column: 2;
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: ${t.space.xs}px;
+  /*
+   * \`space.md\`, matching the layers row's action strip, and it was
+   * \`space.xs\`. These are 18px \`miniSize\` plates whose \`::after\` pads them
+   * out to a 24px target; at a 2px gap two adjacent targets are 20px apart and
+   * their pads overlap, so the pointer lands on whichever the cascade happens
+   * to put on top. The chrome has four of these strips and had solved the
+   * spacing on two of them.
+   */
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: ${t.space.md}px;
   /* The one thing in the bar that takes its clicks back off the fold layer: a
      press on \`+\` must add a fill, not collapse the section it would land in. */
   position: relative; z-index: 1;
@@ -444,6 +599,25 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   display: inline-flex; align-items: center; justify-content: center;
   color: ${t.color.textDim};
   transform: rotate(90deg);
+  /*
+   * The quarter turn, on the same clock as the thing it describes.
+   *
+   * This was \`fast\` while the body it discloses was a \`display\` swap, and the
+   * comment here said so: the chevron carried the whole statement because
+   * nothing else could. The body animates now (\`.de-section-fold\` above), so
+   * the two are one gesture and have to take one duration — at 120 against 180
+   * the mark finished its turn while the section was still two thirds open,
+   * which reads as the chevron being a separate little control that happens to
+   * sit in the bar.
+   *
+   * \`base\` is the fold's rung, and it is still well clear of \`snap\`: 90
+   * degrees is a larger visual move than a tint, and at 70ms the turn reads as
+   * a substitution rather than a rotation.
+   *
+   * One rule reaches every collapsible section in the chrome, and the blanket in
+   * \`css/base.ts\` already clamps it for reduced motion.
+   */
+  transition: transform ${t.duration.base} ${t.ease};
 }
 /* The fold state lives on the header now, not on the button: the chevron is no
    longer a child of the button that turns it. */
@@ -455,10 +629,23 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 /* The step above the rule is the tight one and the step below it the group one:
    this is a boundary between two runs of controls, so it has to out-measure the
    gap inside either run or the rule is doing the separating on its own. */
+/*
+ * The space does it, so the line came out.
+ *
+ * This drew 4px of margin AND 12px of padding AND a hairline — 16px of air
+ * between two runs whose internal gap is 8, which is already the 2x the rule
+ * above asks for. The comment two lines up says exactly that ("it has to
+ * out-measure the gap inside either run"), and then the rule hedged by adding a
+ * border on top of a separation that had already worked.
+ *
+ * Space first, lines last and only where space alone cannot carry it: with 16
+ * against 8 it plainly can. \`.de-section\`'s own \`border-bottom\` stays, because
+ * a twelve-section settings column IS the dense case the exemption is for; two
+ * runs of controls inside one section is not.
+ */
 .de-layout-group + .de-layout-group {
   margin-top: ${t.space.sm}px;
   padding-top: ${t.space.lg}px;
-  border-top: 1px solid ${t.color.border};
 }
 /*
  * ─────────────────────────────────────────────────────────────────────────
@@ -502,23 +689,79 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * Nothing here sets a size or weight that is not one of the four rows above. A
  * fifth rung is how the first three stop meaning anything.
  */
+/*
+ * A heading BINDS DOWN to the block it names, and it did not.
+ *
+ * \`.de-group-caption\` a few hundred lines below already argues this exact
+ * asymmetry one rung lower: a caption sits \`space.sm\` above the control it
+ * names and \`space.md\` from the next group, so it reads as belonging to what
+ * follows rather than floating between two things. The rule was never applied
+ * to the rung above it.
+ *
+ * So a sub-heading was the bare first child of a \`space.md\` stack — 8px above,
+ * 8px below, a ratio of 1.0 where the grouping rule wants at least 2. On the
+ * Responsive section that put a title, three lines of prose and a field all at
+ * the same 8px, and the NEXT block's title at 8px too: five things in one
+ * column with nothing in the spacing saying which of them belong together.
+ *
+ * A negative bottom margin rather than restructuring the sections, because the
+ * stack that owns the gap is shared by six call sites and three of them have no
+ * heading at all. This closes the gap under the heading to \`space.sm\` and
+ * leaves the \`space.md\` between blocks standing, which is the 2x the rule
+ * asks for, without any of those call sites changing.
+ */
 .de-layout-group-title {
   color: ${t.color.text};
   font-size: ${t.type.body};
   font-weight: ${t.type.weightSection};
+  margin-bottom: -${t.space.sm}px;
 }
 /* A sentence, not a name — so it keeps the body size a caption gives up, and
    the quietest ink, because it is the one thing in a section you can finish
    reading and never look at again. */
-.de-hint { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: 1.4; }
+.de-hint { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
 
 /* Selection identity: what you picked, and where it lives in the source. */
 .de-tagname { color: ${t.color.textDim}; font-weight: ${t.type.weightBody}; }
 .de-source { font-size: ${t.type.body}; color: ${t.color.textDim}; word-break: break-all; }
 
 .de-row { display: flex; align-items: center; gap: ${t.space.md}px; }
-.de-row--split { display: grid; grid-template-columns: 1fr 1fr; gap: ${t.space.md}px; }
-.de-row--quad { display: grid; grid-template-columns: repeat(2, 1fr); gap: ${t.space.md}px; }
+/*
+ * TWO GAPS, NOT ONE, and the shorthand was quietly saying the wrong thing.
+ *
+ * \`gap: \${t.space.md}px\` sets the row gap AND the column gap to 8. Eight is
+ * also what \`.de-section-body\` and \`.de-stack\` put BETWEEN groups. So in the
+ * Position section the gutter between the X and Y fields — two items inside one
+ * captioned group — was 8px, and the distance from the whole Position group to
+ * the whole Size group was also 8px. Nothing in the rhythm said which pair
+ * belonged together; the grouping rule wants twice as much between groups as
+ * within one, and this measured 1.0.
+ *
+ * The column gap drops to \`space.sm\`, which makes it 8/4 = 2.0 and is not a new
+ * number: 4px between two adjacent wells is what \`.de-paint-row\` already uses a
+ * few rules down. It also hands 4px of width back to a 260px column, where
+ * every pixel is spoken for.
+ *
+ * The ROW gap stays at 8. These grids wrap to a second line in the Size and
+ * Position sections, and a wrapped row is a new pair of items rather than a
+ * tighter version of the one above — halving it there would merge two rows into
+ * one block.
+ *
+ * Honest caveat, recorded because the audit that found this made it: the
+ * comparison is cross-axis — horizontal within a row against vertical between
+ * groups — and the rule is usually read as same-axis. Every same-axis ratio in
+ * this panel already clears 2.0. The change is made anyway because the reader's
+ * eye does not know which axis it is crossing; it only sees which things are
+ * nearer each other.
+ */
+.de-row--split {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: ${t.space.md}px ${t.space.sm}px;
+}
+.de-row--quad {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: ${t.space.md}px ${t.space.sm}px;
+}
 
 /*
  * Every field rests in a well.
@@ -589,15 +832,55 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   font-size: ${t.type.body};
   user-select: none;
   cursor: ew-resize;
+  transition: background ${t.duration.snap} ${t.ease}, color ${t.duration.snap} ${t.ease};
 }
+/*
+ * THE SCRUB SAYS SO WHILE IT IS HAPPENING.
+ *
+ * \`cursor: ew-resize\` is the only thing that ever admitted this label is a
+ * control, and a cursor is an offer, not an acknowledgement: press and drag and
+ * the number counts, but nothing on the control confirms that the gesture — not
+ * the pointer drifting over a panel — is what is driving it. On a 24px row with
+ * eight neighbours that ambiguity is the whole reason the most powerful
+ * interaction in the inspector is also the least discovered.
+ *
+ * The lit state is the same pair a pressed \`.de-mini\` takes, so "this control
+ * is engaged" is one appearance in the panel rather than two. \`snap\`, because
+ * it has to land inside the first few pixels of the drag or it is describing a
+ * gesture that already started; and because the reverse — letting go — must not
+ * still be fading while the value sits finished.
+ *
+ * The class is written by \`field.ts\` on pointerdown and cleared on pointerup,
+ * so it also survives the pointer leaving the label mid-drag, which capture
+ * makes common and \`:active\` alone would not cover.
+ */
+/*
+ * The ink is \`text\`, not \`accent\`, and the tint alone carries the accent.
+ *
+ * This was accent-on-\`accentSoft\`, which is 3.76:1 in dark and 3.77:1 in
+ * light. A tinted plate under a MARK owes 3:1 and would have been fine; this
+ * plate is under a WORD — the field's label, "W" or "Opacity" — and a word owes
+ * 4.5:1. The one thing the reader needs while dragging is which field is moving,
+ * and it was the least legible text in the panel for exactly as long as the
+ * drag lasted.
+ *
+ * Found by the contrast sweep in \`tools/contrast.ts\`, not by eye, and it is
+ * the kind of pair that is hard to see: accent-on-accent-wash looks deliberate,
+ * reads as a system, and is a ratio nobody checks because both halves came out
+ * of the palette. \`text\` is 7.1:1 dark and 15.51:1 light; the wash still says
+ * "accent", so nothing about the treatment's meaning moved.
+ */
+.de-field-label--scrubbing {
+  background: ${t.color.accentSoft};
+  color: ${t.color.text};
+}
+.de-field--scrubbing { border-color: ${t.color.accent}; }
 .de-field input {
   flex: 1; min-width: 0; width: 100%;
   padding: 0 ${t.space.sm}px 0 0;
   border: none; background: transparent; outline: none;
   color: ${t.color.text}; font-family: inherit; font-size: ${t.type.body};
 }
-/* Numbers only: a proportional font walks the digits sideways as you scrub. */
-.de-field--numeric input { font-variant-numeric: tabular-nums; }
 .de-field input::-webkit-outer-spin-button,
 .de-field input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .de-field input[disabled] { color: ${t.color.textDim}; cursor: default; }
@@ -614,19 +897,101 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   flex: none;
   padding-right: ${t.space.sm}px;
   color: ${t.color.textMuted}; font-size: ${t.type.body};
-  user-select: none;
 }
-/* A measured value in a field's clothes — read-only, so it never takes a caret. */
+/*
+ * A measured value in a field's clothes — read-only, so it never takes a caret.
+ *
+ * SELECTABLE, which it was not, and neither was the \`px\` above it.
+ *
+ * Both carried \`user-select: none\`, copied down the row from \`.de-field-label\`,
+ * where it is correct: that label is a scrub handle, a press on it starts a
+ * drag, and a drag that highlights text as it travels is a drag fighting the
+ * browser. Neither of these two is draggable. They are the row's OUTPUT — the
+ * computed width, the resolved gap, the unit it is in — which is the content a
+ * designer is most likely to want out of this panel and into a message, and the
+ * suppression meant a selection swept across the row came back as a number with
+ * no unit on it, or as nothing at all.
+ *
+ * \`better-typography\` is direct about the shape: suppression "belongs on a
+ * draggable or gesture-driven surface where accidental selection interferes.
+ * Never across the interface". The handle keeps it; the readout does not.
+ */
 .de-field-value {
   flex: 1; min-width: 0;
   padding-right: ${t.space.sm}px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: ${t.color.text}; font-size: ${t.type.body};
-  font-variant-numeric: tabular-nums;
-  user-select: none;
 }
 
 /* ---------- paint rows (fill / stroke / effects) ---------- */
+/*
+ * THE COLOUR WELL, WHICH USED TO ANSWER NOTHING.
+ *
+ * Every other control in this panel tells you the pointer has found it. This
+ * one had eight inline declarations, no class, and therefore no state at all —
+ * the single most clickable-looking thing in the inspector, and the only one
+ * that stayed completely still under the cursor.
+ *
+ * The hover mark is a RING rather than a tint, and that is forced rather than
+ * chosen: the well's whole surface is the colour it holds, so tinting it would
+ * misreport the value. A ring sits outside the paint and cannot. It is drawn as
+ * two stacked shadows — a \`bg\` spacer then the ring proper — so it reads
+ * against both a light fill and a dark one without knowing which it is on.
+ *
+ * The press is the \`0.92\` every other pressed control in the chrome uses, and
+ * the focus ring is the panel's standard so a keyboard reaches it the same way
+ * it reaches everything else.
+ *
+ * \`data-de-unparsed\` is the honest case: a colour this editor cannot convert
+ * shows as black because \`<input type=color>\` can hold nothing else, so the
+ * well says so with a dashed edge instead of asserting a black the element does
+ * not have. See the note in \`inspector/color.ts\`.
+ */
+.de-color-well {
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid ${t.color.border};
+  border-radius: ${t.radius.sm};
+  transition: box-shadow ${t.duration.fast} ${t.ease}, transform ${t.duration.snap} ${t.ease};
+}
+.de-color-well:hover {
+  box-shadow: 0 0 0 2px ${t.color.bg}, 0 0 0 3px ${t.color.borderInteractive};
+}
+.de-color-well:active { transform: scale(0.96); }
+.de-color-well:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-color-well[data-de-unparsed] { border-style: dashed; border-color: ${t.color.borderInteractive}; }
+
+/*
+ * A CLASS CHIP LEAVES SIDEWAYS.
+ *
+ * Chips wrap inside one row, so what closes over a removed chip is the gap
+ * beside it rather than the space under it — which is why this is not
+ * \`.de-leaving\`, whose whole job is collapsing a height. Everything that takes
+ * horizontal space goes with it, or the row keeps a few pixels of nothing where
+ * the chip was.
+ *
+ * \`inspector/section-classes.ts\` pins the measured width first, for the reason
+ * \`core/leave.ts\` pins a height: a chip's width is its content's, so there is
+ * no value for CSS to animate from. The global blanket in \`css/base.ts\` clamps
+ * the duration under reduced motion and the module drops its timer to match.
+ */
+.de-class-chip {
+  overflow: hidden;
+  transition:
+    max-width ${t.duration.base} ${t.ease},
+    opacity ${t.duration.fast} ${t.ease},
+    padding ${t.duration.base} ${t.ease},
+    margin ${t.duration.base} ${t.ease};
+}
+.de-chip--leaving {
+  max-width: 0 !important;
+  opacity: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-right: calc(-1 * ${t.space.sm}px) !important;
+  pointer-events: none;
+}
+
 .de-paint-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
 .de-paint-row .de-field { flex: 1; min-width: 0; }
 .de-paint-row .de-select { flex: 1; min-width: 0; }
@@ -650,9 +1015,15 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    card's first child is a ROW, and the 20px swatch at its left end is centred
    in a 24px band, so it sits 4px in horizontally and 6px down. Nothing here
    reaches a corner, so there is no curve for anything to be parallel to. */
+/* Every other card in the chrome pairs a hairline with a fill — \`.de-lib-card\`
+   on \`bgRaised\`, \`.de-lint-ignored-row\` on \`bgSunken\`. This one was a border
+   alone on the panel ground, so at a glance it read as a rule someone had drawn
+   around four fields rather than as a thing containing them. \`bgSunken\` matches
+   the other "grouped box inside a section body". */
 .de-paint-card {
   display: flex; flex-direction: column; gap: ${t.space.sm}px;
   padding: ${t.space.sm}px;
+  background: ${t.color.bgSunken};
   border: 1px solid ${t.color.border}; border-radius: ${t.radius.md};
 }
 
@@ -673,11 +1044,18 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid transparent; border-radius: ${t.radius.sm};
   background: transparent; color: ${t.color.textDim};
-  font-family: inherit; font-size: ${t.type.body}; line-height: 1;
+  font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
   cursor: pointer;
   transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease},
-    border-color ${t.duration.fast} ${t.ease};
+    border-color ${t.duration.fast} ${t.ease}, transform ${t.duration.snap} ${t.ease};
 }
+/*
+ * The press, at the depth \`.de-tool\` and \`.de-button\` use. These are the
+ * smallest pressable things in the chrome and several of them are destructive —
+ * the row bin, the swatch clear — so the press landing is precisely the frame
+ * that matters. \`:not([disabled])\` for the reason the shared button gives.
+ */
+.de-mini:active:not([disabled]) { transform: scale(0.96); }
 /*
  * The drawing is 18px; the target is the full row height.
  *
@@ -710,11 +1088,24 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    the work and the ring is dropped entirely: an 18px box with both reads as a
    badge. */
 .de-mini[aria-pressed="true"] { background: ${t.color.accentSoft}; color: ${t.color.accent}; }
-/* Dark ink on the fill, never white. \`danger\` is a LIGHT coral on this chrome
-   and white on it measures about 2.3:1, so the glyph disappeared at exactly the
-   moment the button became destructive — the pairing trap \`accentFill\` exists
-   to close, and the one the armed clear-all in \`annotations.ts\` already dodges. */
-.de-mini--danger:hover { background: ${t.color.danger}; color: ${t.color.onAccent}; }
+/*
+ * Dark ink on the fill, never white. \`danger\` is a LIGHT coral on this chrome
+ * and white on it measures 2.31:1, so the glyph disappears at exactly the
+ * moment the button becomes destructive.
+ *
+ * \`onSemantic\`, where this used to say \`onAccent\`. That was the same fix,
+ * written against a role that then moved underneath it: \`onAccent\` was
+ * near-black in dark until the accent became a Figma blue, at which point it
+ * went white in both themes — right for the blues, and a silent regression
+ * here and at four other semantic fills, every one of which carried a comment
+ * like this one claiming the bug was already closed. It measured 2.31:1 again,
+ * to the hundredth.
+ *
+ * \`onSemantic\` is the flipping ink this rule always wanted, split back out of
+ * \`onAccent\` and owning nothing else. 7.52:1 here; the full table is in its
+ * note in \`tokens.ts\`.
+ */
+.de-mini--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 /*
  * Disabled is quieter, not gone.
  *
@@ -849,15 +1240,69 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   height: ${t.size.rowHeight}px;
   border-radius: ${CONTROL_RADIUS};
   background: ${t.color.bgSunken};
+  /* The containing block for the chip below. */
+  position: relative;
+}
+/*
+ * THE CHOSEN CHIP IS ONE OBJECT THAT MOVES.
+ *
+ * It used to be the segment's own background, which makes the selection two
+ * boxes taking turns: the old chip vanishes and a new one appears, and the eye
+ * is given nothing to follow between two words 60px apart. A segmented
+ * control's whole affordance is that the choice is a thing you can watch move
+ * along the rail.
+ *
+ * Exactly the values the segment drew — \`bgRaised\` and a hairline — so the
+ * control is identical at rest and differs only in transit. The hairline is an
+ * inset shadow rather than a border because this box is written from a
+ * measurement, and a real border would make it one pixel wider than the segment
+ * it is covering at every position.
+ *
+ * \`fast\`, not \`snap\`: the travel is a whole segment where the tab pill's is a
+ * label's width, and at 70ms this outruns the eye instead of leading it.
+ *
+ * Behind the words — \`.de-segment\` takes an index below — and
+ * \`pointer-events: none\`, so the chip can never take a click meant for the
+ * segment it is sitting on.
+ *
+ * Guarded on \`[data-de-thumb]\`, which \`inspector/field.ts\` sets only once it
+ * holds a real measurement. Unmeasured — JSDOM, or a panel that has not painted
+ * — the segment keeps the tint it always drew and nothing is lost.
+ */
+.de-segment-thumb {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--de-thumb-w, 0px);
+  transform: translateX(var(--de-thumb-x, 0px));
+  border-radius: ${CONTROL_RADIUS};
+  background: ${t.color.bgRaised};
+  box-shadow: inset 0 0 0 1px ${t.color.border};
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform ${t.duration.fast} ${t.ease},
+    width ${t.duration.fast} ${t.ease},
+    opacity ${t.duration.fast} ${t.ease};
+}
+.de-segmented[data-de-thumb] .de-segment-thumb { opacity: 1; }
+/* Once the chip is real it owns the surface and the segment stops drawing one:
+   two grounds at the same value, one of them travelling, reads as a smear. */
+.de-segmented[data-de-thumb] .de-segment[aria-pressed="true"] {
+  background: transparent;
+  border-color: transparent;
 }
 .de-segment {
   flex: 1; min-width: 0;
+  /* Above the chip, which is an earlier sibling and would otherwise paint over
+     the word it is meant to sit behind. */
+  position: relative;
+  z-index: 1;
   /* A transparent hairline at rest, so taking the state adds a COLOUR and never
      a box — the same rule \`.de-mini\` follows. Without it the chosen segment
      grows 2px and shoves its neighbours along the rail. */
   border: 1px solid transparent; border-radius: ${CONTROL_RADIUS};
   background: transparent; color: ${t.color.textMuted};
-  font-family: inherit; font-size: ${t.type.body}; line-height: 1;
+  font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   cursor: pointer;
   transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease},
@@ -896,12 +1341,15 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * belonging to the control above it, which is the one it is not about.
  */
 .de-group { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+/* Selectable, like every other word in the chrome. It carried
+   \`user-select: none\` and nothing here drags: the caption sits ABOVE the row of
+   fields, and the only gesture surface in the group is \`.de-field-label\` two
+   elements down, which keeps its suppression for the reason written there. */
 .de-group-caption {
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
   font-weight: ${t.type.weightBody};
-  line-height: 1;
-  user-select: none;
+  line-height: ${t.type.leadingFlush};
 }
 
 /* ---------- joined action group ---------- */
@@ -995,18 +1443,60 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   height: ${t.size.rowHeight}px;
   border-radius: ${CONTROL_RADIUS};
   background: ${t.color.bgSunken};
+  /* Containing block for the chip below. */
+  position: relative;
 }
+/*
+ * THE ICON TWIN GETS THE TRAVELLING CHIP TOO.
+ *
+ * \`field.ts\` calls this "the icon twin of \`segmented\`", and for a while that
+ * stopped being true: the word version was given a chip that slides between
+ * choices and the glyph version was left teleporting its tint. The two sit
+ * inches apart in the same panel — Distribution above, flow direction below —
+ * so the product was answering one gesture two ways on one screen.
+ *
+ * Identical mechanism, identical rung, same helper in
+ * \`core/travelling-surface.ts\`: one node measured against the pressed cell,
+ * behind the glyphs, \`pointer-events: none\` so it cannot take a click, and
+ * hidden until a real measurement exists so an unmeasured group keeps exactly
+ * the per-cell tint it always had.
+ */
+.de-iseg-thumb {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--de-thumb-w, 0px);
+  transform: translateX(var(--de-thumb-x, 0px));
+  border-radius: ${CONTROL_RADIUS};
+  background: ${t.color.bgRaised};
+  box-shadow: inset 0 0 0 1px ${t.color.border};
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform ${t.duration.fast} ${t.ease},
+    width ${t.duration.fast} ${t.ease},
+    opacity ${t.duration.fast} ${t.ease};
+}
+.de-iseg[data-de-thumb] .de-iseg-thumb { opacity: 1; }
 .de-iseg > .de-tool {
   flex: 1; min-width: 0;
   width: auto;
   border-radius: ${CONTROL_RADIUS};
   background: transparent;
+  /* Above the chip, which is an earlier sibling. */
+  position: relative;
+  z-index: 1;
 }
 .de-iseg > .de-tool:hover { background: ${t.color.bgHoverQuiet}; }
 .de-iseg > .de-tool[aria-pressed="true"] {
   background: ${t.color.bgRaised};
   border-color: ${t.color.border};
   color: ${t.color.text};
+}
+/* Once the chip is real it owns the plate, for the reason \`.de-segment\` gives:
+   two grounds at one value, one of them moving, reads as a smear. */
+.de-iseg[data-de-thumb] > .de-tool[aria-pressed="true"] {
+  background: transparent;
+  border-color: transparent;
 }
 
 /* ---------- alignment pad ---------- */
@@ -1042,6 +1532,9 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 }
 .de-pad-cell {
   display: flex; align-items: center; justify-content: center;
+  /* Containing block for the mark, which is stacked over the dot rather than
+     replacing it — see the crossfade below. */
+  position: relative;
   padding: 0;
   border: none; border-radius: ${CONTROL_RADIUS};
   background: transparent;
@@ -1060,9 +1553,41 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 }
 .de-pad-cell:hover { background: ${t.color.bgHoverQuiet}; color: ${t.color.textMuted}; }
 .de-pad-cell[aria-pressed="true"] { color: ${t.color.accent}; }
-/* Chosen, the dot gives way to a drawn mark — the same swap Figma makes, and
-   the reason the cell can carry a glyph child at all. */
-.de-pad-cell[aria-pressed="true"]::before { display: none; }
+/*
+ * Chosen, the dot gives way to a drawn mark — the same swap Figma makes, and
+ * the reason the cell can carry a glyph child at all.
+ *
+ * THE SWAP IS A CROSSFADE NOW, and it took a markup change to become one. It
+ * was \`display: none\` on the dot and a glyph that was only appended to the
+ * cell WHILE pressed, so there were never two states for the browser to
+ * interpolate between — the mark did not appear quickly, it appeared with no
+ * intermediate state to have.
+ *
+ * \`field.ts\` mounts the glyph on every cell now and lets this rule decide
+ * which of the two is showing. The dot shrinks into the mark's place rather
+ * than vanishing from under it, which is what makes the nine cells read as one
+ * control choosing rather than nine independently blinking.
+ *
+ * Both are \`scale\` and \`opacity\` only, on a 24px box that never reflows.
+ */
+/*
+ * The \`svg\` half needs \`[data-designlayer]\` and \`[data-de-glyph]\` on it, for
+ * the reason \`css/annotations.ts\` spells out on \`.de-swap > svg\`: the
+ * stroke-weight rule in \`css/icons.ts\` is (0,2,1) and \`transition\` is a
+ * shorthand, so at (0,1,1) this list was being replaced rather than extended
+ * and the mark appeared at full size instead of arriving. The \`::before\` half
+ * is untouched by that rule and keeps the plain selector.
+ */
+.de-pad-cell::before {
+  transition: opacity ${t.duration.fast} ${t.ease}, transform ${t.duration.fast} ${t.ease};
+}
+[data-designlayer] .de-pad-cell > svg[data-de-glyph] {
+  transition: opacity ${t.duration.fast} ${t.ease}, transform ${t.duration.fast} ${t.ease},
+    stroke-width ${t.duration.fast} ${t.ease};
+}
+.de-pad-cell > svg { position: absolute; opacity: 0; transform: scale(0.6); }
+.de-pad-cell[aria-pressed="true"]::before { opacity: 0; transform: scale(0.4); }
+.de-pad-cell[aria-pressed="true"] > svg { opacity: 1; transform: scale(1); }
 .de-pad-cell:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
 
 /* ---------- field trailing slot ---------- */
@@ -1086,7 +1611,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   padding: 0 ${t.space.sm}px;
   border: none; background: transparent;
   color: ${t.color.textDim};
-  font-family: inherit; font-size: ${t.type.body}; line-height: 1;
+  font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
   white-space: nowrap;
   cursor: pointer;
   transition: color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
@@ -1110,7 +1635,32 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   transition: border-color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
 }
 .de-select:hover { background: ${t.color.bgHoverQuiet}; }
+/*
+ * \`outline: none\` WITH A REPLACEMENT, which is the half this rule was missing.
+ *
+ * It used to remove the platform's focus ring and offer a border hue as the
+ * substitute. A 1px border going from \`transparent\` to \`accent\` is not a focus
+ * indicator: it is thinner than the 2px the rest of this chrome draws, it is
+ * the same channel the control already uses for hover and validity, and it is
+ * the only thing a keyboard user gets to tell them where they are — on a
+ * control that \`appearance: none\` has already stripped of every other native
+ * affordance.
+ *
+ * The start screen met this exact bug on its own \`<select>\` and fixed it there,
+ * with the argument left in \`runtime/start-screen-style.mjs\`. The inspector's
+ * dropdowns never got the same pass. This is that pass: the ring is the 2px
+ * \`accent\` outline every other focusable thing in the chrome wears
+ * (\`.de-lint-select\`, \`.de-token-row\`, the tab strip), so focus looks the same
+ * wherever it lands.
+ *
+ * Split across two selectors rather than one: the background and border lift
+ * belong on \`:focus\`, because a select opened with the pointer should still
+ * look engaged, while the RING belongs on \`:focus-visible\`, because a ring
+ * painted after a mouse click is noise. That split is the cheat sheet's rule
+ * and it is also what the platform does on its own.
+ */
 .de-select:focus { outline: none; background: ${t.color.bgHoverQuiet}; border-color: ${t.color.accent}; }
+.de-select:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
 .de-select option { background: ${t.color.bgRaised}; color: ${t.color.text}; }
 
 /*
@@ -1146,24 +1696,51 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-select-shell:hover > .de-select-caret { color: ${t.color.textMuted}; }
 
 /*
- * The inspector's last row: actions, not properties.
+ * \`.de-inspector-footer\` was here: a padded column at the foot of the Design
+ * tab holding Save as option / Update / Revert.
  *
- * No border of its own. Every section above closes with a bottom hairline, so
- * a border-top here would land against that one and read as a 2px rule — the
- * divider the footer needs is already drawn by whatever sits above it, and the
- * footer is last, so nothing needs closing below.
+ * The reason it existed was real. The saved list is absent until something is
+ * saved, and Save is the only way anything ever gets saved — so the verbs could
+ * not live inside a box that might not be there. The answer was to put them
+ * outside it, at the bottom of the panel.
+ *
+ * The box is unconditional now (\`options/panel.ts\`) and the verbs are its first
+ * row, so the panel has no last-row concept left to style.
+ *
+ * If a future section wants a footer, note what this one got wrong as well as
+ * what it got right. No border of its own was correct: every section above
+ * closes with a bottom hairline, and a border-top here would have landed
+ * against it and read as a 2px rule. Parking the verbs nine sections below the
+ * list they act on was not — that is not one group with space around it, it is
+ * two groups, and a reader who found the list had no reason to look that far
+ * down for the things to do with it.
  */
-.de-inspector-footer {
-  padding: ${t.space.md}px;
-  display: flex; flex-direction: column; align-items: flex-start; gap: ${t.space.md}px;
-}
 
+/*
+ * \`balance\` and not the root's \`pretty\`, and centring is the whole reason.
+ *
+ * \`pretty\` fixes the last line and leaves the ones above it wherever they fell,
+ * which is invisible in a left-aligned column and glaring in a centred one: a
+ * 40/40/8-character stack reads as a shape rather than as a sentence, because
+ * the eye is following two ragged edges instead of one. \`balance\` evens every
+ * line, which is what a centred block of two or three lines wants and what the
+ * skill reserves it for.
+ *
+ * Safe here for the reason it is not safe generally: browsers stop balancing
+ * past a handful of lines, and an empty state that ran longer than that would
+ * already be the wrong copy for an empty state.
+ */
 .de-empty {
   padding: ${t.space["5xl"]}px ${t.space["2xl"]}px;
+  /* Centred, so the cap needs \`margin-inline: auto\` to stay centred with it.
+     An empty state is the longest prose in the panel and the one a wide window
+     stretches furthest. */
+  max-width: ${t.type.measure}; margin-inline: auto;
   color: ${t.color.textDim};
   text-align: center;
   font-size: ${t.type.body};
-  line-height: 1.5;
+  line-height: ${t.type.leadingBody};
+  text-wrap: balance;
 }
 
 `

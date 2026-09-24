@@ -79,6 +79,27 @@ export interface EditorState {
    */
   leftTab: string
   /**
+   * Whether the left panel's Controls tab lists every app control or only the
+   * ones bound to the current selection.
+   *
+   * Here for the reason `leftTab` and `inspectorTab` are here, and arrived with
+   * a second writer from the start: the Controls pane's own chips set it, and
+   * so does the right panel's "N app controls affect this element" button,
+   * which has to open the tab AND scope it in one `setState` — two writes would
+   * paint the unscoped list for a frame. `panels/controls.ts` still owns the
+   * value in the sense that matters: it is the only thing that reads it.
+   *
+   * A real union rather than the bare `string` the two tab fields carry,
+   * because this one is not a list a panel owns. There are exactly two scopes
+   * and there is no third a future pane could add without changing what the
+   * word means, so the type can say so and every reader gets the narrowing.
+   *
+   * Defaults to `"all"`. A pane that opened scoped would be a pane that shows
+   * nothing on a cold load, since nothing is selected yet — and "everything the
+   * app exposes" is the question this tab exists to answer.
+   */
+  controlsScope: "all" | "selection"
+  /**
    * The editor stands down entirely: no panels, no toolbar, no canvas chrome —
    * one floating button to bring it back, and nothing else.
    *
@@ -127,6 +148,9 @@ const state: EditorState = {
   // with. Named here for the same reason `inspectorTab` is: the panel has an
   // answer before it first paints.
   leftTab: "layers",
+  // Everything, because on a cold load there is no selection to scope to and a
+  // pane that opened on "this element" would open empty.
+  controlsScope: "all",
   chromeHidden: false,
   annotating: false,
   optionSets: {},

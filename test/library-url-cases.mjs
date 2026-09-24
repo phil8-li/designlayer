@@ -276,23 +276,63 @@ check("a URL is named after whichever of the host and the path is a name", () =>
 
 console.log("\nWhere the catalog might be")
 
+/*
+ * Three filenames at every level, and each belongs to a different tool:
+ * `index.json` is Storybook v7+, `stories.json` is what v6 called the same
+ * file, and `meta.json` is what `ladle build` writes. A filename that is never
+ * asked for is a tool that can never be found, and the extra 404 costs nothing
+ * in a round of requests that is already parallel.
+ */
 check("a deep URL is probed deepest-first, with the bare origin last", () => {
   assert.deepEqual(catalogProbes(STORYBOOK_URL), [
     `${STORYBOOK_ORIGIN}/atlas/primitives/avatar/index.json`,
     `${STORYBOOK_ORIGIN}/atlas/primitives/avatar/stories.json`,
+    `${STORYBOOK_ORIGIN}/atlas/primitives/avatar/meta.json`,
     `${STORYBOOK_ORIGIN}/atlas/primitives/index.json`,
     `${STORYBOOK_ORIGIN}/atlas/primitives/stories.json`,
+    `${STORYBOOK_ORIGIN}/atlas/primitives/meta.json`,
     `${STORYBOOK_ORIGIN}/atlas/index.json`,
     `${STORYBOOK_ORIGIN}/atlas/stories.json`,
+    `${STORYBOOK_ORIGIN}/atlas/meta.json`,
     `${STORYBOOK_ORIGIN}/index.json`,
     `${STORYBOOK_ORIGIN}/stories.json`,
+    `${STORYBOOK_ORIGIN}/meta.json`,
   ])
 })
 
 check("a URL that already names a JSON file is its own first probe", () => {
   const probes = catalogProbes("https://example.com/design/tokens.json")
   assert.equal(probes[0], "https://example.com/design/tokens.json")
-  assert.equal(probes[probes.length - 1], "https://example.com/stories.json")
+  assert.equal(probes[probes.length - 1], "https://example.com/meta.json")
+})
+
+/*
+ * THE PREFIXES AT BOTH ENDS OF THE PATH, which is a different list from the
+ * four deepest and a better one.
+ *
+ * Walking outwards and keeping the first four prefixes keeps the four DEEPEST —
+ * `…/overview`, `…/text-field`, `…/forms`, `…/components` — and then jumps
+ * straight to the origin. Nobody mounts a component explorer at
+ * `…/forms/text-field/overview`; organisations mount one at `/v2/web`, and
+ * those are exactly the prefixes that walk used to discard. Modelled on a
+ * versioned enterprise documentation site, where the tool sits two segments
+ * down and the pasted URL is six.
+ */
+check("a deep URL is probed at the shallow end of its path as well as the deep end", () => {
+  const probes = catalogProbes(
+    "https://design.example.com/v2/web/components/forms/text-field/overview"
+  )
+  assert.ok(
+    probes.includes("https://design.example.com/v2/web/index.json"),
+    "never asked the prefix a tool is actually mounted at"
+  )
+  assert.ok(probes.includes("https://design.example.com/v2/index.json"))
+  // Still deepest-first, and still ending at the origin.
+  assert.equal(
+    probes[0],
+    "https://design.example.com/v2/web/components/forms/text-field/overview/index.json"
+  )
+  assert.equal(probes[probes.length - 1], "https://design.example.com/meta.json")
 })
 
 // ── Storybook ──────────────────────────────────────────────────────────────
@@ -648,6 +688,568 @@ await checkAsync("a page with no story index behind it yields its one component"
 })
 
 /*
+ * THE SHAPE OF EVERY MODERN COMPONENT EXPLORER, and the one this lane used to
+ * install as an empty library.
+ *
+ * Nothing here is machine-readable in the way the cases above assume. The site
+ * is a client-rendered application: it answers 200 with the SAME HTML shell for
+ * every path, so every `index.json` probe comes back as HTML that will not
+ * parse, and the whole reading collapses to one component guessed from the URL.
+ * The counts read zero, the pickers gain nothing, and the designer reports that
+ * they added a design system and no styles appeared. Modelled on a real one.
+ *
+ * The tokens are in its compiled CSS, which this editor has always known how to
+ * read — the lane simply never fetched a stylesheet. Three things have to hold
+ * for that to produce the right answer, and this case pins all three:
+ *
+ *  1. the stylesheets are followed at all;
+ *  2. the PREVIEW document's are preferred over the shell's, because the shell
+ *     is the tool's own chrome and its CSS is the tool's own theme;
+ *  3. a preview candidate that answered with the shell is discarded — on a
+ *     catch-all SPA `…/avatar/preview.html` returns the shell with a 200, and
+ *     being deeper it is reached before the real `/preview.html`.
+ *
+ * Drop (3) and this case still satisfies (1) and (2) while returning the
+ * chrome's palette, which is the wrong answer wearing the right shape.
+ */
+const SPA_ORIGIN = "https://explorer.example.net"
+const SPA_URL = `${SPA_ORIGIN}/luminous/primitives/avatar`
+const SPA_SHELL = `<!doctype html><html><head><title>Explorer</title>
+<link rel="stylesheet" href="/assets/chrome.css"></head><body><div id="root"></div></body></html>`
+const SPA_PREVIEW = `<!doctype html><html><head>
+<link rel="stylesheet" href="https://fonts.example.com/css2?family=X&amp;display=swap">
+<link rel="stylesheet" href="/assets/preview.css"></head><body></body></html>`
+// The tool's own theme: plausible, complete, and not the design system.
+const CHROME_CSS = ":root{--color-amber-50:#fffbeb;--color-green-50:#f0fdf4;--spacing:4px}"
+// The design system, behind an escaped-quote selector of the kind a utility
+// framework emits — the parser bug and the fetching gap in one fixture.
+const PREVIEW_CSS =
+  String.raw`.\[\&\>svg\]\:size-4\:not\(\'x\'\)>svg{display:none}` +
+  ":root{--color-accent:#9dd2ff;--color-surface:#faf9f9;--spacing-m:8px;--radius-md:12px}" +
+  ".dark{--color-accent:#1f3b9b;--color-surface:#0f0f0f}"
+
+const css = (body) => ({ status: 200, headers: { "content-type": "text/css" }, body })
+
+/** Every other path answers with the shell, which is what a catch-all SPA does. */
+const spaFetch = (routes) => async (url) => {
+  const recorded = routes[String(url)]
+  const response = recorded ?? { status: 200, headers: { "content-type": "text/html" }, body: SPA_SHELL }
+  return {
+    status: response.status,
+    headers: new Headers(response.headers ?? {}),
+    text: async () => response.body ?? "",
+  }
+}
+
+await checkAsync("a client-rendered explorer yields the preview's tokens, not the shell's", async () => {
+  const result = await parseUrlLibrary(SPA_URL, {
+    fetchImpl: spaFetch({
+      [`${SPA_ORIGIN}/preview.html`]: html(SPA_PREVIEW),
+      [`${SPA_ORIGIN}/assets/preview.css`]: css(PREVIEW_CSS),
+      [`${SPA_ORIGIN}/assets/chrome.css`]: css(CHROME_CSS),
+    }),
+    runHelper: noHelper,
+  })
+
+  assert.equal(result.error, "")
+  const names = result.catalog.colors.map((color) => color.name).sort()
+  assert.deepEqual(names, ["accent", "surface"], `read the wrong stylesheet: ${names.join(", ")}`)
+  // The dark block came with it, which is what a picker needs and what a
+  // single-theme read would silently drop.
+  const accent = result.catalog.colors.find((color) => color.name === "accent")
+  assert.deepEqual(accent.values, { light: "#9dd2ff", dark: "#1f3b9b" })
+  assert.equal(result.catalog.radii.length, 1)
+  // And the component the pasted page names is still there: one paste gives the
+  // row its component and the pickers their tokens.
+  assert.deepEqual(result.catalog.components.map((entry) => entry.name), ["Avatar"])
+  assert.match(result.detail, /2 colors/)
+  assert.match(result.detail, /1 component/)
+})
+
+/*
+ * The credential belongs to ONE host. A stylesheet link pointing anywhere else
+ * is not followed, so a session cookie given to the editor for a Storybook
+ * cannot be handed to a font service on the strength of a `<link>` tag in
+ * somebody's build output.
+ */
+await checkAsync("stylesheets are followed only on the pasted URL's own origin", async () => {
+  const asked = []
+  await parseUrlLibrary(SPA_URL, {
+    fetchImpl: async (url) => {
+      asked.push(String(url))
+      return spaFetch({
+        [`${SPA_ORIGIN}/preview.html`]: html(SPA_PREVIEW),
+        [`${SPA_ORIGIN}/assets/preview.css`]: css(PREVIEW_CSS),
+      })(url)
+    },
+    runHelper: noHelper,
+  })
+  const offOrigin = asked.filter((url) => !url.startsWith(SPA_ORIGIN))
+  assert.deepEqual(offOrigin, [], `followed a cross-origin link: ${offOrigin.join(", ")}`)
+})
+
+/**
+ * One URL read offline, with a RECORD of every request it made.
+ *
+ * Half the cases below are about a request that must not happen — a
+ * cross-origin `@import`, a `media="print"` stylesheet, a composed Storybook on
+ * somebody else's host — and a catalog assertion cannot see those. A sheet that
+ * was fetched and contributed nothing looks exactly like a sheet that was never
+ * fetched, right up until the day it contributes something wrong.
+ *
+ * `fallback` is what every unrecorded path answers with, which is how a
+ * catch-all single-page application is modelled; without one, anything not
+ * named in `routes` is a 404.
+ */
+async function readUrl(url, routes, fallback = null) {
+  const asked = []
+  const result = await parseUrlLibrary(url, {
+    fetchImpl: async (target) => {
+      asked.push(String(target))
+      const response =
+        routes[String(target)] ??
+        fallback ?? { status: 404, headers: { "content-type": "text/html" }, body: "" }
+      return {
+        status: response.status,
+        headers: new Headers(response.headers ?? {}),
+        text: async () => response.body ?? "",
+      }
+    },
+    runHelper: noHelper,
+  })
+  return { result, asked }
+}
+
+/*
+ * THE MOST OBVIOUS THING A DESIGNER CAN DO, which used to be the one thing this
+ * lane could not read.
+ *
+ * Everything else here hunts for a catalog NEAR the pasted URL, on the
+ * assumption that the URL is a page beside the design system rather than the
+ * design system. Paste the CDN address of a system published as CSS — the
+ * `dist/tokens.css` every Style Dictionary build emits and every such package
+ * ships — and that assumption is simply false: the body is the whole answer,
+ * and it came back as "nothing at this URL read as a design system" because
+ * only a path ending `.json` ever had its own body parsed.
+ */
+await checkAsync("a pasted stylesheet is read as the design system it is", async () => {
+  const url = "https://cdn.example.com/@acme/tokens@2.1.0/dist/tokens.css"
+  const { result } = await readUrl(url, {
+    [url]: css(
+      ":root{--acme-color-brand-primary:#0b57d0;--acme-color-brand-on-primary:#ffffff;" +
+        "--acme-space-4:16px;--acme-radius-md:8px}"
+    ),
+  })
+  assert.equal(result.error, "")
+  assert.equal(result.detail, "2 colors · 1 spacing step · 1 radius")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name),
+    ["brand-primary", "brand-on-primary"]
+  )
+})
+
+/*
+ * The same gap in its two other spellings, and the first of them is the one
+ * that stings: `.tokens` is the extension the DTCG format module itself
+ * recommends, so the canonical filename of the open standard was the filename
+ * that failed. The second is a tokens endpoint with no extension at all, which
+ * is what a design-system API serves.
+ *
+ * The content types are deliberately unhelpful — `application/octet-stream` for
+ * the first — because a static host serving a `.tokens` file has no reason to
+ * know what it is. Detection is by content, and pinning that here keeps it so.
+ */
+await checkAsync("a token file is read by its contents, not by its extension", async () => {
+  const dtcg = JSON.stringify({
+    color: { brand: { $type: "color", $value: "#0b57d0" } },
+    space: { md: { $type: "dimension", $value: "16px" } },
+  })
+
+  const spelled = "https://design.example.com/tokens/theme.tokens"
+  const { result: fromExtension } = await readUrl(spelled, {
+    [spelled]: { status: 200, headers: { "content-type": "application/octet-stream" }, body: dtcg },
+  })
+  assert.equal(fromExtension.error, "")
+  assert.equal(fromExtension.detail, "1 color · 1 spacing step")
+
+  const endpoint = "https://api.example.com/v1/design/tokens"
+  const { result: fromApi } = await readUrl(endpoint, {
+    [endpoint]: { status: 200, headers: { "content-type": "application/json" }, body: dtcg },
+  })
+  assert.equal(fromApi.error, "")
+  assert.equal(fromApi.detail, "1 color · 1 spacing step")
+})
+
+/*
+ * A SPLIT TOKEN BUILD IS ONE DESIGN SYSTEM, and reading the first file and
+ * stopping turned it into a third of one.
+ *
+ * Style Dictionary's per-category CSS output is a file per axis — `color.css`,
+ * `size.css`, `radius.css` — and it is not an unusual configuration;
+ * `@primer/primitives` and `@spectrum-css` both publish in that shape. Read
+ * first-sheet-wins, the page gave up three colours and reported no spacing and
+ * no radii at all, which is indistinguishable from a system that has none: the
+ * spacing picker is empty and nothing says why.
+ */
+await checkAsync("a design system split across stylesheets is merged, not truncated", async () => {
+  const origin = "https://tokens.example.com"
+  const url = `${origin}/docs/color`
+  const { result } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head><title>Tokens</title>
+<link rel="stylesheet" href="/css/color.css">
+<link rel="stylesheet" href="/css/size.css">
+<link rel="stylesheet" href="/css/radius.css"></head><body></body></html>`),
+    [`${origin}/css/color.css`]: css(
+      ":root{--color-blue-500:#0969da;--color-neutral-100:#f6f8fa;--color-green-500:#1a7f37}"
+    ),
+    [`${origin}/css/size.css`]: css(":root{--size-space-4:4px;--size-space-8:8px;--size-space-16:16px}"),
+    [`${origin}/css/radius.css`]: css(":root{--radius-small:3px;--radius-medium:6px;--radius-large:12px}"),
+  })
+  assert.equal(result.error, "")
+  assert.equal(result.catalog.colors.length, 3)
+  assert.equal(result.catalog.spacing.length, 3, "the second stylesheet was fetched and discarded")
+  assert.equal(result.catalog.radii.length, 3, "the third stylesheet was fetched and discarded")
+})
+
+/*
+ * THE DOCUMENTATION FRAMEWORK'S THEME IS NOT THE DESIGN SYSTEM, and on a
+ * Docusaurus site it is the first stylesheet the page links.
+ *
+ * Infima is Docusaurus's own theme and it ships a complete, plausible set of
+ * `--ifm-*` variables in `:root`. First-sheet-wins therefore answered every
+ * Docusaurus-published design system with Infima's palette — a well-formed
+ * catalog of the wrong thing, with nothing in it to suggest the product's own
+ * tokens were sitting in the very next link. Bootstrap 5.3's hundred-odd
+ * `--bs-*` variables do the same to any page that loads it first.
+ *
+ * Merging alone would not fix this: the two namespaces do not collide, so both
+ * would simply appear and the designer would find a docs theme mixed into their
+ * palette. A sheet that is almost entirely one framework's namespace is
+ * therefore a separate, lower answer — used only when there is no other.
+ */
+await checkAsync("a docs framework's own theme loses to the product's tokens", async () => {
+  const origin = "https://docs.example.com"
+  const url = `${origin}/design/components/button`
+  const { result } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head><title>Button</title>
+<link rel="stylesheet" href="/assets/css/styles.1a2b3c.css">
+<link rel="stylesheet" href="/assets/css/custom.3c4d5e.css"></head><body></body></html>`),
+    [`${origin}/assets/css/styles.1a2b3c.css`]: css(
+      ":root{--ifm-color-primary:#3578e5;--ifm-color-primary-dark:#306cce;" +
+        "--ifm-color-primary-darker:#2d66c3;--ifm-color-primary-light:#538ce9;" +
+        "--ifm-color-emphasis-100:#f5f6f7;--ifm-background-color:#ffffff;" +
+        "--ifm-spacing-horizontal:1rem;--ifm-global-radius:0.4rem;" +
+        "--ifm-font-size-base:100%;--ifm-line-height-base:1.65}"
+    ),
+    [`${origin}/assets/css/custom.3c4d5e.css`]: css(
+      ":root{--acme-color-brand:#0b57d0;--acme-color-surface:#faf9f9;" +
+        "--acme-space-md:16px;--acme-radius-md:12px}"
+    ),
+  })
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name).sort(),
+    ["brand", "surface"],
+    "the documentation framework's palette reached the picker"
+  )
+})
+
+/*
+ * THE CAP USED TO BITE BEFORE THE RIGHT SHEET WAS REACHED. Modelled on a real
+ * twelve-link page: a vendor bundle, a `print` sheet, a dark-only sheet, eight
+ * build chunks, and `tokens.css` last.
+ *
+ * Collecting six links and fetching those six meant the budget was spent on
+ * chunks before `tokens.css` was even a candidate — and a `media="print"` sheet
+ * outranked it, which is absurd on its face: a print stylesheet is by
+ * definition not the palette anybody designs against, and its `--color-bg:#ccc`
+ * is a value that must never reach a swatch.
+ *
+ * Collecting widely and ranking before spending the budget is what makes the
+ * twelfth link reachable. The dark-only sheet is real CSS and is not dropped
+ * for being wrong, only sorted behind the default palette, where it cannot
+ * overwrite `--color-bg`.
+ */
+await checkAsync("print and dark sheets never outrank the token sheet", async () => {
+  const origin = "https://kit.example.com"
+  const url = `${origin}/docs/button`
+  const chunks = Array.from(
+    { length: 8 },
+    (_, index) => `<link rel="stylesheet" href="/chunk-${index + 1}.css">`
+  ).join("\n")
+  const routes = {
+    [url]: html(`<!doctype html><html><head><title>Kit</title>
+<link rel="stylesheet" href="/vendor.css">
+<link rel="stylesheet" media="print" href="/print.css">
+<link rel="stylesheet" media="(prefers-color-scheme: dark)" href="/dark.css">
+${chunks}
+<link rel="stylesheet" href="/tokens.css"></head><body></body></html>`),
+    [`${origin}/vendor.css`]: css(".a{color:red}"),
+    [`${origin}/print.css`]: css(":root{--color-bg:#cccccc;--color-ink:#000;--space-md:0;--radius-md:0}"),
+    [`${origin}/dark.css`]: css(":root{--color-bg:#000000;--color-night:#111;--space-md:8px;--radius-md:4px}"),
+    [`${origin}/tokens.css`]: css(
+      ":root{--color-bg:#ffffff;--color-brand:#0b57d0;--space-md:16px;--radius-md:12px}"
+    ),
+  }
+  for (let index = 1; index <= 8; index += 1) {
+    routes[`${origin}/chunk-${index}.css`] = css(`.c${index}{display:block}`)
+  }
+
+  const { result, asked } = await readUrl(url, routes)
+  assert.equal(result.error, "")
+  assert.ok(asked.includes(`${origin}/tokens.css`), "the twelfth link was never reached")
+  assert.ok(!asked.includes(`${origin}/print.css`), "a print stylesheet was fetched")
+  const background = result.catalog.colors.find((color) => color.name === "bg")
+  assert.equal(background?.values.light, "#ffffff", "a print or dark value became the default")
+})
+
+/*
+ * THE AGGREGATE ENTRY FILE, which is how the biggest published systems ship.
+ *
+ * `@primer/primitives` and `@spectrum-css` both publish an `index.css` whose
+ * entire body is `@import` lines, and so does every Style Dictionary build
+ * configured to emit one file per category. Followed no further, that file has
+ * no custom properties in it at all — so the page linking it read as a page
+ * with no design system, while pointing directly at one.
+ *
+ * One level, and SAME-ORIGIN. An `@import` is a URL inside a file, one step
+ * further from anything the designer looked at, and the editor may be holding a
+ * session cookie for the pasted host; a CDN import is not followed even though
+ * following it would produce a better catalog.
+ */
+await checkAsync("one level of @import is followed, and never off-origin", async () => {
+  const origin = "https://spectrum.example.com"
+  const url = `${origin}/page/tokens`
+  const { result, asked } = await readUrl(url, {
+    [url]: html(
+      '<!doctype html><html><head><link rel="stylesheet" href="/css/index.css"></head><body></body></html>'
+    ),
+    [`${origin}/css/index.css`]: css(
+      '@import "./color.css";\n@import url("./dimension.css");\n' +
+        '@import "https://cdn.other.example/reset.css";\n'
+    ),
+    [`${origin}/css/color.css`]: css(
+      ":root{--spectrum-blue-500:#0265dc;--spectrum-gray-100:#f8f8f8;--spectrum-red-500:#d31510}"
+    ),
+    [`${origin}/css/dimension.css`]: css(
+      ":root{--spectrum-spacing-100:8px;--spectrum-spacing-200:12px;--spectrum-corner-radius-medium:8px}"
+    ),
+  })
+  assert.equal(result.error, "")
+  assert.equal(result.catalog.colors.length, 3, "the imported colour file was not followed")
+  assert.equal(result.catalog.spacing.length, 2, "the imported dimension file was not followed")
+  const offOrigin = asked.filter((entry) => !entry.startsWith(origin))
+  assert.deepEqual(offOrigin, [], `followed a cross-origin @import: ${offOrigin.join(", ")}`)
+
+  // And the same entry file pasted DIRECTLY, which is the shorter path to the
+  // same place and reaches this code from the other side: the pasted document
+  // is the sheet, so nothing linked it and nothing would have asked it what it
+  // imports.
+  const { result: pasted } = await readUrl(`${origin}/css/index.css`, {
+    [`${origin}/css/index.css`]: css('@import "./color.css";\n@import url("./dimension.css");\n'),
+    [`${origin}/css/color.css`]: css(
+      ":root{--spectrum-blue-500:#0265dc;--spectrum-gray-100:#f8f8f8;--spectrum-red-500:#d31510}"
+    ),
+    [`${origin}/css/dimension.css`]: css(
+      ":root{--spectrum-spacing-100:8px;--spectrum-spacing-200:12px;--spectrum-corner-radius-medium:8px}"
+    ),
+  })
+  assert.equal(pasted.error, "")
+  assert.equal(pasted.catalog.colors.length, 3)
+  assert.equal(pasted.catalog.spacing.length, 2)
+})
+
+/*
+ * CSS THE DOCUMENT CARRIES ITSELF. Tailwind v4 declares a design system in
+ * `@theme`, and a framework that inlines critical CSS puts that block straight
+ * into the page — as does Storybook's `preview-head.html`, and Astro's global
+ * styles. Scanning `<link>` only, every one of those is a page with no
+ * stylesheets, which is the one outcome that reads as the site's fault.
+ */
+await checkAsync("tokens declared in an inline <style> block are read", async () => {
+  const url = "https://site.example.com/design/button"
+  const { result } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head><title>Button</title>
+<style>@theme{--color-brand:#ff5722;--color-ink:#111827;--spacing-4:1rem;--radius-lg:12px}</style>
+</head><body></body></html>`),
+  })
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name),
+    ["brand", "ink"]
+  )
+  assert.equal(result.catalog.radii.length, 1)
+})
+
+/*
+ * `rel="preload" as="style"` is a stylesheet link by another name, and on a
+ * Gatsby build it is sometimes the ONLY one in the served markup: the real
+ * `<link rel=stylesheet>` is inserted by script this module never runs, with
+ * the `<noscript>` copy as the fallback for a reader that is not a browser.
+ */
+await checkAsync("a preloaded stylesheet counts as a stylesheet", async () => {
+  const origin = "https://gatsby.example.com"
+  const url = `${origin}/docs/card`
+  const { result } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head>
+<link rel="preload" as="style" href="/styles.abc.css"></head><body></body></html>`),
+    [`${origin}/styles.abc.css`]: css(
+      ":root{--color-primary:#663399;--color-text:#232129;--space-5:1rem;--radius-2:8px}"
+    ),
+  })
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name),
+    ["primary", "text"]
+  )
+})
+
+/*
+ * `<base href>` MOVES WHAT A RELATIVE LINK MEANS, and a reading that ignores it
+ * asks for every stylesheet in the wrong directory. A docs build served from a
+ * sub-path commonly declares one so the same markup works wherever it is
+ * mounted.
+ *
+ * What it must NOT move is what "same-origin" means. A document declaring a
+ * base on another host would otherwise make every relative link on the page
+ * same-origin by its own say-so — the credential rule rewritten by the document
+ * it exists to be careful of — so the origin test stays pinned to the URL the
+ * designer pasted.
+ */
+await checkAsync("a <base href> is honoured for resolution and ignored for origin", async () => {
+  const origin = "https://handbook.example.com"
+  const url = `${origin}/docs/button`
+  const { result } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head><base href="/build/">
+<link rel="stylesheet" href="tokens.css"></head><body></body></html>`),
+    [`${origin}/build/tokens.css`]: css(
+      ":root{--color-brand:#0b57d0;--color-ink:#1f1f1f;--space-md:16px;--radius-md:8px}"
+    ),
+  })
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name),
+    ["brand", "ink"],
+    "the base href was ignored, so every link resolved to the wrong directory"
+  )
+
+  const { asked } = await readUrl(`${origin}/docs/card`, {
+    [`${origin}/docs/card`]: html(`<!doctype html><html><head><base href="https://cdn.other.example/">
+<link rel="stylesheet" href="tokens.css"></head><body></body></html>`),
+  })
+  const offOrigin = asked.filter((entry) => !entry.startsWith(origin))
+  assert.deepEqual(offOrigin, [], `a base href widened the origin rule: ${offOrigin.join(", ")}`)
+})
+
+/*
+ * LADLE publishes a story index too, under a different filename and with the
+ * title pre-split. `ladle build` writes `meta.json`, whose `stories` map keys
+ * `levels: ["forms", "text field"]` where Storybook would write
+ * `title: "Forms/Text field"`. Neither the filename nor the key was known here,
+ * so every deployed Ladle fell through to the page parse and produced one
+ * component guessed from the URL.
+ */
+await checkAsync("a Ladle meta.json reads as the same catalog a Storybook would", async () => {
+  const url = "https://ladle.example.com/"
+  const { result } = await readUrl(url, {
+    "https://ladle.example.com/meta.json": json({
+      stories: {
+        "colored-button--basic": {
+          levels: ["colored-button"],
+          name: "basic",
+          entry: "src/colored-button.stories.tsx",
+        },
+        "colored-button--another": {
+          levels: ["colored-button"],
+          name: "another",
+          entry: "src/colored-button.stories.tsx",
+        },
+        "forms-text-field--default": {
+          levels: ["forms", "text field"],
+          name: "default",
+          entry: "src/text-field.stories.tsx",
+        },
+      },
+    }),
+  })
+  assert.equal(result.error, "")
+  assert.equal(result.detail, "2 components · 3 variants")
+  const [button, field] = result.catalog.components
+  assert.deepEqual(button.props?.[0].values, ["basic", "another"])
+  assert.equal(field.name, "text field")
+  assert.equal(field.group, "forms")
+  assert.equal(field.file, "src/text-field.stories.tsx")
+})
+
+/*
+ * HISTOIRE keeps its preview in `__sandbox.html`, a filename nobody would
+ * guess and the only document on the origin that carries the product's CSS.
+ * Asking only for `iframe.html` and `preview.html`, the reading falls back to
+ * the shell and answers with Histoire's own `--htw-*` interface theme — the
+ * exact failure the preview-before-shell rule exists to prevent, reached by a
+ * filename rather than by a decoy.
+ */
+await checkAsync("Histoire's sandbox is a preview document, and beats the shell", async () => {
+  const origin = "https://histoire.example.com"
+  const url = `${origin}/story/src-button-story-vue`
+  const shell = html(`<!doctype html><html><head><title>Histoire</title>
+<link rel="stylesheet" href="/assets/histoire.css"></head><body><div id="app"></div></body></html>`)
+  const { result } = await readUrl(
+    url,
+    {
+      [url]: shell,
+      [`${origin}/__sandbox.html`]: html(
+        '<!doctype html><html><head><link rel="stylesheet" href="/assets/app.css"></head><body></body></html>'
+      ),
+      [`${origin}/assets/app.css`]: css(
+        ":root{--color-accent:#10b981;--color-surface:#fafafa;--space-md:12px;--radius-md:10px}"
+      ),
+      [`${origin}/assets/histoire.css`]: css(
+        ":root{--htw-color-primary:#6366f1;--htw-color-gray-50:#f9fafb;--htw-space-2:8px;--htw-radius:4px}"
+      ),
+    },
+    shell
+  )
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.colors.map((color) => color.name).sort(),
+    ["accent", "surface"],
+    "read the tool's own interface theme instead of the sandbox's"
+  )
+})
+
+/*
+ * A COMPOSED STORYBOOK'S CATALOG IS IN OTHER STORYBOOKS, and its own index is
+ * an empty file that parses perfectly — the worst shape of failure, because it
+ * looks like an answer. An organisation publishing one address in front of
+ * several team Storybooks got a row reporting zero components.
+ *
+ * The refs are in the built manager HTML as `window['REFS']`, each with a
+ * `url`. Same-origin only: a ref is somebody else's string in somebody else's
+ * build output, and "the editor fetched a third-party host because a page told
+ * it to" is not a thing to be talked into by a `<script>` tag.
+ */
+await checkAsync("a composed Storybook is read through its refs", async () => {
+  const origin = "https://sb.example.net"
+  const url = `${origin}/`
+  const { result, asked } = await readUrl(url, {
+    [url]: html(`<!doctype html><html><head><title>Storybook</title></head>
+<body><div id="root"></div>
+<script>window['REFS'] = {"design-system":{"id":"design-system","url":"${origin}/design-system","title":"Design System"},"partner":{"id":"partner","url":"https://other.example.org/storybook","title":"Partner"}};</script>
+</body></html>`),
+    [`${origin}/index.json`]: json({ v: 5, entries: {} }),
+    [`${origin}/design-system/index.json`]: json(INDEX_V4),
+  })
+  assert.equal(result.error, "")
+  assert.deepEqual(
+    result.catalog.components.map((component) => component.name),
+    ["Avatar", "Badge"]
+  )
+  const offOrigin = asked.filter((entry) => !entry.startsWith(origin))
+  assert.deepEqual(offOrigin, [], `followed a cross-origin ref: ${offOrigin.join(", ")}`)
+})
+
+/*
  * The failure this feature would otherwise ship. Every probe and the page
  * itself answer 200 with the login page, so nothing here is an HTTP error —
  * the only thing standing between the designer and a design system made of
@@ -829,6 +1431,79 @@ await checkAsync("a url is refused when it is not one, and the same page adds on
     await assert.rejects(
       context.store.add({ path: "package.json", kind: "url" }),
       (error) => error.statusCode === 400
+    )
+  } finally {
+    await context.cleanup()
+  }
+})
+
+/*
+ * ADDING THE SAME LINK AGAIN RE-READS IT, and that is the only way back from a
+ * catalog that is out of date.
+ *
+ * A URL library's catalog is a snapshot taken when it was added — re-fetching
+ * every URL on every `list()` would put somebody else's network on the panel's
+ * hot path. So a row can be wrong and stay wrong, and the case that matters is
+ * not "the site changed" but "the editor's own reading improved": a
+ * stylesheet-parsing fix landed and left every row added before it reporting
+ * nothing, with no gesture in the panel that would renew one.
+ *
+ * Re-pasting is that gesture. The row must keep its identity while its contents
+ * move, so both halves are asserted — one library, new tokens.
+ */
+await checkAsync("re-adding a URL renews its catalog without adding a second row", async () => {
+  const empty = "<!doctype html><html><head><title>Kit</title></head><body></body></html>"
+  const withTokens =
+    "<!doctype html><html><head><title>Kit</title>" +
+    '<link rel="stylesheet" href="/kit.css"></head><body></body></html>'
+  const PAGE = "https://kit.example.com/docs/button"
+  let serving = empty
+
+  const context = await project({
+    fetchImpl: async (url) => {
+      const target = String(url)
+      const body =
+        target === PAGE
+          ? serving
+          : target === "https://kit.example.com/kit.css"
+            ? ":root{--color-brand:#123456;--color-ink:#000;--radius-md:8px}"
+            : ""
+      return {
+        status: body ? 200 : 404,
+        headers: new Headers({
+          "content-type": target.endsWith(".css") ? "text/css" : "text/html",
+        }),
+        text: async () => body,
+      }
+    },
+    runHelper: noHelper,
+  })
+  try {
+    const first = await context.store.add({ url: PAGE })
+    assert.equal(first.library.catalog.colors.length, 0, "the fixture started with tokens")
+
+    // The site — or the editor's reading of it — improves.
+    serving = withTokens
+    const again = await context.store.add({ url: PAGE })
+
+    assert.equal(again.library.id, first.library.id, "re-adding made a different library")
+    assert.equal((await context.store.list()).libraries.length, 1, "re-adding grew the list")
+    assert.deepEqual(
+      again.library.catalog.colors.map((color) => color.name).sort(),
+      ["brand", "ink"],
+      "re-adding handed back the stale catalog instead of re-reading"
+    )
+
+    /*
+     * And a re-read that FAILS keeps what was working. Losing a good catalog to
+     * one flaky moment would make this gesture something to avoid using.
+     */
+    serving = ""
+    const afterFailure = await context.store.add({ url: PAGE })
+    assert.equal(
+      afterFailure.library.catalog.colors.length,
+      2,
+      "a failed re-read threw away the tokens that were already there"
     )
   } finally {
     await context.cleanup()

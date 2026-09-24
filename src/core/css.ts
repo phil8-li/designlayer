@@ -12,7 +12,6 @@ import { inspectorCss } from "./css/inspector"
 import { leftTabsCss } from "./css/left-tabs"
 import { appChooserCss } from "./css/app-chooser"
 import { codeCss } from "./css/code"
-import { promptsCss } from "./css/prompts"
 import { annotationsCss } from "./css/annotations"
 import { layersCss } from "./css/layers"
 import { optionsCss } from "./css/options"
@@ -58,7 +57,6 @@ export const shellCss =
   // out of correctness, so the trigger is what decides where this entry lands.
   appChooserCss +
   codeCss +
-  promptsCss +
   annotationsCss +
   layersCss +
   optionsCss +

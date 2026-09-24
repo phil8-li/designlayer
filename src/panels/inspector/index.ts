@@ -50,8 +50,12 @@ import { onAnnotationsChange } from "../../annotations/store"
 import { onEditsChange } from "../../annotations/journal"
 import { owedCount } from "../../annotations/output"
 import { clear, el } from "../../core/dom"
+import { smoothScroll } from "../../core/motion"
+import { holdScroll } from "../../core/scroll"
+import { installTabPill } from "../../core/travelling-surface"
 import { focusControl } from "../../core/focus"
 import { createWriter, type Writer } from "../../core/writer"
+import { tokens } from "../../core/tokens"
 import type { EditorContext } from "../../core/context"
 import type { Selection } from "../../core/types"
 
@@ -69,8 +73,7 @@ import { strokeSection } from "./section-stroke"
 import { effectsSection } from "./section-effects"
 import { typographySection } from "./section-typography"
 import { classesSection } from "./section-classes"
-import { optionsActionsSection, optionsSection } from "../../options/panel"
-import { openOptionsBrowser } from "../../options/inventory-panel"
+import { optionsSection } from "../../options/panel"
 
 export interface SectionContext {
   editor: EditorContext
@@ -116,6 +119,17 @@ const SECTIONS: InspectorSection[] = [
   // so `section-instance.ts` merges them by name and says, per row, which of
   // them can actually be written.
   instanceSection,
+  // Third, and now the whole of what the options subsystem contributes here.
+  //
+  // It used to be two entries: the list of saved styles in this slot, and the
+  // three verbs that act on them — Save, Update, Revert — dead last, nine
+  // sections below. The split was argued on the grounds that the list is absent
+  // until something is saved, and Save is the only way anything ever gets
+  // saved, so the button could not live inside a box that did not exist yet.
+  // The fix was to stop letting the box not exist: the section is unconditional
+  // now, with the verbs as the first row of its body, and the objection
+  // dissolves with them inside it. A critical action nine sections below the
+  // fold is not grouped with anything; it is just hard to find.
   optionsSection,
   responsiveSection,
   // Above layout, the way every editor stacks it: where the thing sits and how
@@ -129,9 +143,6 @@ const SECTIONS: InspectorSection[] = [
   effectsSection,
   typographySection,
   classesSection,
-  // Last, and always drawn: the options actions outlive the options list, which
-  // is absent until the element has one. See `options/panel.ts`.
-  optionsActionsSection,
 ]
 
 interface FocusMemory {
@@ -310,6 +321,7 @@ export function installInspector(editor: EditorContext): void {
   })
 
   const strip = el("div", { class: "de-tabs", role: "tablist", "aria-label": "Inspector views" })
+  const pill = installTabPill(strip)
   for (const definition of tabs) {
     const button = el(
       "button",
@@ -343,6 +355,11 @@ export function installInspector(editor: EditorContext): void {
   }
 
   editor.slots.right.append(strip, ...panels.values())
+
+  /* A frame late, for the reason `panels/left.ts` gives at the same call: the
+     strip is in the document but not yet laid out, and `installTabPill` will
+     not publish a measurement of zero. */
+  requestAnimationFrame(() => pill.track(buttons.get(activeId)))
 
   /**
    * Switching tabs updates the tab you switch TO, and only that one.
@@ -391,7 +408,10 @@ export function installInspector(editor: EditorContext): void {
      * case fail on a method that has nothing to do with what they assert.
      */
     const button = buttons.get(id)
-    button?.scrollIntoView?.({ block: "nearest", inline: "nearest" })
+    button?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: smoothScroll() })
+    // After the scroll: the pill reads content-relative offsets, and a strip
+    // that just scrolled is a different layout from the one measured before it.
+    pill.track(button)
     tabs.find((definition) => definition.id === id)?.tab.update()
   }
 
@@ -404,18 +424,61 @@ export function installInspector(editor: EditorContext): void {
     })
   }
 
+  /**
+   * Which element the panel currently shows, so a repaint can tell a tweak from
+   * a new subject.
+   *
+   * `Selection.key` and not the object: the store hands out a fresh selection
+   * record on every resolve, so identity would read every repaint as a change
+   * of element and the scroll hold below would never once apply.
+   */
+  let renderedKey: string | null = null
+
   function render(): void {
     const focus = captureFocus(host)
-    clear(host)
     const selections = editor.getState().selection
     const selection = editor.primarySelection()
+    /*
+     * Stay where the reader put us — but only while the panel is describing the
+     * same element.
+     *
+     * Every committed property rebuilds this whole host, and an emptied
+     * scroller is clamped to the top by the first layout that happens while it
+     * is empty — which the sections themselves force, since they read computed
+     * geometry as they build. So changing a weight from a row two thirds of the
+     * way down sent the panel back to the top with the control you had just
+     * used off screen. `core/scroll.ts` carries the mechanism and why the pin,
+     * rather than a scroll-back, is what does the work.
+     *
+     * A different element gets the top of the panel, which is both the old
+     * behaviour and the right one: the sections below are a different set
+     * describing a different box, so a remembered offset into the previous
+     * one points at nothing in particular.
+     */
+    const key = selection?.key ?? null
+    const hold = key !== null && key === renderedKey ? holdScroll(host) : null
+    renderedKey = key
+    clear(host)
 
-    // Nothing selected is not nothing to do. With no element to scope them to,
-    // the panel cannot show the relevant options — so it offers all of them, in
-    // one press. This calls the browser directly rather than announcing an
-    // intention on `window`: the listener only exists once the browser has been
-    // mounted, and the browser is mounted lazily, so on a cold load the event
-    // went nowhere and the button did nothing.
+    /*
+     * Nothing selected is not nothing to do — but what there is to do is on the
+     * other side of the window now.
+     *
+     * This used to read "Browse all design options" and call
+     * `openOptionsBrowser(editor)` directly, and the comment here argued the
+     * directness at length: a `window` event went nowhere on a cold load
+     * because the floating browser mounted lazily and its listener did not yet
+     * exist. That whole problem is gone with the browser. What is left is a
+     * store write, which is how every other lane in this editor reaches
+     * another one, and it cannot be too early — `panels/left.ts` subscribes to
+     * `leftTab` at mount and the store is there before any panel is.
+     *
+     * The label leads with a verb and names the destination the left rail
+     * actually calls it: Controls. It used to be one of two names for one
+     * place — a `.de-button` saying "Browse all design options" here, a
+     * text link saying "All design options" in the footer — which is how a
+     * reader concludes there are two places.
+     */
     if (!selection) {
       host.append(
         el("div", { class: "de-empty" }, [
@@ -425,13 +488,18 @@ export function installInspector(editor: EditorContext): void {
             {
               class: "de-button",
               type: "button",
-              style: "margin-top:10px",
-              onclick: () => openOptionsBrowser(editor),
+              style: `margin-top:${tokens.space.lg}px`,
+              onclick: () => editor.setState({ layersOpen: true, leftTab: "controls" }),
             },
-            ["Browse all design options"]
+            ["Browse app controls"]
           ),
         ])
       )
+      // Unreachable while a hold is only taken for an unchanged element — the
+      // empty state has no element at all — but released on the way out anyway,
+      // because a `min-height` left pinned would freeze the panel at the height
+      // of whatever was selected before it.
+      hold?.release()
       return
     }
 
@@ -494,7 +562,11 @@ export function installInspector(editor: EditorContext): void {
       if (node) host.append(node)
     }
 
+    // Focus first, then the scroll: `restoreFocus` asks for `preventScroll`, but
+    // an engine that ignored it would scroll the refocused control into view and
+    // the release below is what puts the panel back where the reader had it.
     restoreFocus(host, focus)
+    hold?.release()
   }
 
   // Rebuild only when what the inspector shows actually changed. `hovered` is

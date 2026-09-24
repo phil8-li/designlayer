@@ -12,6 +12,7 @@
  */
 
 import { el, round } from "../../core/dom"
+import { revealGroup } from "../../core/leave"
 import { icon } from "../../core/icons"
 import type { IconName } from "../../core/icons"
 import { tokens } from "../../core/tokens"
@@ -24,6 +25,7 @@ import {
   numberField,
   segmented,
   setExpanded,
+  takeJustExpanded,
 } from "./field"
 import type { SectionContext } from "./index"
 
@@ -215,7 +217,11 @@ function paddingControls(
       })
     )
   )
-  return group("Padding", el("div", { class: "de-row" }, [grid, toggle]), binding ?? null)
+  const perSideGroup = group("Padding", el("div", { class: "de-row" }, [grid, toggle]), binding ?? null)
+  // Opened only on the render that follows the press — see `takeJustExpanded`.
+  // Every other rebuild of this panel leaves the group exactly as it found it.
+  if (takeJustExpanded(PADDING_EXPANDER)) revealGroup(perSideGroup)
+  return perSideGroup
 }
 
 /**

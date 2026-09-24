@@ -13,6 +13,7 @@
  */
 
 import { clamp, clear, el } from "../../core/dom"
+import { arriveFrom, smoothScroll } from "../../core/motion"
 import { focusControl } from "../../core/focus"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
@@ -174,9 +175,24 @@ export function tokenField(options: TokenFieldOptions): HTMLElement {
     },
     [
       options.hidePreview ? null : previewNode(selected ? selected.preview : options.fallback.preview),
+      /*
+       * The bound token's full path in `title`, because the field shows it in
+       * full and then clips it.
+       *
+       * The popover's rows can afford to print a leaf — the group prefix is a
+       * sticky header above them — but the CLOSED field has no header to lean
+       * on, so it carries the whole path in a cell that is a fraction of a
+       * 260px panel. `Background/Surface/Raised/Hover` reaches the reader as
+       * `Background/Surfa…`, which names the group and hides the answer. This
+       * is the one control in the inspector whose entire purpose is to say
+       * which token is bound.
+       */
       el(
         "span",
-        { class: selected ? "de-token-field-name" : "de-token-field-name de-token-field-name--plain" },
+        {
+          class: selected ? "de-token-field-name" : "de-token-field-name de-token-field-name--plain",
+          title: selected ? selected.name : options.fallback.text,
+        },
         [selected ? selected.name : options.fallback.text]
       ),
     ]
@@ -229,7 +245,15 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
         "aria-label": `Your own ${options.title}`,
       }) as HTMLInputElement)
     : null
-  const popover = el("div", { class: "de-token-popover", role: "dialog", "aria-label": options.title }, [
+  /*
+   * `de-arrive` is the chrome's shared entrance (`css/base.ts`). It plays once,
+   * on mount, which is exactly when this node is built — there is no reopen
+   * path to re-trigger it, because a second open constructs a fresh popover.
+   */
+  const popover = el(
+    "div",
+    { class: "de-token-popover de-arrive", role: "dialog", "aria-label": options.title },
+    [
     el("div", { class: "de-token-popover-header" }, [
       el("span", { class: "de-token-popover-title" }, [options.title]),
       closeButton,
@@ -258,7 +282,7 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
     for (const [index, row] of rows.entries()) row.setAttribute("data-active", String(index === active))
     search.setAttribute("aria-activedescendant", rows[active].id)
     // jsdom has no scroller, and neither does a list short enough to fit.
-    rows[active].scrollIntoView?.({ block: "nearest" })
+    rows[active].scrollIntoView?.({ block: "nearest", behavior: smoothScroll() })
   }
 
   const close = (restoreFocus: boolean) => {
@@ -310,7 +334,21 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
       },
       [
         previewNode(choice.preview),
-        el("span", { class: "de-token-row-name" }, [choice.leaf]),
+        /*
+         * The leaf, with the WHOLE path one hover away.
+         *
+         * The row already shows a shortened form on purpose — the group prefix
+         * is hoisted into a sticky header so it is not repeated forty times —
+         * and `.de-token-row-name` then ellipsises whatever is left inside a
+         * 260px popover. Two layers of shortening, and the second one is not
+         * deliberate: `Background/Surface/Raised/Hover` and
+         * `Background/Surface/Raised/Pressed` reduce to `Hover`/`Pressed` fine,
+         * but a design system that names its leaves `container-high-emphasis`
+         * loses the distinguishing end of the word with nothing to recover it.
+         * `choice.name` is the full path, which is what the closed field reads,
+         * so the tooltip and the field agree on what was picked.
+         */
+        el("span", { class: "de-token-row-name", title: choice.name }, [choice.leaf]),
         choice.detail ? el("span", { class: "de-token-row-detail" }, [choice.detail]) : null,
         chosen ? el("span", { class: "de-token-row-check" }, [icon("Check", tokens.icon.row)]) : null,
       ]
@@ -340,6 +378,23 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
     if (!visible.length) list.append(el("div", { class: "de-token-empty" }, ["No matches"]))
     const chosen = visible.findIndex((choice) => choice.id === options.selectedId)
     setActive(chosen < 0 ? 0 : chosen)
+    /*
+     * RE-ANCHOR, because filtering just changed this popover's height.
+     *
+     * `place()` used to run once, when the popover opened, and never again. That
+     * is fine while the card opens downward — its top edge is the field and the
+     * height grows away from it. It is wrong the moment the card has been
+     * FLIPPED above its field to fit the viewport, because then the top edge is
+     * derived from the height, and typing a filter that shortens the list left
+     * the card anchored to a height it no longer had: it detached from the
+     * control it belongs to and floated up the screen, by a hundred pixels or
+     * more on a list of any length.
+     *
+     * Cheap to do here — one layout read on a surface the user is already
+     * typing into — and it makes the anchor a property of the current list
+     * rather than of the list that happened to be there when it opened.
+     */
+    place(field, popover)
   }
 
   const onPointerDown = (event: Event) => {
@@ -408,8 +463,11 @@ function place(field: HTMLElement, popover: HTMLElement): void {
   popover.style.left = `${clamp(anchor.left, EDGE, Math.max(EDGE, window.innerWidth - POPOVER_WIDTH - EDGE))}px`
   const height = popover.getBoundingClientRect().height
   const below = anchor.bottom + 4
-  popover.style.top =
-    below + height + EDGE <= window.innerHeight
-      ? `${below}px`
-      : `${Math.max(EDGE, anchor.top - 4 - height)}px`
+  const fits = below + height + EDGE <= window.innerHeight
+  popover.style.top = fits ? `${below}px` : `${Math.max(EDGE, anchor.top - 4 - height)}px`
+  // The entrance follows the placement. A picker pushed above its field has to
+  // grow out of its bottom edge, or it opens travelling away from the field it
+  // belongs to — and a token field near the foot of a long Design tab is where
+  // that happens most. See `arriveFrom`.
+  arriveFrom(popover, fits ? "below" : "above")
 }

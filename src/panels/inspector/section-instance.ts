@@ -209,7 +209,7 @@ function switchField(options: {
   on: boolean
   onCommit(next: boolean): void
 }): HTMLElement {
-  return el("button", {
+  const node = el("button", {
     class: "de-instance-switch",
     type: "button",
     role: "switch",
@@ -217,8 +217,35 @@ function switchField(options: {
     "aria-label": options.label,
     title: options.label,
     "data-de-field": options.id,
-    onclick: () => options.onCommit(!options.on),
+    /*
+     * THE NEW STATE IS PAINTED ON THIS NODE BEFORE THE PANEL IS INVALIDATED.
+     *
+     * `css/variants.ts` specifies this control properly — 12px of knob travel
+     * over `duration.base`, a track crossfade, a press squeeze — and none of it
+     * ever played. `onCommit` ends in `context.invalidate()`, the Design tab
+     * rebuilds all thirteen sections (`inspector/index.ts`), and the button the
+     * user pressed is replaced by a new one already at `translateX(12px)`. A
+     * node that has just been created has no previous value, so the browser
+     * paints it at its final state: the knob teleported, and the CSS describing
+     * how it should move was unreachable.
+     *
+     * Writing the attribute here gives the LIVE node a value to animate from.
+     * The rebuild still happens a frame later and still replaces this button —
+     * but by then the transition is already running, and the replacement mounts
+     * at the same state the animation is heading for, so nothing snaps back.
+     *
+     * This is the local fix. The general one is for `invalidate()` to diff
+     * rather than clear and re-append, which would revive the same dead
+     * transitions on every other pressed control in `css/panels.ts`; until it
+     * does, a control with motion worth keeping has to say so itself.
+     */
+    onclick: () => {
+      const next = !options.on
+      node.setAttribute("aria-checked", String(next))
+      options.onCommit(next)
+    },
   })
+  return node
 }
 
 /** A fact the library states and this panel will not pretend to control. */
@@ -526,7 +553,15 @@ function headerRow(
     el("span", { class: "de-instance-id" }, [
       el("span", { class: "de-instance-name", title: name }, [name]),
       match
-        ? el("span", { class: "de-instance-owner" }, [`From ${match.libraryName}`])
+        ? // `.de-instance-owner` ellipsises, and its own stylesheet comment says
+          // what it is for: telling you WHICH library, when two are loaded. A
+          // cut of `From @acme/design-syste…` cannot do that job, and the
+          // sibling line above it already carries its `title`.
+          el(
+            "span",
+            { class: "de-instance-owner", title: `From ${match.libraryName}` },
+            [`From ${match.libraryName}`]
+          )
         : null,
     ]),
   ])
@@ -612,7 +647,14 @@ export const instanceSection: InspectorSection = (context) => {
   // The declaring file, and only when the LIBRARY names one. The panel header
   // above this section already prints the selection's own source line, so
   // repeating it here would be the same fact twice in 260px.
-  if (match?.file) body.push(el("div", { class: "de-instance-file" }, [match.file]))
+  //
+  // `title` because the row is clipped at the END — the comment on
+  // `.de-instance-file` in `css/variants.ts` records why it is not reversed —
+  // and a path cut at the end is a path with its filename missing, which is the
+  // only part of it anybody was reading.
+  if (match?.file) {
+    body.push(el("div", { class: "de-instance-file", title: match.file }, [match.file]))
+  }
   if (match?.description) body.push(el("div", { class: "de-instance-desc" }, [match.description]))
   if (rows.length) body.push(group("Properties", ...rows))
 

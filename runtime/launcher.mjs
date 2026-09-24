@@ -24,6 +24,7 @@ import { Readable } from "node:stream"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { browserPrelude } from "../config.mjs"
+import { wrapCompanion } from "../server/companions.mjs"
 import { chooserUrlFromEnv, isLoopbackOrigin } from "./chooser-url.mjs"
 import { urlHost } from "./dev-server.mjs"
 import { openBrowser } from "./open-browser.mjs"
@@ -205,6 +206,35 @@ export function readChromeBundle() {
     )
     return ""
   }
+}
+
+/**
+ * The configured companions, concatenated after the editor's own chrome.
+ *
+ * After, because the editor is the thing this package is responsible for: a
+ * companion that blows up on evaluation must not be able to take it with it,
+ * and `wrapCompanion` fences each one for the same reason. Read on every
+ * overlay request rather than cached, so rebuilding a companion's bundle shows
+ * up on reload — the editor's own dist is checked at launch precisely because
+ * it CANNOT be, being concatenated from a path this process pins.
+ *
+ * A companion that has gone missing since launch warns and is skipped. The
+ * alternative is a 500 on the overlay, which takes down the editor over a file
+ * that belongs to somebody else.
+ */
+export function readCompanionBundles(config) {
+  return (config.companions ?? [])
+    .map((companion) => {
+      try {
+        return wrapCompanion(companion.name, fs.readFileSync(companion.script, "utf8"))
+      } catch (error) {
+        console.warn(
+          `[designlayer] companion "${companion.name}" could not be read (${error.message})`
+        )
+        return ""
+      }
+    })
+    .join("")
 }
 
 const BUILD_SCRIPT = fileURLToPath(new URL("../build.mjs", import.meta.url))
@@ -488,7 +518,8 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
     if (path.resolve(String(filePath)) === vendor.overlay) {
       patchedOverlay ??= patchOverlay(fs.readFileSync(vendor.overlay, "utf8"), config)
       return Readable.from([
-        `${browserPrelude(config, runtime)}\n${patchedOverlay}\n;\n${readChromeBundle()}`,
+        `${browserPrelude(config, runtime)}\n${patchedOverlay}\n;\n${readChromeBundle()}` +
+          `\n;\n${readCompanionBundles(config)}`,
       ])
     }
 

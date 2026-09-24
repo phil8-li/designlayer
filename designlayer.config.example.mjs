@@ -132,6 +132,23 @@ const config = {
     },
   },
 
+  // Optional. Other people's dev-time browser tooling, loaded beside the editor
+  // — an annotation toolbar, a flag switcher. Each entry is a manifest naming a
+  // self-contained browser bundle and the selectors it draws under, which join
+  // `chrome.trustedSelectors` so the canvas stops mistaking its buttons for
+  // yours. Paths inside a manifest are read against the manifest.
+  //
+  //   { "name": "flags", "script": "./flags.js",
+  //     "trustedSelectors": ["[data-flag-switcher]"] }
+  //
+  // `DESIGNLAYER_COMPANIONS` declares the same thing for the whole machine, for
+  // tooling that belongs to the person rather than to this repository.
+  //
+  // Commented out rather than illustrated live, unlike every other key here: a
+  // companion that is not on disk stops the editor starting, on purpose, so a
+  // copied example naming a bundle nobody has would refuse to launch.
+  // companions: ["./tools/flag-switcher/companion.json"],
+
   // Optional. Without this block the package does not look for Leva at all.
   controls: {
     leva: {
@@ -203,6 +220,7 @@ const config = {
   // itself: handing work over means writing a brief under `stateDir/requests/`
   // and waking a coding agent attached over MCP, which needs no key, no model
   // name and no transport to choose between.
+
 }
 
 export default config

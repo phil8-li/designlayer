@@ -283,19 +283,27 @@ check("the dark block still carries the contrast-tuned values it shipped with", 
        * carried before were the near-black `#1c1d21` ground and the light
        * indigo `#a1bbff` accent the editor shipped with.
        *
-       * Two of them are the whole shape of that change. `bg` is Figma's
-       * neutral panel grey. `bg-sunken` is the control surface and now LIFTS
-       * in dark — `#ffffff 6%` over the ground resolves to `#393939`, against
-       * Figma's measured `#383838` — where it used to sink to `#121316`.
-       * Figma draws its fields lighter than its panels; we drew them darker.
+       * Two of them are the whole shape of that change. `bg-sunken` is the
+       * control surface and now LIFTS in dark — `#ffffff 6%` over the ground —
+       * where it used to sink to `#121316`. Figma draws its fields lighter
+       * than its panels; we drew them darker.
+       *
+       * `bg` itself is no longer Figma's neutral panel grey. The editor is
+       * chrome around someone else's product rather than a panel inside one,
+       * and the ground dropped to `#1a1a1a` so it recedes behind whatever it
+       * frames; `tokens.ts` argues it on the `CHROME` constant, including why
+       * it stops there rather than at `#000`. This case pins the ground and
+       * the mix TOGETHER on purpose — `bg-sunken` interpolates from `bg`, so a
+       * ground changed in one place and not the other is exactly the drift the
+       * assertion exists to catch.
        *
        * The three inks all went up because a lighter ground costs a
        * white-alpha ink its contrast: at the old 0.58, `text-dim` measured
        * 3.94:1 on a hovered control, under the 4.5:1 this project holds for
        * body text. 0.70 restores it to 5.35:1.
        */
-      "--de-color-bg": "#2c2c2c",
-      "--de-color-bg-sunken": "color-mix(in srgb, #ffffff 6%, #2c2c2c)",
+      "--de-color-bg": "#1a1a1a",
+      "--de-color-bg-sunken": "color-mix(in srgb, #ffffff 6%, #1a1a1a)",
       "--de-color-text": "#ffffff",
       "--de-color-text-muted": "rgba(255,255,255,0.75)",
       "--de-color-text-dim": "rgba(255,255,255,0.70)",
@@ -336,7 +344,13 @@ check("the dark block still carries the contrast-tuned values it shipped with", 
  * popover resolve at all.
  */
 check("the palette is declared where every chrome root can inherit it", () => {
-  assert.match(chrome.paletteCss, /^\/\* -+ palette -+ \*\/\n:root,\n/)
+  // The declaration block no longer leads the sheet: the `@property`
+  // registrations that make these roles animatable come first, and a
+  // registration has to be parsed before the property it types is used. What
+  // this case is about is the SELECTOR the values are declared on, so it looks
+  // for the block rather than for the first line of the file.
+  assert.match(chrome.paletteCss, /^\/\* -+ palette -+ \*\//)
+  assert.match(chrome.paletteCss, /\n:root,\n\[data-designlayer\]\[data-de-theme="dark"\]/)
   assert.match(chrome.paletteCss, /\n:root\[data-de-theme="light"\],\n/)
   // Dark first and unconditional, so a document that never gets the attribute
   // written — storage blocked, boot threw — is still the editor as it shipped.
@@ -344,6 +358,26 @@ check("the palette is declared where every chrome root can inherit it", () => {
     chrome.paletteCss.indexOf(":root,") < chrome.paletteCss.indexOf(':root[data-de-theme="light"]'),
     "the light block no longer wins on order"
   )
+  /*
+   * Every role is registered, and registered as a colour.
+   *
+   * This is what makes the theme crossfade possible at all — an unregistered
+   * custom property cannot be interpolated, so the transition below would be a
+   * no-op. Checked against `themeProperties()` rather than a count, so a role
+   * added to `PALETTE` without a registration fails here rather than silently
+   * dropping out of the fade.
+   */
+  for (const property of chrome.themeProperties()) {
+    assert.ok(
+      chrome.paletteCss.includes(`@property ${property} {`),
+      `${property} is declared but never registered, so it cannot animate`
+    )
+    assert.ok(
+      chrome.paletteCss.includes(`transition:`) &&
+        new RegExp(`${property} \\d+ms`).test(chrome.paletteCss.replace(/\s+/g, " ")),
+      `${property} is registered but left out of the theme transition`
+    )
+  }
   // And it leads the sheet: every module after it reads these properties.
   assert.ok(chrome.baseCss.startsWith(chrome.paletteCss), "the palette is not first in base.ts")
 })
@@ -449,6 +483,158 @@ check("every spacing value in the shipped stylesheet is on the kit's scale", () 
     [],
     `off the spacing scale (${[...new Set(offenders.values())].sort((a, b) => a - b).join(", ")})`
   )
+})
+
+/*
+ * A rule's selector, with the comment block that precedes it removed.
+ *
+ * The rule regex these sweeps share starts a match at the last `}` or newline,
+ * so anything between one rule and the next — which in this stylesheet is
+ * usually thirty lines of argument — arrives glued to the front of the
+ * selector. Harmless while a case only greps the declarations; not harmless the
+ * moment one compares a selector to the string it should be.
+ */
+const selectorOf = (rule) =>
+  rule[2]
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+
+/*
+ * The same sweep, one property over: every leading in the sheet is a ROLE.
+ *
+ * The spacing case above exists because a survey found twelve numbers where a
+ * scale should have been. Leading was in exactly that state and nobody had
+ * looked: `1`, `1.4`, `1.45`, `1.5`, `1.55`, `14px`, `15px` and `16px` across
+ * forty declarations, with no rule anywhere saying which of 1.4 and 1.45 a
+ * wrapping sentence was supposed to take — they differ by 0.6px at the body
+ * rung, which is why nobody could tell and why it kept happening.
+ *
+ * Read off the emitted sheet for the reason the spacing sweep is: the point is
+ * the number that ships. A `${t.type.leadingBody}` in the source proves only
+ * that somebody typed a token name.
+ *
+ * The px exemptions are the two places where the line box IS the box — a badge
+ * with no height of its own, centred by its own leading — and they are listed
+ * rather than pattern-matched so that a third one is a decision somebody makes
+ * on purpose.
+ */
+check("every line-height in the shipped stylesheet is one of the type scale's leading roles", () => {
+  const roles = new Map(
+    Object.entries(chrome.tokens.type)
+      .filter(([role]) => role.startsWith("leading"))
+      .map(([role, value]) => [String(value), role])
+  )
+  assert.ok(roles.size >= 4, `only ${roles.size} leading roles — the scale shrank`)
+
+  /*
+   * A leading that is really a box height, named with its reason.
+   *
+   * `.de-layer-saved` is an 18px tally chip with no `height`; `.de-ann-badge` is
+   * a 14px-tall outlined chip. Both centre their single line by being exactly
+   * one line tall, which is a geometry decision and not a reading one — routing
+   * either through a unitless role would resize the chip.
+   */
+  const BOX_HEIGHT = new Set(["18px", "14px"])
+
+  const offenders = new Map()
+  for (const match of chrome.shellCss.matchAll(/(?:^|[;{\s])line-height:\s*([^;}]+)/g)) {
+    const value = match[1].trim()
+    if (roles.has(value) || BOX_HEIGHT.has(value)) continue
+    offenders.set(value, (offenders.get(value) ?? 0) + 1)
+  }
+  assert.deepEqual(
+    [...offenders.keys()],
+    [],
+    "a leading off the scale — use tokens.type.leadingFlush / leadingRow / leadingBody / leadingCode"
+  )
+
+  // And the roles themselves clear the floor `better-typography` sets for text
+  // that wraps to three lines. `leadingFlush` is the deliberate exception and
+  // is only ever set on a single line that cannot wrap.
+  for (const [value, role] of roles) {
+    if (role === "leadingFlush") continue
+    assert.ok(
+      Number.parseFloat(value) >= 1.4,
+      `type.${role} is ${value}, under the 1.4 floor for anything that wraps`
+    )
+  }
+  // Unitless, all of them, or a line box stops tracking the size it sits on:
+  // the flat `16px` this replaced landed as 1.6 on the `micro` rung and 1.33 on
+  // `body`, which is the ratio inverted across the scale it was meant to serve.
+  for (const [value, role] of roles) {
+    assert.match(String(value), /^[\d.]+$/, `type.${role} is "${value}" — leading must be unitless`)
+  }
+})
+
+/*
+ * A value that changes in place does not shift the row it sits in.
+ *
+ * This chrome is an instrument panel: the canvas badge counts up through a
+ * drag, the tab's change badge crosses 9, the lint summary rewrites its own
+ * total, an inspector field is scrubbed a digit at a time. Proportional figures
+ * move the layout under every one of them.
+ *
+ * The guarantee is asserted at the root rather than per surface, because the
+ * per-surface version is what failed: nine rules across eight files had it and
+ * the ones that did not — the lint group count, the summary line, an options
+ * folder's tally — are the same kind of thing, just noticed later. A sweep for
+ * "did somebody remember this one" can only ever be as complete as the list
+ * somebody wrote; a root declaration has nothing to forget.
+ *
+ * So both halves are checked: the root declares it, AND nothing re-declares it,
+ * because a second declaration is the beginning of the list coming back.
+ */
+check("a value that changes in place does not shift the row it sits in", () => {
+  const rules = [...chrome.shellCss.matchAll(/(^|\n)([^{}@\n][^{}]*)\{([^{}]*)\}/g)]
+  const declaring = rules
+    .filter((rule) => /font-variant-numeric:\s*tabular-nums/.test(rule[3]))
+    .map(selectorOf)
+
+  assert.deepEqual(
+    declaring,
+    ["[data-designlayer]"],
+    "tabular figures belong once on the chrome root — see the argument in css/base.ts"
+  )
+
+  /*
+   * And the form controls, which do not inherit it.
+   *
+   * Every UA ships the `font` shorthand on an `<input>`, and the shorthand
+   * resets `font-variant` — so the inspector's number fields compute `normal`
+   * however the root is set. The stylesheet already restates `font-family` and
+   * `font-size` on every control for the same reason; this is the third
+   * property in that set and the one that was missing.
+   */
+  const inherits = rules.find((rule) => /font-variant-numeric:\s*inherit/.test(rule[3]))
+  assert.ok(inherits, "no rule hands the figures to form controls, which reset font-variant")
+  for (const element of ["input", "textarea", "select", "button"]) {
+    assert.match(inherits[2], new RegExp(`\\b${element}\\b`), `${element} misses out on the figures`)
+  }
+})
+
+/*
+ * macOS smoothing is a PAIR, and half of it is worse than none.
+ *
+ * `-webkit-font-smoothing` was here on its own, which is the half Chromium and
+ * WebKit read. Firefox reads the other one, so on macOS it kept subpixel
+ * antialiasing and drew the whole chrome a visible notch heavier than the same
+ * build in Safari — one frame around the product, two weights, depending on
+ * which browser the app under review happened to be open in.
+ *
+ * Once, on the root, is the rest of the rule: these are inherited properties
+ * and a component that restates them is a component that can disagree.
+ */
+check("macOS font smoothing is declared as a pair, once, at the root", () => {
+  const rules = [...chrome.shellCss.matchAll(/(^|\n)([^{}@\n][^{}]*)\{([^{}]*)\}/g)]
+  const webkit = rules.filter((rule) => /-webkit-font-smoothing:/.test(rule[3]))
+  const moz = rules.filter((rule) => /-moz-osx-font-smoothing:/.test(rule[3]))
+  assert.equal(webkit.length, 1, `${webkit.length} rules set -webkit-font-smoothing; one may`)
+  assert.equal(moz.length, 1, "-moz-osx-font-smoothing is missing, so Firefox on macOS renders heavier")
+  assert.match(webkit[0][3], /-webkit-font-smoothing:\s*antialiased/)
+  assert.match(moz[0][3], /-moz-osx-font-smoothing:\s*grayscale/)
+  assert.equal(selectorOf(webkit[0]), selectorOf(moz[0]), "the pair is split across two selectors")
+  assert.equal(selectorOf(webkit[0]), "[data-designlayer]", "smoothing belongs on the chrome root")
 })
 
 /*
@@ -644,6 +830,94 @@ check("a selected control's white glyph is readable on the fill it sits on", () 
 })
 
 /*
+ * THE SEMANTIC FILLS CARRY AN INK THAT FLIPS, AND THE ACCENT'S DOES NOT.
+ *
+ * These were one role until the accent moved to Figma's published blues. That
+ * move was right and it broke everything else sharing the ink, silently and in
+ * one direction: the blues are dark fills in BOTH themes, so `onAccent`
+ * correctly became `#ffffff` in both — and the six semantic hues, which are
+ * pale in dark and deep in light precisely so they can be read as ink on their
+ * own ground, were left with white on the pale ones.
+ *
+ * The regression is the reason this case is measured rather than pinned. Three
+ * of the five call sites carried a comment naming "white on it measures about
+ * 2.3:1" as a bug they had already fixed, and all three had gone back to
+ * exactly 2.31:1 without anybody editing them. A test asserting the token
+ * NAMES would have passed throughout; only the ratio catches a role changing
+ * under its callers.
+ *
+ * Both floors, because the two roles fail in opposite directions and a single
+ * assertion would let one of them through: a semantic fill has to carry
+ * `onSemantic` at 4.5:1 — these are labels and glyphs both, so the stricter
+ * floor — and `onAccent` must stay white, which the case above already pins.
+ *
+ * Arithmetic, not a browser: every hue here is plain hex in both themes, and a
+ * theme that moves one to a `color-mix()` fails loudly in `hex` rather than
+ * quietly skipping the measurement.
+ */
+check("a semantic fill carries ink that flips with the theme, and clears the floor", () => {
+  const channel = (v) => {
+    const s = v / 255
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+  }
+  const luminance = ({ r, g, b }) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+  const hex = (value, what) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(String(value).trim())
+    assert.ok(m, `${what} is "${value}", which this check cannot measure — resolve it to a hex`)
+    const n = Number.parseInt(m[1], 16)
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+  }
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+    return (hi + 0.05) / (lo + 0.05)
+  }
+
+  // Every role in the palette that is used as a FILL with text or a glyph on
+  // it. Named rather than discovered, because `guide` and `measure` are the
+  // same hue and only one of them is ever filled — a sweep would report a pass
+  // for a pair nothing renders.
+  const FILLS = [
+    "--de-color-success",
+    "--de-color-danger",
+    "--de-color-lint-warning",
+    "--de-color-component",
+    "--de-color-guide",
+  ]
+
+  for (const [theme, block] of [
+    ["dark", DARK_BLOCK],
+    ["light", LIGHT_BLOCK],
+  ]) {
+    const ink = hex(block.get("--de-color-on-semantic"), `the ${theme} semantic ink`)
+    for (const role of FILLS) {
+      const declared = block.get(role)
+      assert.ok(declared, `${role} is missing from the ${theme} theme`)
+      const measured = ratio(ink, hex(declared, `the ${theme} ${role}`))
+      assert.ok(
+        measured >= 4.5,
+        `${role} in ${theme} carries its ink at ${measured.toFixed(2)}:1, under the 4.5:1 a label needs`
+      )
+    }
+  }
+
+  /*
+   * And the two inks really are different, in the theme where it matters.
+   *
+   * The floors above would all still pass if `onSemantic` were quietly pointed
+   * back at `onAccent` in a future retune AND the hues were darkened to suit —
+   * which is a defensible change, but not one that should happen by accident
+   * while six comments still explain why the ink flips. In dark the accent fill
+   * is a deep blue wanting white and the semantic hues are pale wanting black,
+   * so the two inks disagreeing is the invariant, not an implementation detail.
+   */
+  assert.notEqual(
+    DARK_BLOCK.get("--de-color-on-semantic").trim().toLowerCase(),
+    DARK_BLOCK.get("--de-color-on-accent").trim().toLowerCase(),
+    "the semantic ink and the accent ink are the same in dark — one of the two fills is unreadable"
+  )
+})
+
+/*
  * Every corner is a squircle, and the circles are not.
  *
  * Both halves matter. Without the first, \`corner-shape\` reaches only the rules
@@ -735,7 +1009,7 @@ console.log("\nDesign-system catalog")
  * That makes this suite one of the four places the editor is coupled to a real
  * app rather than a fixture, which is the point: it is the regression net that
  * catches a change to the tool silently changing what a real app sees, and the
- * numbers below are the Workspaces app's. The host-AGNOSTIC contract — that
+ * numbers below are the pinned host app's. The host-AGNOSTIC contract — that
  * the same code reads a design system it has never met, with differently spelled
  * `@theme` namespaces, absent token groups, a Tailwind v3 scale, or no manifest
  * at all — is proved without this file, on the fixture hosts in
@@ -748,7 +1022,7 @@ const prelude = browserPrelude(workspace, { proxyPort: 4567 })
 const browserSandbox = { window: {} }
 vm.runInNewContext(prelude, browserSandbox)
 
-check("the Workspaces catalog is the non-vacuous 115-asset export", () => {
+check("the host app's catalog is the non-vacuous 115-asset export", () => {
   const counts = {
     colors: catalog.colors.length,
     spacing: catalog.spacing.length,

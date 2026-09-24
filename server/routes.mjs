@@ -19,6 +19,7 @@ import { createControlDefaults } from "./control-defaults.mjs"
 import { createDesignLint } from "./design-lint.mjs"
 import { createIconSet } from "./icon-set.mjs"
 import { createAuthStore } from "./library-auth.mjs"
+import { createBrowserSignIn } from "./library-signin.mjs"
 import { createLibraryStore } from "./libraries.mjs"
 import { fetchLibraryUrl } from "./library-url.mjs"
 import { createOptionsStore, normalizeOptionSet } from "./options-store.mjs"
@@ -156,7 +157,7 @@ function libraryRouteId(segment) {
  * `{ refresh: true }` — this layer checks only that it was handed an object,
  * because every rule about what is IN that object lives one module down.
  */
-function libraryRoutes(libraries, auth, rest, req, res, url, readBody) {
+function libraryRoutes(libraries, auth, signin, rest, req, res, url, readBody) {
   if (rest !== "/libraries" && !rest.startsWith("/libraries/")) return null
 
   if (rest === "/libraries" && req.method === "GET") {
@@ -178,8 +179,64 @@ function libraryRoutes(libraries, auth, rest, req, res, url, readBody) {
   }
 
   /*
-   * Sign-in, and the reason it is three verbs on one path rather than a field
-   * on the library.
+   * Signing in by opening the SITE'S OWN sign-in, which is the path a designer
+   * should ever see.
+   *
+   * `POST /libraries/auth` below takes a credential the designer went and found
+   * — a bearer token, a cookie out of dev tools. That route still exists, for
+   * the sites this one cannot open, but it is not the offer any more: nobody
+   * building a component list should have to learn what an audience is or how
+   * their company mints an identity token. Here the editor opens the wall in a
+   * browser window, the provider runs the sign-in it always runs, and the
+   * session that produces is captured on the designer's behalf.
+   *
+   * It ends in exactly the same place as the paste — verified against the live
+   * URL, then stored — because the invariant that makes the panel trustworthy
+   * is that a stored credential has been seen to work, and how it was obtained
+   * does not change that.
+   */
+  if (rest === "/libraries/auth/signin" && req.method === "POST") {
+    return readBody().then(async (body) => {
+      const target = String(body?.url ?? "").trim()
+      if (!target) throw badRequest("Signing in needs the url that was refused")
+
+      const outcome = await signin.signIn(target)
+      if (!outcome.ok) {
+        // Not a 500: a person closing the window, or a provider that grants no
+        // reusable session, is an ordinary outcome with a sentence attached.
+        return sendJson(res, 200, {
+          ok: false,
+          reason: outcome.reason,
+          provider: outcome.provider ?? "",
+        })
+      }
+
+      const credential = { scheme: "cookie", value: outcome.cookie }
+      const probe = await fetchLibraryUrl(target, { credential })
+      if (probe.sso || !probe.ok) {
+        return sendJson(res, 200, {
+          ok: false,
+          provider: outcome.provider ?? "",
+          reason: probe.sso
+            ? "The sign-in worked in the window, but the site still refuses the editor. This one " +
+              "may need a token."
+            : `The site answered HTTP ${probe.status} after signing in`,
+        })
+      }
+
+      const saved = await auth.saveCredential({ url: target, ...credential })
+      return sendJson(res, 200, { ok: true, provider: outcome.provider ?? "", ...saved })
+    })
+  }
+
+  /** Whether this machine can open a sign-in window at all, for the panel's offer. */
+  if (rest === "/libraries/auth/signin" && req.method === "GET") {
+    return signin.available().then((available) => sendJson(res, 200, { available }))
+  }
+
+  /*
+   * The credential a designer went and found, for the sites the window above
+   * cannot open, and the reason it is three verbs on one path.
    *
    * A credential belongs to an ORIGIN, not to a library: two deep links into
    * one Storybook are two libraries and one sign-in, and signing in for the
@@ -235,7 +292,19 @@ function libraryRoutes(libraries, auth, rest, req, res, url, readBody) {
       return readBody().then(async (body) => {
         const origin = String(body?.origin ?? "").trim()
         if (!origin) throw badRequest("Forgetting a sign-in needs the origin it belongs to")
-        sendJson(res, 200, await auth.forgetCredential(origin))
+        const forgotten = await auth.forgetCredential(origin)
+        /*
+         * And the session in the browser profile, which is the half that makes
+         * the promise true.
+         *
+         * Not awaited into the answer's success: the credential is already
+         * gone, which is what the panel reports and what stops the libraries
+         * loading. If the browser cannot be opened to finish the job, the right
+         * outcome is a forget that happened rather than an error about a
+         * cleanup step the designer never asked about by name.
+         */
+        void signin.forgetOrigin(origin).catch(() => {})
+        sendJson(res, 200, forgotten)
       })
     }
   }
@@ -427,14 +496,14 @@ async function insertElements(angular, react, framework, body) {
   return angular.apply(operations)
 }
 
-async function route(store, defaults, agent, icons, libraries, auth, lint, variants, usage, apps, angular, react, framework, prefix, mcpPort, req, res, url) {
+async function route(store, defaults, agent, icons, libraries, auth, signin, lint, variants, usage, apps, angular, react, framework, prefix, mcpPort, req, res, url) {
   const { pathname, searchParams } = url
   const rest = pathname.slice(prefix.length)
 
   const handled = angularRoutes(angular, framework, rest, req, res, url, () => readJsonBody(req))
   if (handled !== null) return handled
 
-  const library = libraryRoutes(libraries, auth, rest, req, res, url, () => readJsonBody(req))
+  const library = libraryRoutes(libraries, auth, signin, rest, req, res, url, () => readJsonBody(req))
   if (library !== null) return library
 
   const audit = lintRoutes(lint, rest, req, res, url, () => readJsonBody(req))
@@ -602,6 +671,10 @@ export function createDesignLayerRoutes(config = resolveConfig()) {
   const agent = createAgent(config)
   const icons = createIconSet(config)
   const auth = createAuthStore(config)
+  // The browser that opens a site's own sign-in. Built here beside the store it
+  // fills, because the two halves of "signed in to an origin" are the session
+  // the provider grants and the credential this editor then reuses.
+  const signin = createBrowserSignIn(config)
   // The library store looks a credential up per fetch, so a sign-in that
   // happens while the editor is open reaches the very next refresh.
   const libraries = createLibraryStore(
@@ -641,7 +714,7 @@ export function createDesignLayerRoutes(config = resolveConfig()) {
       }
 
       route(
-        store, defaults, agent, icons, libraries, auth, lint, variants, usage, apps, angular, react,
+        store, defaults, agent, icons, libraries, auth, signin, lint, variants, usage, apps, angular, react,
         framework, prefix, config.ports?.mcp ?? null, req, res, url
       ).catch((error) => {
         if (res.headersSent) {

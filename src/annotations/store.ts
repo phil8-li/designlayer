@@ -246,6 +246,20 @@ function load(): void {
   // Never restored, whatever is on disk: this one is per-tab by definition, and
   // a session that started with every marker hidden looks like a broken build.
   settings.hideUntilRestart = false
+  /*
+   * And `scope`, for a harder reason than "per tab".
+   *
+   * The switch that set it is gone from the settings fold, so a stored
+   * `"editor"` is not a preference any more — it is a mode with no control to
+   * leave by, on a session that would open with every click landing on the
+   * editor's own panels instead of the app. `DEFAULT_SETTINGS` has always
+   * claimed this value does not travel between sessions; it does, because
+   * `persist` writes the whole blob, and this is the line that makes the claim
+   * true. The key stays in the defaults on purpose: dropping it would make the
+   * retirement filter above delete it from stored blobs, and `canvas.ts` still
+   * reads it.
+   */
+  settings.scope = "app"
 
   const key = storageKey()
   // Whatever an older build left under the unscoped key belongs to somebody, and
@@ -286,10 +300,6 @@ function persist(): void {
 export function annotations(): AnnotationRecord[] {
   load()
   return notes
-}
-
-export function annotationCount(): number {
-  return annotations().length
 }
 
 export function onAnnotationsChange(listener: () => void): () => void {
@@ -335,11 +345,60 @@ export function updateAnnotation(id: string, patch: Partial<AnnotationRecord>): 
   announce()
 }
 
-export function removeAnnotation(id: string): void {
+/**
+ * Deletes a note and hands back what it took, so the caller can offer it back.
+ *
+ * ## Why this returns something now
+ *
+ * Every other destructive act in this editor is recoverable. An element delete
+ * and a style change go through `core/history.ts`; a revert restores what it
+ * reverted; clearing every note arms first and says what it will cost. Deleting
+ * ONE note was the last irreversible single click in the product — and it is
+ * irreversible over the one thing on screen the user typed themselves. A note
+ * cannot be recovered from a source file the way an edit can, because it was
+ * never written to one.
+ *
+ * The row control is right to ask nothing, and `tab-annotations.ts` argues it:
+ * a control used on most rows in a session cannot confirm every time. Confirm
+ * and undo are alternatives rather than a pair, so the row keeps its single
+ * click and this returns the note instead — the cheaper half for the reader as
+ * well as for the code.
+ *
+ * The INDEX comes back with it because this list is ordered, and the order is
+ * the order the notes were taken in. Restoring onto the end would quietly
+ * reorder a brief the designer is about to hand over: a second edit nobody
+ * asked for, made while undoing the first.
+ */
+export function removeAnnotation(id: string): { note: AnnotationRecord; index: number } | null {
   load()
-  const next = notes.filter((note) => note.id !== id)
-  if (next.length === notes.length) return
-  notes = next
+  const index = notes.findIndex((note) => note.id === id)
+  if (index === -1) return null
+  const note = notes[index]
+  notes = [...notes.slice(0, index), ...notes.slice(index + 1)]
+  persist()
+  announce()
+  return { note, index }
+}
+
+/**
+ * Puts a deleted note back where it was.
+ *
+ * The inverse of `removeAnnotation`, and deliberately NOT "add it again".
+ * `addAnnotation` mints a fresh id and a fresh `createdAt`, so a note restored
+ * through it would be a different note that merely reads the same: the new id
+ * breaks any marker, row or pending handover still pointing at the old one, and
+ * the new timestamp moves it in anything that sorts by age.
+ *
+ * Restored at the recorded index, clamped, because the list can have moved
+ * while the toast was up — notes can be dropped from the canvas at any moment,
+ * and the whole list can be cleared. A no-op if the id is somehow present
+ * again, so that a double-pressed Undo cannot produce two of the same note.
+ */
+export function restoreAnnotation(note: AnnotationRecord, index: number): void {
+  load()
+  if (notes.some((existing) => existing.id === note.id)) return
+  const at = Math.max(0, Math.min(index, notes.length))
+  notes = [...notes.slice(0, at), note, ...notes.slice(at)]
   persist()
   announce()
 }

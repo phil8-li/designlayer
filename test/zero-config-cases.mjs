@@ -33,6 +33,7 @@ import os from "node:os"
 import path from "node:path"
 
 import { detectDevServer, resolveConfig, resolveDevPort, resolveDevScript } from "../config.mjs"
+import { createLibraryStore } from "../server/libraries.mjs"
 import { describeProject, projectRootForPort, scanLocalApps } from "../runtime/local-apps.mjs"
 import { ensureAppRunning, loopbackHostFor, urlHost } from "../runtime/dev-server.mjs"
 
@@ -63,7 +64,11 @@ async function checkAsync(name, fn) {
 
 const temporary = []
 function project(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "de-zero-"))
+  // `realpath`, because `os.tmpdir()` on macOS is itself a symlink
+  // (`/var` -> `/private/var`). The library store resolves both ends of its
+  // containment check, so a fixture spelled the unresolved way makes every file
+  // in it read as outside the project it was just written into.
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "de-zero-")))
   temporary.push(root)
   for (const [name, contents] of Object.entries(files)) {
     const target = path.join(root, name)
@@ -662,6 +667,450 @@ console.log("\nThe start screen fills the folder in")
     } finally {
       process.chdir(previous)
       await new Promise((resolve) => server.close(resolve))
+    }
+  })
+}
+
+/* ---------------------------------------------------------------------- */
+/*
+ * The design system the prototype already has.
+ *
+ * The same promise as everything above it, applied to the one question the tool
+ * exists to answer. A designer opening somebody else's prototype has no
+ * `designlayer.config.mjs` and is not going to write one, so "declare where your
+ * tokens are" is not a workaround — it is the Design tab having no token pickers
+ * at all on a project whose entire palette is sitting in `app/globals.css`.
+ *
+ * Every fixture below is a real project layout rather than a minimal one that
+ * happens to exercise the code: a stock `shadcn init` stylesheet with its
+ * `:root`, `.dark` and `@theme inline` blocks, a v3 palette that lives only in
+ * `tailwind.config.js`, a Next app with four and a half thousand generated SVGs
+ * in front of its stylesheet. Detection that works on a three-line fixture and
+ * not on those is detection that does not work.
+ *
+ * The negative cases are paired with a positive one in the same case body. "A
+ * reset is not a design system" passes trivially against a tool that detects
+ * nothing at all, so each one also asserts what the SAME shape of project does
+ * find — which is what makes the case fail when detection is missing as well as
+ * when it is too eager.
+ */
+console.log("\nThe design system the project already has")
+
+{
+  const TOKEN_GROUPS = [
+    "colors", "spacing", "radii", "textStyles", "uiTextStyles", "effects", "icons", "motion",
+  ]
+  const tokenCount = (catalog) =>
+    TOKEN_GROUPS.reduce((total, group) => total + catalog[group].length, 0)
+  const named = (catalog, group, name) =>
+    catalog[group].some((token) => token.name === name || token.cssVar === name)
+
+  // `shadcn init` output, trimmed to the blocks that carry values: the light
+  // ramp, the dark overrides, and the `@theme inline` mapping that is the only
+  // place a Tailwind v4 project says `bg-primary` means `--primary`.
+  const SHADCN_GLOBALS = `@import "tailwindcss";
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --border: oklch(1 0 0 / 10%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-muted: var(--muted);
+  --radius-lg: var(--radius);
+}
+`
+
+  // Six one-off properties and a pile of rules: what `worthOffering` already
+  // rejects in the Add panel, asserted here because detection adopting one would
+  // make it the project's design system everywhere in the editor.
+  const RESET = `*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; -webkit-font-smoothing: antialiased; }
+img, picture, video { display: block; max-width: 100%; }
+:root { --reset-line: 1.5; }
+`
+
+  const TOKENS_CSS = `:root {
+  --brand-ink: #101828;
+  --brand-paper: #ffffff;
+  --brand-accent: #3b5bdb;
+  --brand-muted: #667085;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+}
+`
+
+  const palette = (prefix, count) =>
+    `:root {\n${Array.from(
+      { length: count },
+      (_, index) => `  --${prefix}-${index}: #${(index * 7919).toString(16).padStart(6, "0").slice(-6)};`
+    ).join("\n")}\n}\n`
+
+  check("a stock Next + Tailwind v4 + shadcn app arrives with its own tokens", () => {
+    const root = project({
+      "package.json": manifest({
+        dependencies: { next: "^15.0.0", react: "^19.0.0" },
+        devDependencies: { tailwindcss: "^4.0.0" },
+      }),
+      "components.json": { style: "new-york", tailwind: { css: "app/globals.css" } },
+      "app/globals.css": SHADCN_GLOBALS,
+    })
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+
+    // The measurement this whole section exists for: before detection this was
+    // 0 colors, 0 radii and 0 aliases on a file the editor could already read.
+    assert.ok(catalog.colors.length >= 10, `only ${catalog.colors.length} colors`)
+    assert.ok(catalog.radii.length >= 1, "no radius came out of --radius")
+    assert.ok(named(catalog, "colors", "--primary"), "the primary colour is not in the catalog")
+    assert.deepEqual(detectedFrom, ["app/globals.css"])
+
+    // `.dark` is read as the same token's other value rather than as a second
+    // token, which is what lets one swatch show both themes.
+    assert.ok(
+      catalog.colors.some((token) => token.values?.dark),
+      "no colour carried a dark value, so the .dark block was not read"
+    )
+
+    // The v4 alias arm. `aliasesFromCss` has always known how to read `@theme`;
+    // it sat behind the empty-catalog short-circuit and was never called.
+    assert.ok(
+      catalog.aliases.tailwind.length > 0,
+      "no Tailwind aliases, so the inspector cannot say an element is bg-primary"
+    )
+    assert.ok(
+      catalog.aliases.tailwind.every((alias) => alias.tokenIds.length > 0),
+      "an alias resolved to no token at all"
+    )
+  })
+
+  check("components.json is believed over the convention list", () => {
+    // A project that moved its stylesheet moved this pointer with it, and it is
+    // the only signal available here that is a statement rather than a guess.
+    const root = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "components.json": { tailwind: { css: "src/assets/app.css" } },
+      "src/assets/app.css": SHADCN_GLOBALS,
+    })
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+    assert.deepEqual(detectedFrom, ["src/assets/app.css"])
+    assert.ok(catalog.colors.length >= 10)
+  })
+
+  check("an entry stylesheet that is nothing but imports still resolves", () => {
+    // Three `@import`s over a `styles/` folder is a normal shape, and read on
+    // its own the entry declares no custom properties at all — so without
+    // following one level this file is rejected as carrying no tokens.
+    const root = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "app/globals.css": '@import "tailwindcss";\n@import "./theme.css";\n',
+      "app/theme.css": TOKENS_CSS,
+    })
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+    assert.ok(catalog.colors.length >= 4, `only ${catalog.colors.length} colors`)
+    assert.ok(catalog.spacing.length >= 4, `only ${catalog.spacing.length} spacing steps`)
+    // Imports first, because that is where the cascade puts them.
+    assert.deepEqual(detectedFrom, ["app/theme.css", "app/globals.css"])
+  })
+
+  check("a Vite + Tailwind v3 palette that exists only in the config is read", () => {
+    // The commonest "prototype with a design system built in" shape before v4:
+    // no `:root`, no custom properties, the whole scale in a JavaScript object.
+    // The reader for it has been in this package the whole time and only fired
+    // when a config file named the file by hand.
+    const root = project({
+      "package.json": manifest({
+        dependencies: { react: "^19.0.0" },
+        devDependencies: { tailwindcss: "^3.4.0", vite: "^7.0.0" },
+      }),
+      "src/index.css": "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n",
+      "tailwind.config.js": [
+        "module.exports = {",
+        "  content: ['./index.html', './src/**/*.tsx'],",
+        "  theme: {",
+        "    extend: {",
+        "      colors: { brand: { 500: '#3b5bdb', 900: '#1c2f8f' }, ink: '#101828' },",
+        "      borderRadius: { pill: '9999px', card: '0.75rem' },",
+        "    },",
+        "  },",
+        "}",
+      ].join("\n"),
+    })
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+    assert.deepEqual(detectedFrom, ["tailwind.config.js"])
+    assert.ok(named(catalog, "colors", "brand-500"), "brand-500 is not in the catalog")
+    assert.ok(named(catalog, "colors", "ink"), "ink is not in the catalog")
+    assert.ok(named(catalog, "radii", "pill"), "pill is not in the catalog")
+    // v3 has no custom property behind its scale, so a token that claimed one
+    // would send the inspector to write `var(--color-brand-500)` into a page
+    // that has never defined it.
+    assert.ok(
+      catalog.colors.every((token) => !token.cssVar),
+      "a v3 theme token claimed a CSS variable"
+    )
+  })
+
+  check("a Tailwind config this process cannot evaluate does not take startup down", () => {
+    const broken = project({
+      "package.json": manifest({ devDependencies: { tailwindcss: "^3.4.0" } }),
+      "tailwind.config.js": "module.exports = require('./nothing-here')",
+    })
+    // Declared, this is a mistake the host has to hear about. Detected, it is a
+    // guess, and a guess that throws would kill the editor on a project that had
+    // merely been looked at too eagerly.
+    assert.equal(tokenCount(resolveConfig({}, { cwd: broken }).designSystem.catalog), 0)
+    assert.throws(
+      () => resolveConfig({ designSystem: { tailwindConfig: "./tailwind.config.js" } }, { cwd: broken }),
+      /Could not read Tailwind config/
+    )
+
+    // The pair, so "it did not throw" cannot be satisfied by never looking: the
+    // same project with a config this process CAN evaluate resolves its scale.
+    const sound = project({
+      "package.json": manifest({ devDependencies: { tailwindcss: "^3.4.0" } }),
+      "tailwind.config.js": "module.exports = { theme: { colors: { ink: '#101828' } } }",
+    })
+    assert.ok(named(resolveConfig({}, { cwd: sound }).designSystem.catalog, "colors", "ink"))
+  })
+
+  check("a design system shipped as a dependency is reached without walking node_modules", () => {
+    const root = project({
+      "package.json": manifest({ dependencies: { "@acme/tokens": "^1.0.0", react: "^19.0.0" } }),
+      "node_modules/@acme/tokens/package.json": { name: "@acme/tokens", style: "tokens.css" },
+      "node_modules/@acme/tokens/tokens.css": TOKENS_CSS,
+      // A dependency that ships a stylesheet and does not claim to be a design
+      // system stays out of it. Without the name filter this project's palette
+      // would be Bootstrap's.
+      "node_modules/bootstrap/package.json": { name: "bootstrap", style: "dist/bootstrap.css" },
+      "node_modules/bootstrap/dist/bootstrap.css": palette("bs", 120),
+    })
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+    assert.deepEqual(detectedFrom, ["@acme/tokens/tokens.css"])
+    assert.ok(named(catalog, "colors", "--brand-accent"), "the package's accent is missing")
+    assert.equal(
+      catalog.colors.some((token) => String(token.cssVar).startsWith("--bs-")),
+      false,
+      "a dependency that never claimed to be a design system was adopted as one"
+    )
+  })
+
+  check("a monorepo sibling package is reached through the workspace symlink", () => {
+    const root = project({
+      "package.json": { name: "workspace-root", private: true, workspaces: ["apps/*", "packages/*"] },
+      "packages/tokens/package.json": { name: "@acme/tokens" },
+      "packages/tokens/tokens.css": TOKENS_CSS,
+      "apps/web/package.json": manifest({
+        dependencies: { next: "^15.0.0", "@acme/tokens": "workspace:*" },
+      }),
+    })
+    const app = path.join(root, "apps/web")
+    fs.mkdirSync(path.join(app, "node_modules/@acme"), { recursive: true })
+    fs.symlinkSync(
+      path.join(root, "packages/tokens"),
+      path.join(app, "node_modules/@acme/tokens"),
+      "dir"
+    )
+    // Nothing here knows what a workspace is. The package is reached because the
+    // app's own manifest declares it and `realpath` follows the link the package
+    // manager already wrote.
+    const { catalog, detectedFrom } = resolveConfig({}, { cwd: app }).designSystem
+    assert.deepEqual(detectedFrom, ["@acme/tokens/tokens.css"])
+    assert.ok(catalog.spacing.length >= 4, "the sibling package's spacing scale is missing")
+  })
+
+  check("a project whose only stylesheet is a reset gets nothing, and says nothing", () => {
+    const reset = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "app/globals.css": RESET,
+      "src/components/card.css": ".card { --card-pad: 12px; --card-gap: 8px; }",
+    })
+    const bare = resolveConfig({}, { cwd: reset }).designSystem
+    assert.equal(tokenCount(bare.catalog), 0, "a CSS reset was adopted as a design system")
+    assert.deepEqual(bare.detectedFrom, [])
+
+    // The pair: the same project, plus a real token file. A detector that finds
+    // nothing anywhere would pass the assertion above for the wrong reason.
+    const tokens = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "app/globals.css": RESET,
+      "src/components/card.css": ".card { --card-pad: 12px; --card-gap: 8px; }",
+      "src/styles/tokens.css": TOKENS_CSS,
+    })
+    const found = resolveConfig({}, { cwd: tokens }).designSystem
+    assert.deepEqual(found.detectedFrom, ["src/styles/tokens.css"])
+    assert.ok(tokenCount(found.catalog) >= 10)
+  })
+
+  /*
+   * A PALETTE AND NOTHING ELSE IS STILL A DESIGN SYSTEM, when it sits at the
+   * entry point.
+   *
+   * Detection reused the Add panel's bar at first, and that bar asks for
+   * twenty-four tokens from a stylesheet declaring a single axis — a sensible
+   * rule where it belongs, choosing one file out of a whole tree, because a
+   * dozen colours there could just as easily be one busy component.
+   *
+   * At a conventional entry it is the wrong question, and it failed against
+   * real projects rather than imagined ones: of four prototypes keeping their
+   * tokens in `src/index.css`, two were adopted and two were refused for
+   * declaring colours and no second axis — thirteen in one, seven in the other,
+   * both inside an explicit theme block. Each showed a completely empty Design
+   * tab for a project whose tokens were thirty lines into the stylesheet its
+   * own build treats as the entry point.
+   *
+   * The two counts below are those two projects. Thirteen is under the old
+   * single-axis bar and seven is under the breadth bar as well, so this case
+   * fails against either half of the strict rule.
+   */
+  check("an entry stylesheet that declares only colours is still adopted", () => {
+    const palette = (count) =>
+      `@theme {\n${Array.from(
+        { length: count },
+        (_, index) => `  --color-token-${index}: #${(index + 16).toString(16).repeat(3)};`
+      ).join("\n")}\n}\n`
+
+    for (const count of [13, 7]) {
+      const root = project({
+        "package.json": manifest({ dependencies: { vite: "^5.0.0" } }),
+        "src/index.css": `@import 'tailwindcss';\n${palette(count)}`,
+      })
+      const { catalog, detectedFrom } = resolveConfig({}, { cwd: root }).designSystem
+      assert.deepEqual(
+        detectedFrom,
+        ["src/index.css"],
+        `a ${count}-colour entry stylesheet was not adopted`
+      )
+      assert.equal(
+        catalog.colors.length,
+        count,
+        `the ${count}-colour palette did not reach the catalog`
+      )
+    }
+  })
+
+  check("a declared design system is never second-guessed", () => {
+    const files = {
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "app/globals.css": SHADCN_GLOBALS,
+      "src/brand.css": TOKENS_CSS,
+    }
+    const declared = resolveConfig(
+      { designSystem: { cssSources: ["src/brand.css"] } },
+      { cwd: project(files) }
+    ).designSystem
+    assert.deepEqual(declared.detectedFrom, [], "detection ran beside a declared design system")
+    assert.ok(named(declared.catalog, "colors", "--brand-accent"))
+    assert.equal(
+      named(declared.catalog, "colors", "--primary"),
+      false,
+      "the detected stylesheet was merged into the one the host declared"
+    )
+
+    // And the same project with nothing declared finds the entry stylesheet, so
+    // the assertion above is about precedence rather than about a detector that
+    // never runs.
+    assert.deepEqual(resolveConfig({}, { cwd: project(files) }).designSystem.detectedFrom, [
+      "app/globals.css",
+    ])
+  })
+}
+
+/* ---------------------------------------------------------------------- */
+console.log("\nDiscovery survives a project of a realistic size and shape")
+
+{
+  const TOKENS_CSS = `:root {
+  --brand-ink: #101828;
+  --brand-paper: #ffffff;
+  --brand-accent: #3b5bdb;
+  --brand-muted: #667085;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+}
+`
+  const palette = (prefix, count) =>
+    `:root {\n${Array.from(
+      { length: count },
+      (_, index) => `  --${prefix}-${index}: #${(index * 7919).toString(16).padStart(6, "0").slice(-6)};`
+    ).join("\n")}\n}\n`
+
+  await checkAsync("a stylesheet behind four thousand generated assets is still found", async () => {
+    const root = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      "src/styles/tokens.css": TOKENS_CSS,
+    })
+    // Alphabetically ahead of `src/styles`, which is the whole failure: the walk
+    // charged its file budget for every SVG it could never parse and gave up
+    // before it reached the stylesheet. 4,500 is what a generated icon set or a
+    // folder of OG cards actually looks like.
+    const generated = path.join(root, "src/assets/generated")
+    fs.mkdirSync(generated, { recursive: true })
+    for (let index = 0; index < 4500; index += 1) {
+      fs.writeFileSync(
+        path.join(generated, `icon-${String(index).padStart(5, "0")}.svg`),
+        "<svg xmlns='http://www.w3.org/2000/svg'/>"
+      )
+    }
+
+    const config = resolveConfig({}, { cwd: root })
+    const { candidates } = await createLibraryStore(config).discover()
+    assert.ok(
+      candidates.some((candidate) => candidate.path === "src/styles/tokens.css"),
+      `the walk starved before reaching the stylesheet: ${JSON.stringify(candidates)}`
+    )
+    // And the host catalog resolves it without walking anything at all.
+    assert.deepEqual(config.designSystem.detectedFrom, ["src/styles/tokens.css"])
+  })
+
+  await checkAsync("the project's own design system outranks the things that look like one", async () => {
+    const root = project({
+      "package.json": manifest({ dependencies: { next: "^15.0.0" } }),
+      // Any JSON with a nested `value` leaf reads as a token file, and `tokens`
+      // outranks `css` — so this sat at the TOP of the list describing itself as
+      // "no tokens", above the project's real design system.
+      "locales/en.json": { greeting: { value: "Hello" }, farewell: { value: "Bye" } },
+      "public/vendor/open-props.css": palette("op", 200),
+      "test/fixtures/theme.css": palette("fixture", 40),
+      "src/styles/tokens.css": TOKENS_CSS,
+    })
+    const { candidates } = await createLibraryStore(resolveConfig({}, { cwd: root })).discover()
+    const paths = candidates.map((candidate) => candidate.path)
+    assert.equal(paths[0], "src/styles/tokens.css", `ranked: ${paths.join(", ")}`)
+    for (const noise of ["locales/en.json", "public/vendor/open-props.css", "test/fixtures/theme.css"]) {
+      assert.equal(paths.includes(noise), false, `${noise} was offered as a design system`)
     }
   })
 }

@@ -1,34 +1,78 @@
 /**
- * The chrome's tooltip, placed against the viewport it is actually in.
+ * The chrome's tooltip: React Bits' `WarmTooltip`, ported to plain DOM.
  *
  * ---------------------------------------------------------------------------
- * WHY THIS IS JAVASCRIPT
+ * WHAT IT IS
  *
- * A `::after` carrying `content: attr(data-de-tip)` is the cheapest tooltip
- * there is and this chrome had three of them. They are all the same program:
- * draw a card at a fixed offset from the control and hope the screen is big
- * enough. None of them can ask how wide the window is, where the control sits
- * in it, or how wide the label came out — so none of them can do the one thing
- * a tooltip has to do, which is be readable at the edge of the screen.
+ * https://reactbits.dev/micro/warm-tooltip. One card shared by every control on
+ * the page, with a state machine rather than a delay:
  *
- * Both of the panel ones are already bent around that hole. The help dot's card
- * is anchored to the whole ROW rather than to the 14px dot, because hung off
- * the dot it ran off the left edge of a 260px panel and cut the first two words
- * of every hint in half. The row actions' card is hung off the RIGHT edge of
- * its button and grown leftward, because the actions live in the row's
- * top-right corner and any other direction leaves the panel. Both are correct,
- * both are invisible as constraints, and both stop being true the moment the
- * surface moves — which is the actual argument for one primitive rather than
- * three: a rule you can only obey by remembering it is a rule nobody will obey.
+ *   COLD    nothing has been shown recently. The pointer has to rest on a
+ *           control for 400ms, and the card POPS in — 160ms, scaling up from
+ *           0.94, un-blurring from 4px, rising 4px away from its control.
+ *   WARM    a card is up, or one was up within the last 300ms. The wait is
+ *           gone: the reader has declared they are reading tooltips.
+ *   MOVE    a card is up and the pointer arrives somewhere else. The card does
+ *           not close and reopen. It TRAVELS — one 320ms spring carrying its
+ *           position and its width and height to the next control — while the
+ *           old label slides out and the new one slides in across it.
+ *   GRACE   the pointer leaves. Nothing happens for 80ms, because the 4px gap
+ *           between two toolbar buttons is not the reader leaving the toolbar.
  *
- * So: one element, `getBoundingClientRect()` against `window.innerWidth` and
- * `innerHeight`, and the standard three-step — PREFER a side, FLIP to the other
- * when the preferred one overflows, SHIFT along the cross axis to stay inside.
- * `placeTip` below is that arithmetic as a pure function, so it can be checked
- * against synthetic rects without a browser.
+ * The behaviour this replaces had the first two of those and neither of the
+ * last two: it hid the card and showed a new one at the new place, which is the
+ * flicker the warm window exists to prevent, moved one level up. The travel is
+ * the whole point of the component — a strip of ten tools reads as one label
+ * following the pointer rather than ten labels firing at it.
  *
  * ---------------------------------------------------------------------------
- * VIEWPORT, NOT THE APP INSET
+ * WHAT IT IS NOT: THE PORT'S BUDGET
+ *
+ * Upstream is a React component built on `motion/react`: a provider, a trigger
+ * wrapper element per control, seven motion values and a `useTransform` graph
+ * recomputed every frame. None of that could be adopted as written. The chrome
+ * is plain DOM by policy (`core/dom.ts` — a second React tree in the app's
+ * document fights the app's own reconciler), and the previous card cost exactly
+ * zero animation frames, so a port that spends a frame budget to look nicer has
+ * regressed the editor it is decorating.
+ *
+ * So the motion is split three ways by what each part actually needs, cheapest
+ * mechanism first:
+ *
+ *   THE POP — a CSS transition. Opacity, transform and filter between two
+ *   declared states, interpolated on the compositor with no script running at
+ *   all. It also interrupts correctly for free: leaving 60ms into a 160ms pop
+ *   resumes from wherever the value is, which upstream gets from Motion and a
+ *   hand-rolled interpolation would get wrong.
+ *
+ *   THE LABEL SWAP — `Element.animate()`. Two short opacity/transform/filter
+ *   animations, fire-and-forget, composited, no per-frame callback and no
+ *   forced reflow to start them.
+ *
+ *   THE TRAVEL — a `requestAnimationFrame` spring, and the only per-frame work
+ *   in the file. It has to be: the card's WIDTH and HEIGHT are springing, an
+ *   interruption has to carry velocity, and a keyframed approximation of either
+ *   is worse than the real thing. It runs only while a card is moving between
+ *   two controls, stops itself the frame it settles, and writes three
+ *   properties on one fixed-position element whose children are absolutely
+ *   positioned — so nothing outside the card is laid out.
+ *
+ * The three listeners that cost something when NOTHING is happening — scroll,
+ * resize and `visibilitychange` — are attached when a card opens and removed
+ * when it closes. The previous implementation held a document-wide capturing
+ * scroll listener for the entire session, so the idle cost of the chrome is
+ * lower after this change than before it.
+ *
+ * ---------------------------------------------------------------------------
+ * PLACEMENT: VIEWPORT, NOT THE APP INSET
+ *
+ * `placeTip` below is the standard three-step — PREFER a side, FLIP to the
+ * other when the preferred one overflows, SHIFT along the cross axis to stay
+ * inside — as a pure function, so it can be checked against synthetic rects
+ * without a browser. It is kept from the implementation this replaces and is
+ * strictly more than upstream does: `WarmTooltip` clamps the cross axis and
+ * never flips, which is fine for a demo page and not for a card hung off a
+ * toolbar pinned 12px from the bottom of the window.
  *
  * `annotations/canvas.ts` clamps its composer against `--de-left`/`--de-right`
  * rather than the window, because a composer that slides under the inspector
@@ -42,26 +86,37 @@
  * ACCESSIBILITY: THE CARD IS DECORATION, AND IS MARKED AS SUCH
  *
  * `aria-hidden="true"` on the card; the control keeps its own `aria-label`.
- * The alternative — pointing `aria-describedby` at the card — is the wrong
- * trade here, for three reasons that are all about what the call sites already
- * say. Every tipped control in this chrome is named with the same words as its
- * tip: `shell/toolbar.ts` emits `data-de-tip` and `aria-label` from one helper,
- * and `test/annotation-cases.mjs` asserts the two attributes are EQUAL on the
- * row actions. A description would therefore read the label back a second time
- * ("Undo, button, Undo"). Second, one shared card means one id pointed at by
- * whichever control is hovered, re-pointed on every pointer move — a moving
- * target in the accessibility tree for a surface that exists only for a
- * pointer. Third, the three implementations this replaces were pseudo-elements,
- * which are not in the accessibility tree at all, so hiding the card keeps the
- * announced experience byte-for-byte what it is today.
+ * Upstream does the opposite — `role="tooltip"` plus an `aria-describedby`
+ * pointed at it — and that is the one part of the component this port
+ * deliberately did not take, for three reasons that are all about what the call
+ * sites already say. Every tipped control in this chrome is named with the same
+ * words as its tip: `shell/toolbar.ts` emits `data-de-tip` and `aria-label`
+ * from one helper, and `test/annotation-cases.mjs` asserts the two attributes
+ * are EQUAL on the row actions. A description would therefore read the label
+ * back a second time ("Undo, button, Undo"). Second, one shared card means one
+ * id pointed at by whichever control is hovered, re-pointed on every pointer
+ * move — a moving target in the accessibility tree for a surface that exists
+ * only for a pointer, and upstream only gets away with it because its card
+ * unmounts between runs. Third, the three implementations this lineage replaced
+ * were pseudo-elements, which are not in the accessibility tree at all, so
+ * hiding the card keeps the announced experience byte-for-byte what it is.
  *
  * The one thing that is genuinely not announced either way is the toolbar's
  * shortcut suffix — the tip says "Undo · ⌘Z" and the label says "Undo". That is
- * unchanged from the pseudo-elements, and the fix for it is a real
- * `aria-keyshortcuts` on the control, not a description on a hover card.
+ * unchanged, and the fix for it is a real `aria-keyshortcuts` on the control,
+ * not a description on a hover card.
  */
 
-import { TIP_WRAP_WIDTH } from "./css/tooltip"
+import {
+  TIP_CLOSE_MS,
+  TIP_EASE_OUT,
+  TIP_POP_MS,
+  TIP_RISE,
+  TIP_SWAP_BLUR,
+  TIP_SWAP_MS,
+  TIP_SWAP_SHIFT,
+  TIP_WRAP_WIDTH,
+} from "./css/tooltip"
 import { el } from "./dom"
 import { tokens as t } from "./tokens"
 
@@ -109,7 +164,7 @@ export interface TipSize {
 }
 
 export interface TipPlacement {
-  /** Viewport pixels, ready for `style.left` / `style.top`. */
+  /** Viewport pixels, ready for the card's `translate()`. */
   left: number
   top: number
   /** Which side it ended up on. */
@@ -141,52 +196,116 @@ export interface TipPlacement {
  */
 const DEFAULT_SIDE: TipSide = "below"
 
-/** Between the control and the card. The gap the toolbar's tip already used. */
+/** Between the control and the card. Upstream's `gap`, and the same 8. */
 const GAP = t.space.md
 
 /**
  * How close to the edge of the window the card may come.
  *
  * The same 8 that `token-picker.ts`, `app-chooser.ts`, `layer-menu.ts` and
- * `annotations/canvas.ts` each call `EDGE`. A card flush to the edge reads as
- * clipped even when it is whole.
+ * `annotations/canvas.ts` each call `EDGE`, and the same 8 upstream calls
+ * `MARGIN`. A card flush to the edge reads as clipped even when it is whole.
  */
 const MARGIN = t.space.md
 
 /**
- * The wait, and it is the toolbar's 400ms rather than a new number.
+ * The cold wait. Upstream's `delay`, and the toolbar's old 400ms unchanged.
  *
- * `css/toolbar.ts` states the reason and it generalises: the bar is a strip of
+ * `css/toolbar.ts` stated the reason and it generalises: the bar is a strip of
  * ten controls you sweep the pointer across on the way somewhere else, and
- * without a wait that sweep fires ten labels. The same is true of a column of
- * panel rows. The wait is what separates "the pointer passed over this" from
- * "the pointer stopped on this", and it is the whole difference between a
- * tooltip and a flicker.
+ * without a wait that sweep fires ten labels. The wait is what separates "the
+ * pointer passed over this" from "the pointer stopped on this".
  */
 const DELAY = 400
 
 /**
- * How long the primitive stays WARM after a tip closes.
+ * How long the primitive stays WARM after a card closes. Upstream's
+ * `warmWindow`, and the component is named for it.
  *
- * The argument, and it is ours: once a tooltip is already up, the reader has
- * declared they are reading tooltips, and making them wait another 400ms to
- * learn what the button NEXT to it does is the wait doing the opposite of its
- * job. So the first tip in a run waits and every tip after it is instant —
- * while one is open, and for a moment after the pointer leaves, because
- * crossing a 4px gap between two buttons closes the first one. It is also the
- * reason the row actions in `css/annotations.ts` were given no delay at all.
+ * Once a tooltip is already up, the reader has declared they are reading
+ * tooltips, and making them wait another 400ms to learn what the button NEXT to
+ * it does is the wait doing the opposite of its job. 300ms is short enough that
+ * coming back to the strip a second later is a fresh run and waits again, which
+ * is what keeps the guard against sweeping intact.
  *
- * This note used to attribute the warm period to Figma. It should not have:
- * Figma publishes nothing about tooltip timing, and the behaviour was not
- * measured either — it was inferred from using the app, which is not evidence.
- * The nearest thing to a source is `figui3`, a UI3 replica by a Figma designer,
- * which uses a flat 500ms delay and no warm period at all. The mechanism stays
- * because the argument above stands on its own; only the citation was false.
- *
- * 300ms is short enough that coming back to the strip a second later is a fresh
- * run and waits again, which is what keeps the guard against sweeping intact.
+ * A note that used to live here attributed this to Figma. It should not have:
+ * Figma publishes nothing about tooltip timing. The mechanism is React Bits',
+ * and the argument above is the reason to keep it.
  */
 const WARM = 300
+
+/**
+ * Upstream's `GRACE`: how long a card waits after the pointer leaves.
+ *
+ * The gap between two toolbar buttons is 4px of padding the pointer crosses in
+ * one frame. Closing on the way across and reopening on the other side is two
+ * state changes for something the reader experienced as one movement — and with
+ * the travel below it is the difference between a card that follows the pointer
+ * and a card that blinks.
+ */
+const GRACE = 80
+
+/**
+ * Upstream's `travel`: how long the card takes to reach the next control.
+ *
+ * Spent on FOUR numbers at once — x, y, width and height — because a card that
+ * slides to the next button without resizing to the next label would arrive as
+ * the wrong shape and then snap.
+ */
+const TRAVEL_MS = 320
+
+/**
+ * Upstream's `bounce: 0.1`, as a damping ratio, plus the natural frequency that
+ * makes the spring settle in `TRAVEL_MS`.
+ *
+ * Motion expresses a spring as a perceptual duration and a bounce; the physics
+ * underneath is `ζ = 1 - bounce` and a frequency solved from the duration. The
+ * solve is Motion's own (`findSpring`), restated: for a zero-velocity start the
+ * residual of a unit travel at time `T` is `(ζ / √(1 - ζ²)) · e^(-ζωT)`, and
+ * Motion asks for that to be 0.001 — so
+ *
+ *     ω = ln( (ζ / √(1 - ζ²)) / 0.001 ) / (ζ · T)
+ *
+ * which at ζ = 0.9 and T = 320ms is about 26.5 rad/s. The naive version of this
+ * — "1% of the distance left after T" — was tried first and is wrong by a
+ * factor of 1.7: it lands the card within a pixel on time and then spends
+ * another 300ms creeping the last half of one, which on a card full of 12px
+ * text is 300ms of visibly soft glyphs. The ratio matters, not the rounding.
+ *
+ * ζ = 0.9 overshoots by `e^(-πζ/√(1-ζ²))`, about 0.15% — a pixel on a long
+ * travel. That is the barely-there give upstream's `bounce: 0.1` asks for, not
+ * a bounce anyone would call one.
+ */
+const DAMPING_RATIO = 1 - 0.1
+const OMEGA =
+  Math.log(DAMPING_RATIO / Math.sqrt(1 - DAMPING_RATIO * DAMPING_RATIO) / 0.001) /
+  (DAMPING_RATIO * (TRAVEL_MS / 1000))
+
+/**
+ * When the spring is close enough to stop, in px and px/s.
+ *
+ * Sub-pixel, because the card carries 12px text: a value that stops a third of
+ * a pixel out is a card with a soft edge and blurred glyphs, which is the one
+ * rendering artefact this label cannot carry. The frame it settles it is
+ * snapped to the exact integer `placeTip` returned.
+ *
+ * The speed is the looser of the two on purpose — at a tenth of a pixel out
+ * this spring is still moving at about 2.4px/s, so a tighter one would make
+ * SPEED the binding condition and hold the card open for the decay of a
+ * quantity nobody can see. 8px/s is an eighth of a pixel a frame.
+ */
+const REST_DISTANCE = 0.1
+const REST_VELOCITY = 8
+
+/** The longest frame the spring will integrate. A backgrounded tab returns one
+ *  enormous delta, and a spring handed 900ms of `dt` explodes. */
+const MAX_FRAME = 0.064
+/** Integration step. Fixed, so the motion is the same on a 60Hz and a 120Hz
+ *  screen, and short enough that `OMEGA · h` stays far inside stability. */
+const STEP = 1 / 240
+
+/** Upstream's `presence` retarget when a card is caught mid-close and reopened. */
+const REOPEN_MS = 120
 
 // ───────────────────────────────────────────────────────── the geometry ────
 
@@ -288,15 +407,79 @@ export function placeTip(input: {
   return { left: Math.round(left), top: Math.round(top), side, flipped: side !== prefer, shifted, clamped }
 }
 
+// ───────────────────────────────────────────────────── the environment ─────
+
+const now = (): number =>
+  typeof performance !== "undefined" && typeof performance.now === "function"
+    ? performance.now()
+    : Date.now()
+
+/**
+ * Reduced motion, asked of the platform rather than guessed.
+ *
+ * The stylesheet already clamps the transitions; this is the other half, for
+ * the two things a stylesheet cannot reach — the spring, which is arithmetic in
+ * this file, and the swap, which is a scripted animation. The query object is
+ * cached because `matchMedia` allocates, and it is re-read every time because
+ * the setting can change while the editor is open.
+ *
+ * Guarded for jsdom, which implements neither this nor the Web Animations API
+ * and drives every suite in `test/`.
+ */
+let reduceQuery: MediaQueryList | null | undefined
+function prefersReducedMotion(): boolean {
+  if (reduceQuery === undefined) {
+    reduceQuery =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null
+  }
+  return reduceQuery?.matches === true
+}
+
+/** True when this document can run a scripted animation at all. */
+const animatable = (node: Element): boolean =>
+  typeof (node as HTMLElement).animate === "function"
+
+/** True when frames exist. jsdom only has them under `pretendToBeVisual`. */
+const framed = (): boolean => typeof requestAnimationFrame === "function"
+
 // ───────────────────────────────────────────────────────── the runtime ─────
 
-let card: HTMLElement | null = null
-/** The control the card is showing for, or is about to. */
+interface Card {
+  /** The placed, sized box. Carries the open attribute and the side variables. */
+  root: HTMLElement
+  /** The pop: scale, blur, opacity. */
+  box: HTMLElement
+  /** Two labels that cross over each other while the box travels. */
+  layers: [HTMLElement, HTMLElement]
+  /** Which of the two is showing. */
+  live: 0 | 1
+  /** An unseen copy of the face, for measuring. See `css/tooltip.ts`. */
+  ruler: HTMLElement
+}
+
+type Phase = "closed" | "open" | "closing"
+
+let card: Card | null = null
+let phase: Phase = "closed"
+/** The control the card is showing for. */
 let anchored: HTMLElement | null = null
-let timer: number | null = null
-let open = false
-/** When the last tip closed, for `WARM`. */
-let closedAt = 0
+/** The control the pointer is on, which is not the same thing during the wait. */
+let hovered: HTMLElement | null = null
+/** What the live layer currently says, so an unchanged label skips the swap. */
+let shownText = ""
+/** The side `anchored` asked for, kept so scrolling can re-place without it. */
+let preferred: TipSide = DEFAULT_SIDE
+/** The last measured card size, kept so scrolling can re-place without it. */
+let measured: TipSize = { width: 0, height: 0 }
+
+let openTimer: ReturnType<typeof setTimeout> | null = null
+let leaveTimer: ReturnType<typeof setTimeout> | null = null
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+/** When the warm window shuts. See `WARM`. */
+let warmUntil = 0
+
 let release: (() => void) | null = null
 
 /**
@@ -309,10 +492,240 @@ let release: (() => void) | null = null
  * while our card is up and put back when it goes, which leaves the DOM exactly
  * as the call site wrote it any time a test or a screen reader looks at it.
  *
+ * The observer is what makes that survive a card that now FOLLOWS a scroll
+ * instead of hiding on one. `annotations/canvas.ts` and `lint/markers.ts` both
+ * reposition pooled markers every scroll frame and both write `title` back if
+ * it does not match — a guard against re-setting it needlessly, which reads an
+ * attribute this file has taken away and therefore never matches. Hiding on
+ * scroll used to end the borrow before that mattered. Now it does not, so the
+ * borrow watches its own attribute and takes it away again, keeping the latest
+ * text to hand back.
+ *
  * A call site moving `title` to `data-de-tip` gets the same result with no
  * mutation at all, and should.
  */
-let borrowed: { node: HTMLElement; value: string } | null = null
+let borrowed: { node: HTMLElement; value: string; watch: MutationObserver | null } | null = null
+
+// ---- the spring ----------------------------------------------------------
+
+type Axis = "x" | "y" | "w" | "h"
+const AXES: Axis[] = ["x", "y", "w", "h"]
+
+/** Where the card is, where it is going, and how fast it is getting there. */
+const at = { x: 0, y: 0, w: 0, h: 0 }
+const to = { x: 0, y: 0, w: 0, h: 0 }
+const velocity = { x: 0, y: 0, w: 0, h: 0 }
+let springFrame = 0
+let springClock = 0
+
+/** The three properties the travel writes, and the only per-frame DOM work. */
+function paint(): void {
+  if (!card) return
+  const style = card.root.style
+  style.transform = `translate(${at.x}px, ${at.y}px)`
+  style.width = `${at.w}px`
+  style.height = `${at.h}px`
+}
+
+function stopSpring(): void {
+  if (!springFrame) return
+  cancelAnimationFrame(springFrame)
+  springFrame = 0
+}
+
+function jump(): void {
+  stopSpring()
+  for (const axis of AXES) {
+    at[axis] = to[axis]
+    velocity[axis] = 0
+  }
+  paint()
+}
+
+/**
+ * One frame of the travel.
+ *
+ * Semi-implicit Euler at a fixed `STEP`, sub-stepped from the real frame delta,
+ * so a dropped frame slows the card down rather than shooting it past the
+ * target. Velocity survives a retarget, which is the reason this is a spring
+ * and not a keyframe list: the pointer changing its mind halfway down a toolbar
+ * should bend the card's path, not restart it.
+ */
+function step(stamp: number): void {
+  springFrame = 0
+  const delta = Math.min(MAX_FRAME, Math.max(0, (stamp - springClock) / 1000))
+  springClock = stamp
+  const count = Math.max(1, Math.ceil(delta / STEP))
+  const h = delta / count
+
+  let moving = false
+  for (const axis of AXES) {
+    let value = at[axis]
+    let v = velocity[axis]
+    const target = to[axis]
+    for (let i = 0; i < count; i += 1) {
+      const acceleration = -(OMEGA * OMEGA) * (value - target) - 2 * DAMPING_RATIO * OMEGA * v
+      v += acceleration * h
+      value += v * h
+    }
+    if (Math.abs(target - value) < REST_DISTANCE && Math.abs(v) < REST_VELOCITY) {
+      value = target
+      v = 0
+    } else {
+      moving = true
+    }
+    at[axis] = value
+    velocity[axis] = v
+  }
+
+  paint()
+  if (moving) springFrame = requestAnimationFrame(step)
+}
+
+/** Aim the spring at `to`, starting it if it is not already running. */
+function chase(): void {
+  if (prefersReducedMotion() || !framed()) {
+    jump()
+    return
+  }
+  if (springFrame) return
+  springClock = now()
+  springFrame = requestAnimationFrame(step)
+}
+
+// ---- the card ------------------------------------------------------------
+
+function layer(): HTMLElement {
+  return el("div", { class: "de-tip-layer" }, [el("div", { class: "de-tip-face" })])
+}
+
+/** The card, made once. Idempotent, and re-parents itself if it is torn out. */
+function ensureCard(): Card {
+  if (card && card.root.isConnected && card.ruler.isConnected) return card
+  if (!card) {
+    const layers: [HTMLElement, HTMLElement] = [layer(), layer()]
+    layers[1].style.opacity = "0"
+    const box = el("div", { class: "de-tip-box" }, layers)
+    card = {
+      root: el("div", {
+        class: "de-tip",
+        // Decoration. The control keeps its own name — see the header.
+        "aria-hidden": "true",
+      }, [box]),
+      box,
+      layers,
+      live: 0,
+      ruler: el("div", { class: "de-tip-ruler de-tip-face" }),
+    }
+  }
+  document.body.append(card.root, card.ruler)
+  return card
+}
+
+const face = (node: HTMLElement): HTMLElement => node.firstElementChild as HTMLElement
+
+function setWrap(node: HTMLElement, wrap: boolean): void {
+  if (wrap) node.setAttribute(TIP_WRAP_ATTR, "")
+  else node.removeAttribute(TIP_WRAP_ATTR)
+}
+
+/**
+ * How big the card has to be for this label — from a second, unseen face.
+ *
+ * The card cannot be measured by looking at it any more: it carries an explicit
+ * width and height at all times because the travel springs them. The ruler
+ * shares `.de-tip-face`, so it shares the padding and the type, so its box IS
+ * the answer. One layout read per show, which is one fewer than the version
+ * that measured the live card and then re-measured it after switching to wrap.
+ *
+ * Ceiled rather than rounded: a card a third of a pixel narrower than its text
+ * drops the last glyph to a second line.
+ */
+function measure(text: string, wrap: boolean): TipSize {
+  const ruler = ensureCard().ruler
+  ruler.textContent = text
+  setWrap(ruler, wrap)
+  const box = ruler.getBoundingClientRect()
+  return { width: Math.ceil(box.width), height: Math.ceil(box.height) }
+}
+
+/** How long the next open/close transition takes. See `css/tooltip.ts`. */
+function pop(ms: number): void {
+  card?.root.style.setProperty("--de-tip-pop", `${prefersReducedMotion() ? 0 : ms}ms`)
+}
+
+/**
+ * The side, as the three custom properties the pop is drawn from.
+ *
+ * A card above its control grows out of its own bottom edge and settles upward;
+ * a card below grows out of its top and settles down. Upstream's `ORIGIN` and
+ * `SIGN` tables, for the two sides this chrome uses.
+ */
+function applySide(side: TipSide): void {
+  const style = card?.root.style
+  if (!style) return
+  style.setProperty("--de-tip-origin", side === "above" ? "center bottom" : "center top")
+  style.setProperty("--de-tip-rise-x", "0px")
+  style.setProperty("--de-tip-rise-y", `${side === "above" ? TIP_RISE : -TIP_RISE}px`)
+}
+
+/**
+ * Re-letter the card: the old words out one side, the new words in the other.
+ *
+ * `direction` is the sign of the pointer's travel, so the text moves the way the
+ * card is moving and the two read as one object rather than as a dissolve.
+ * Upstream's `LAYER` variants, at upstream's 140ms, 10px and 3px.
+ */
+function relabel(text: string, wrap: boolean, direction: number): void {
+  const c = ensureCard()
+  const animated = direction !== 0 && !prefersReducedMotion() && animatable(c.layers[0])
+  const outgoing = c.layers[c.live]
+  const incoming = animated ? c.layers[c.live ^ 1] : outgoing
+
+  /* Whatever the last swap left running, including the `fill: both` it parked
+     the old layer at. Cancelling reverts both to the inline opacity below. */
+  for (const node of c.layers) node.getAnimations?.().forEach((animation) => animation.cancel())
+
+  const target = face(incoming)
+  target.textContent = text
+  setWrap(target, wrap)
+  shownText = text
+
+  c.live = (animated ? c.live ^ 1 : c.live) as 0 | 1
+  c.layers[c.live].style.opacity = "1"
+  c.layers[c.live ^ 1].style.opacity = "0"
+  if (!animated) return
+
+  const timing: KeyframeAnimationOptions = {
+    duration: TIP_SWAP_MS,
+    easing: TIP_EASE_OUT,
+    fill: "both",
+  }
+  outgoing.animate(
+    [
+      { opacity: 1, transform: "translateX(0px)", filter: "blur(0px)" },
+      {
+        opacity: 0,
+        transform: `translateX(${-TIP_SWAP_SHIFT * direction}px)`,
+        filter: `blur(${TIP_SWAP_BLUR}px)`,
+      },
+    ],
+    timing
+  )
+  incoming.animate(
+    [
+      {
+        opacity: 0,
+        transform: `translateX(${TIP_SWAP_SHIFT * direction}px)`,
+        filter: `blur(${TIP_SWAP_BLUR}px)`,
+      },
+      { opacity: 1, transform: "translateX(0px)", filter: "blur(0px)" },
+    ],
+    timing
+  )
+}
+
+// ---- reading the call site -----------------------------------------------
 
 /** The nearest ancestor carrying `attribute`, including the control itself. */
 const inherited = (node: HTMLElement, attribute: string): string | null =>
@@ -320,28 +733,30 @@ const inherited = (node: HTMLElement, attribute: string): string | null =>
 
 const restoreTitle = (): void => {
   if (!borrowed) return
+  /* Before the write, or handing the attribute back would look like the call
+     site putting it back and the observer would take it away again. */
+  borrowed.watch?.disconnect()
   if (borrowed.node.isConnected) borrowed.node.setAttribute("title", borrowed.value)
   borrowed = null
 }
 
-const clearTimer = (): void => {
-  if (timer === null) return
-  clearTimeout(timer)
-  timer = null
-}
-
-/** The card, made once. */
-function ensureCard(): HTMLElement {
-  if (card?.isConnected) return card
-  card =
-    card ??
-    el("div", {
-      class: "de-tip",
-      // Decoration. The control keeps its own name — see the header.
-      "aria-hidden": "true",
+/** Take the `title` off `node` and keep it off. See `borrowed`. */
+function borrowTitle(node: HTMLElement, value: string): void {
+  restoreTitle()
+  node.removeAttribute("title")
+  let watch: MutationObserver | null = null
+  if (typeof MutationObserver === "function") {
+    watch = new MutationObserver(() => {
+      const held = borrowed
+      if (!held || held.node !== node) return
+      const written = node.getAttribute("title")
+      if (written === null) return
+      held.value = written
+      node.removeAttribute("title")
     })
-  document.body.append(card)
-  return card
+    watch.observe(node, { attributes: true, attributeFilter: ["title"] })
+  }
+  borrowed = { node, value, watch }
 }
 
 /**
@@ -367,96 +782,304 @@ function anchorFor(target: EventTarget | null): HTMLElement | null {
   return node
 }
 
+const centreX = (node: HTMLElement): number => {
+  const box = node.getBoundingClientRect()
+  return box.left + box.width / 2
+}
+
+// ---- the state machine ---------------------------------------------------
+
+const clearOpenTimer = (): void => {
+  if (openTimer === null) return
+  clearTimeout(openTimer)
+  openTimer = null
+}
+const clearLeaveTimer = (): void => {
+  if (leaveTimer === null) return
+  clearTimeout(leaveTimer)
+  leaveTimer = null
+}
+const clearCloseTimer = (): void => {
+  if (closeTimer === null) return
+  clearTimeout(closeTimer)
+  closeTimer = null
+}
+
 /**
- * Draw and place the card for `node`.
+ * Show the card for `node`.
  *
- * Measured with the text already in it and the wrap already decided, because
- * the whole point of doing this in JavaScript is that the size is a fact rather
- * than an estimate. The card sits in the document at `opacity: 0` between
- * shows, so it has a box to measure without ever being seen.
+ * `intent` is what the pointer did; the MODE is what that means given whether a
+ * card is already up, and the mapping is upstream's:
+ *
+ *   fresh + cold      pop in over 160ms.
+ *   fresh + warm      appear at once. A card was up a moment ago; as far as the
+ *                     reader is concerned this one never went away.
+ *   already up        MOVE: travel, and cross the labels over.
  */
-function reveal(node: HTMLElement): void {
-  timer = null
+function show(node: HTMLElement, intent: "cold" | "warm"): void {
+  openTimer = null
   if (!node.isConnected) return
   const label = labelOf(node)
   if (!label) return
 
-  restoreTitle()
-  if (label.fromTitle) {
-    borrowed = { node, value: label.text }
-    node.removeAttribute("title")
-  }
+  if (label.fromTitle) borrowTitle(node, label.text)
+  else restoreTitle()
 
-  const tip = ensureCard()
-  tip.textContent = label.text
+  const c = ensureCard()
+  const fresh = phase === "closed"
+  const previous = anchored
+  clearCloseTimer()
 
-  const viewport = { width: window.innerWidth, height: window.innerHeight }
-  const wraps = node.closest(`[${TIP_WRAP_ATTR}]`) !== null
-  if (wraps) tip.setAttribute(TIP_WRAP_ATTR, "")
-  else tip.removeAttribute(TIP_WRAP_ATTR)
-
-  let box = tip.getBoundingClientRect()
   /*
-   * One line that cannot fit becomes several, and this is the case no CSS-only
-   * tip could ever reach: `white-space: nowrap` consults neither the stylesheet
-   * nor the window, so a long label at the edge of a narrow window was simply
-   * cut off. Re-measured after the switch, because wrapping is exactly the
-   * thing that changes both dimensions.
+   * Wrap, then measure, then wrap again if the answer was too wide.
    *
    * Against the SMALLER of the two limits. `TIP_WRAP_WIDTH` is where the sheet
    * says a label has become prose; the viewport band is where the screen says
-   * it has run out of room. A tip past either one wants a second line.
+   * it has run out of room. A tip past either one wants a second line — and
+   * this is the case no CSS-only tip could ever reach, because `nowrap`
+   * consults neither the stylesheet nor the window.
    */
+  const viewport = { width: window.innerWidth, height: window.innerHeight }
+  let wrap = node.closest(`[${TIP_WRAP_ATTR}]`) !== null
+  let size = measure(label.text, wrap)
   const widest = Math.min(TIP_WRAP_WIDTH, viewport.width - MARGIN * 2)
-  if (!wraps && box.width > widest) {
-    tip.setAttribute(TIP_WRAP_ATTR, "")
-    box = tip.getBoundingClientRect()
+  if (!wrap && size.width > widest) {
+    wrap = true
+    size = measure(label.text, wrap)
   }
 
   const declared = inherited(node, TIP_PLACEMENT_ATTR)
+  preferred = declared === "above" || declared === "below" ? declared : DEFAULT_SIDE
   const placement = placeTip({
     anchor: node.getBoundingClientRect(),
-    tip: { width: box.width, height: box.height },
+    tip: size,
     viewport,
-    prefer: declared === "above" || declared === "below" ? declared : DEFAULT_SIDE,
+    prefer: preferred,
   })
-  tip.style.left = `${placement.left}px`
-  tip.style.top = `${placement.top}px`
-  tip.setAttribute(OPEN_ATTR, "")
-  open = true
+
+  /*
+   * Which way the labels cross. Upstream's `swap.dir`: the sign of the pointer's
+   * travel along the card's long axis, and 1 as the tie-break so a swap that
+   * happens to be vertical still moves.
+   */
+  const direction =
+    fresh || !previous || previous === node
+      ? 0
+      : Math.sign(centreX(node) - centreX(previous)) || 1
+
+  anchored = node
+  measured = size
+  applySide(placement.side)
+
+  to.x = placement.left
+  to.y = placement.top
+  to.w = size.width
+  to.h = size.height
+
+  if (fresh) {
+    jump()
+    relabel(label.text, wrap, 0)
+    /*
+     * A card inside the warm window appears at once. Upstream jumps `presence`
+     * here for the same reason: one went away 200ms ago, and popping a second
+     * one in makes a continuous run read as two separate events.
+     */
+    pop(intent === "warm" ? 0 : TIP_POP_MS)
+    c.root.setAttribute(OPEN_ATTR, "")
+  } else {
+    chase()
+    if (shownText !== label.text) relabel(label.text, wrap, direction)
+    else setWrap(face(c.layers[c.live]), wrap)
+    if (phase === "closing") {
+      // Caught on the way out. Upstream re-runs presence to 1 over 120ms.
+      pop(REOPEN_MS)
+      c.root.setAttribute(OPEN_ATTR, "")
+    }
+  }
+
+  phase = "open"
+  /* Idempotent, and unconditional so the listeners cannot be left off by a
+     path that reached "open" without going through the fresh branch. */
+  attachFollow()
 }
 
-/** Take the card down, from any of the seven things that should take it down. */
-export function hideTip(): void {
-  clearTimer()
+function finishClose(): void {
+  clearCloseTimer()
+  stopSpring()
+  detachFollow()
   restoreTitle()
+  phase = "closed"
   anchored = null
-  if (!open) return
-  open = false
-  closedAt = Date.now()
-  card?.removeAttribute(OPEN_ATTR)
+  card?.root.removeAttribute(OPEN_ATTR)
 }
 
 /**
- * Arrive on a control: wait, or don't.
+ * Start taking the card down, and open the warm window as it goes.
  *
- * The three ways to skip the wait, in the order they are asked: the call site
- * said so, a tip is already up, or one was up a moment ago. See `WARM`.
+ * The window opens HERE rather than when the card has finished fading, because
+ * that is what makes a sweep feel continuous: the 300ms is measured from the
+ * reader's decision to leave, not from the end of an animation they are already
+ * done with.
  */
-function schedule(node: HTMLElement): void {
-  if (node === anchored) return
-  clearTimer()
-  anchored = node
-  const instant =
-    node.closest(`[${TIP_INSTANT_ATTR}]`) !== null || open || Date.now() - closedAt < WARM
-  if (instant) {
-    reveal(node)
+function beginClose(instant: boolean): void {
+  if (phase !== "open") return
+  phase = "closing"
+  warmUntil = now() + WARM
+  if (instant || prefersReducedMotion() || !card) {
+    pop(0)
+    finishClose()
     return
   }
-  timer = setTimeout(() => {
-    if (anchored === node) reveal(node)
+  pop(TIP_CLOSE_MS)
+  card.root.removeAttribute(OPEN_ATTR)
+  closeTimer = setTimeout(finishClose, TIP_CLOSE_MS)
+}
+
+/**
+ * Arrive on a control: travel, warm, or wait.
+ *
+ * Deduplicated on `hovered` because this is delegated from the document and
+ * `pointerover` bubbles — crossing from a button's icon to the button itself is
+ * a second event about the same control, and re-arming on it would restart the
+ * 400ms every time the pointer twitched inside a target.
+ */
+function schedule(node: HTMLElement): void {
+  if (node === hovered) return
+  hovered = node
+  clearLeaveTimer()
+  clearOpenTimer()
+
+  // Upstream's `isWarm()`: a card is up, or one was up a moment ago.
+  if (phase !== "closed" || now() < warmUntil) {
+    show(node, "warm")
+    return
+  }
+  /*
+   * `data-de-tip-instant` skips the wait and keeps the pop, where upstream's
+   * equivalent mode jumps. The pop is what this chrome's card already did on
+   * every show, and the brief for the port was to change the behaviour without
+   * changing the look.
+   */
+  if (node.closest(`[${TIP_INSTANT_ATTR}]`) !== null) {
+    show(node, "cold")
+    return
+  }
+  openTimer = setTimeout(() => {
+    openTimer = null
+    if (hovered === node) show(node, "cold")
   }, DELAY)
 }
+
+/** Leave a control: nothing for `GRACE`, then close. */
+function leave(): void {
+  hovered = null
+  clearOpenTimer()
+  if (phase === "closed") return
+  clearLeaveTimer()
+  leaveTimer = setTimeout(() => {
+    leaveTimer = null
+    beginClose(false)
+  }, GRACE)
+}
+
+/**
+ * Take the card down now, with no grace and no fade.
+ *
+ * For the answers rather than the departures: Escape, a press, the window going
+ * away. Exported because it is the one piece of this a surface outside the file
+ * may legitimately need — a menu opening under the pointer, say.
+ */
+export function hideTip(): void {
+  hovered = null
+  clearOpenTimer()
+  clearLeaveTimer()
+  if (phase === "open") beginClose(true)
+  else if (phase === "closing") finishClose()
+}
+
+// ---- following the control ------------------------------------------------
+
+let followFrame = 0
+let following = false
+
+/**
+ * The control moved under the card. Put the card back on it.
+ *
+ * The version this replaces HID on scroll, and that was right for a card that
+ * could only appear and disappear: re-placing it every frame would have been a
+ * card pinned to something the reader is moving away from. It is wrong for one
+ * that travels — the card is an object now, and an object does not evaporate
+ * because the page moved two pixels. Upstream follows, and so does this.
+ *
+ * Coalesced into one frame, so a scroll that fires forty events does four
+ * measurements, and only attached while a card is up.
+ */
+function reposition(): void {
+  followFrame = 0
+  if (phase === "closed" || !anchored || !card) return
+  if (!anchored.isConnected) {
+    hideTip()
+    return
+  }
+  const placement = placeTip({
+    anchor: anchored.getBoundingClientRect(),
+    tip: measured,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    prefer: preferred,
+  })
+  applySide(placement.side)
+  to.x = placement.left
+  to.y = placement.top
+  /*
+   * A jump, not a spring. The card is keeping up with a control the reader is
+   * dragging past; easing after it would lag by exactly the easing. A travel
+   * already in flight keeps its spring and is simply re-aimed.
+   */
+  if (!springFrame) {
+    at.x = to.x
+    at.y = to.y
+    paint()
+  }
+}
+
+const onFollow = (): void => {
+  if (followFrame || !framed()) return
+  followFrame = requestAnimationFrame(reposition)
+}
+const onHidden = (): void => {
+  if (document.visibilityState === "hidden") hideTip()
+}
+
+/**
+ * Attach the three listeners that only matter while a card is up.
+ *
+ * Capturing, because a scroll inside a panel does not bubble to the window.
+ * Passive, because this never calls `preventDefault` and a non-passive scroll
+ * listener on the document taxes every scroll in the app being edited — which
+ * is the cost the previous implementation paid for the whole session, and this
+ * one pays only while something is on screen.
+ */
+function attachFollow(): void {
+  if (following) return
+  following = true
+  window.addEventListener("scroll", onFollow, { capture: true, passive: true })
+  window.addEventListener("resize", onFollow)
+  document.addEventListener("visibilitychange", onHidden)
+}
+
+function detachFollow(): void {
+  if (!following) return
+  following = false
+  if (followFrame) {
+    cancelAnimationFrame(followFrame)
+    followFrame = 0
+  }
+  window.removeEventListener("scroll", onFollow, true)
+  window.removeEventListener("resize", onFollow)
+  document.removeEventListener("visibilitychange", onHidden)
+}
+
+// ---- installation ---------------------------------------------------------
 
 /**
  * True when the focus that just landed is the kind a tooltip answers.
@@ -484,30 +1107,40 @@ function focusIsVisible(node: HTMLElement): boolean {
  * `data-de-tip` or `title`, and four separate chrome roots are mounted on
  * `<body>` (the editor, the options window, the token popover, the inspector's
  * probe). One listener set at the document covers all of them and covers
- * anything mounted later, which a per-surface install cannot.
+ * anything mounted later, which a per-surface install cannot — and it is also
+ * what lets this be a port of a component whose whole model is ONE card shared
+ * by every trigger, without the per-trigger wrapper element upstream needs.
  *
  * `pointerover` rather than `mouseenter`: it bubbles, so one listener sees
  * every control, and it reports its `pointerType`, so a touch — which has no
- * hover and cannot dismiss a card — is ignored outright.
+ * hover and cannot dismiss a card — is ignored outright. Upstream offers a
+ * long-press path for touch; it is not taken here, because the delegated
+ * listener would have to claim a press anywhere in the document to implement
+ * it, and this chrome's canvas is nothing but presses.
  */
 export function installTooltips(): () => void {
   if (release) return release
+
+  /* Eagerly, so the first hover of the session pops like every one after it:
+     a card appended and opened inside one task has no previous computed style
+     to transition from. */
+  ensureCard()
 
   const onPointerOver = (event: PointerEvent): void => {
     if (event.pointerType === "touch") return
     const node = anchorFor(event.target)
     if (node) schedule(node)
-    else hideTip()
+    else leave()
   }
   /* Leaving the window entirely: `relatedTarget` is null and no `pointerover`
      will follow to close it. */
   const onPointerOut = (event: PointerEvent): void => {
-    if (event.relatedTarget === null) hideTip()
+    if (event.relatedTarget === null) leave()
   }
   const onFocusIn = (event: FocusEvent): void => {
     const node = anchorFor(event.target)
     if (node && focusIsVisible(node)) schedule(node)
-    else hideTip()
+    else leave()
   }
   /*
    * Only the control the card is FOR. A `focusout` anywhere else in the
@@ -528,17 +1161,6 @@ export function installTooltips(): () => void {
    * over the menu it just opened.
    */
   const onPointerDown = (): void => hideTip()
-  /*
-   * Scroll and resize move the control out from under a card that was placed
-   * against numbers that are no longer true. Re-placing on every scroll frame
-   * is the other option and it is the wrong one: the card is anchored to
-   * something the reader is now moving away from.
-   *
-   * Capturing, because a scroll inside a panel does not bubble to the window.
-   * Passive, because this never calls `preventDefault` and a non-passive
-   * scroll listener on the document taxes every scroll in the app being edited.
-   */
-  const onScroll = (): void => hideTip()
 
   document.addEventListener("pointerover", onPointerOver, true)
   document.addEventListener("pointerout", onPointerOut, true)
@@ -546,8 +1168,6 @@ export function installTooltips(): () => void {
   document.addEventListener("focusout", onFocusOut, true)
   document.addEventListener("keydown", onKeyDown, true)
   document.addEventListener("pointerdown", onPointerDown, true)
-  document.addEventListener("scroll", onScroll, { capture: true, passive: true })
-  window.addEventListener("resize", hideTip)
   window.addEventListener("blur", hideTip)
 
   release = () => {
@@ -557,12 +1177,14 @@ export function installTooltips(): () => void {
     document.removeEventListener("focusout", onFocusOut, true)
     document.removeEventListener("keydown", onKeyDown, true)
     document.removeEventListener("pointerdown", onPointerDown, true)
-    document.removeEventListener("scroll", onScroll, true)
-    window.removeEventListener("resize", hideTip)
     window.removeEventListener("blur", hideTip)
     hideTip()
-    card?.remove()
+    detachFollow()
+    card?.root.remove()
+    card?.ruler.remove()
     card = null
+    shownText = ""
+    warmUntil = 0
     release = null
   }
   return release

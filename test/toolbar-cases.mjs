@@ -80,9 +80,8 @@ const bundled = await build({
       export { installToolbar } from "./src/shell/toolbar"
       export { installCanvas } from "./src/canvas/index"
       export { installInspector } from "./src/panels/inspector/index"
-      export { installOptionsBrowser } from "./src/options/inventory-panel"
       export { getState, setState, editorOwnsInput, editorMode } from "./src/core/store"
-      export { toolbarCss } from "./src/core/css/toolbar"
+      export { toolbarCss, TOOLBAR_HEIGHT } from "./src/core/css/toolbar"
       export { tooltipCss } from "./src/core/css/tooltip"
       // The collapse is one motion drawn across two stylesheets, so the cases
       // that check the two halves agree have to be able to read both.
@@ -149,6 +148,27 @@ const toolbar = context.slots.toolbar
 const buttons = () => Array.from(toolbar.querySelectorAll("button"))
 const byText = (text) => buttons().find((button) => button.textContent.trim() === text) ?? null
 const byLabel = (name) => toolbar.querySelector(`[aria-label="${name}"]`)
+
+/*
+ * The glyph a control is CURRENTLY SHOWING, which is no longer the only one it
+ * has mounted.
+ *
+ * Every toggle in the bar keeps both drawings in the DOM now and crossfades
+ * between them (`core/swap-mark.ts`), because replacing an `<svg>` gives the
+ * browser no previous state to animate from. `querySelector("svg")` therefore
+ * always finds the resting mark, whatever state the control is in — which is
+ * the same answer for both states and so no answer at all.
+ *
+ * Which one is shown is the `de-swap--done` class, exactly as the stylesheet
+ * reads it. Controls that have not been through the swap helper still have one
+ * `<svg>` and fall through to it, so the cases below keep asserting what they
+ * always asserted: what the user can see.
+ */
+const shownGlyph = (button) => {
+  const swap = button.querySelector(".de-swap")
+  if (!swap) return button.querySelector("svg")
+  return swap.querySelector(swap.classList.contains("de-swap--done") ? ".de-swap-done" : ".de-swap-rest")
+}
 
 /*
  * Named for what pressing DOES, so the name moves with the theme.
@@ -466,7 +486,7 @@ check("each mode brings the right panel's matching tab with it", () => {
  * it.
  */
 check("the live mode is the filled mark, and interactive fills neither", () => {
-  const fill = (name) => byLabel(name).querySelector("svg").getAttribute("fill")
+  const fill = (name) => shownGlyph(byLabel(name)).getAttribute("fill")
   for (const [mode, inspect, notes] of [
     ["inspecting", "currentColor", "none"],
     ["annotating", "none", "currentColor"],
@@ -507,18 +527,28 @@ check("no bare letter is claimed by the bar any more", () => {
   assert.equal(context.getState().tool, "move")
 })
 
-check("the options subsystem still opens from the inspector, not the toolbar", () => {
+/*
+ * The entry point is still the inspector's and still not the bar's — but what
+ * it opens changed. It used to mount a floating window over the app; it now
+ * writes the left panel's tab into the store, which is how every lane in this
+ * editor reaches another one. The assertion follows the write rather than a
+ * rendered surface, because the surface belongs to a panel this suite does not
+ * mount, and asserting on the store is what proves the two are joined up at all.
+ */
+check("the app controls are still reached from the inspector, not the toolbar", () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
-  editor.installOptionsBrowser(context)
+  editor.setState({ selection: [], leftTab: "layers", layersOpen: false })
   editor.installInspector(context)
   const launcher = Array.from(context.slots.right.querySelectorAll("button")).find(
-    (button) => button.textContent.trim() === "Browse all design options"
+    (button) => button.textContent.trim() === "Browse app controls"
   )
-  assert.ok(launcher, "inspector empty state must still offer the options entry point")
+  assert.ok(launcher, "inspector empty state must still offer the controls entry point")
   launcher.click()
-  assert.equal(window.document.querySelector(".de-opt-window").hidden, false)
-  window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  assert.equal(editor.getState().leftTab, "controls")
+  assert.equal(editor.getState().layersOpen, true, "it named a tab in a panel it left closed")
+  // And the thing it used to open is not in the document at all.
+  assert.equal(window.document.querySelector(".de-opt-window"), null)
   globalThis.fetch = originalFetch
 })
 
@@ -531,9 +561,19 @@ console.log("\nPanel toggles")
  *
  * The pressed treatment is a tint, so comparing rendered colour would pass on
  * the very thing these glyphs exist to replace. This reads the geometry.
+ *
+ * Narrowed to the SHOWN glyph when the subject holds a swap pair, for the
+ * reason `shownGlyph` gives: a control with both drawings mounted would
+ * otherwise fingerprint as the two concatenated — the same string in both
+ * states, and so a comparison that can never fail. A bare `<svg>`, which is
+ * what `editor.icon()` hands back, falls through untouched.
  */
-const drawing = (button) =>
-  Array.from(button.querySelectorAll("rect, path, circle"))
+const drawing = (subject) =>
+  Array.from(
+    (subject.querySelector?.(".de-swap") ? shownGlyph(subject) : subject).querySelectorAll(
+      "rect, path, circle"
+    )
+  )
     .map((node) =>
       Array.from(node.attributes)
         .filter((attribute) => attribute.name !== "fill" && attribute.name !== "stroke")
@@ -569,7 +609,7 @@ check("each toggle fills its mark while it is on, and hollows it while it is off
     for (const on of [true, false, true]) {
       editor.setState({ [flag]: on })
       const button = byLabel(label)
-      const svg = button.querySelector("svg")
+      const svg = shownGlyph(button)
       assert.ok(svg, `${label} drew nothing`)
       assert.equal(button.getAttribute("aria-pressed"), String(on), `${label} @ ${on}`)
       assert.equal(
@@ -1163,7 +1203,7 @@ check("the disc shows up in its corner, and not from nothing", () => {
    * disc rests 32px off the bottom-right, and only a drag moves it.
    *
    * 32 rather than Agentation's 20, which this matched until the disc was
-   * looked at over a real app: a 44px circle 20px off two edges reads as
+   * looked at over a real app: a small circle 20px off two edges reads as
    * crowding the corner, and that corner is where scrollbars and the host's own
    * affordances live. The same 32 is the margin a DRAGGED disc clamps to, so a
    * dragged one can land exactly where an undragged one sits.
@@ -1172,26 +1212,104 @@ check("the disc shows up in its corner, and not from nothing", () => {
   assert.match(rest, /position: fixed;/)
   assert.match(rest, /right: 32px;/)
   assert.match(rest, /bottom: 32px;/)
-  // The press still answers, and it is the only `transform` on this element
-  // that is not the arrival.
-  assert.match(editor.launcherCss, /\.de-launcher:active \{\n  transform: scale\(0\.95\);/)
+  /*
+   * The press still answers, and it is the only `transform` on this element
+   * that is not the arrival.
+   *
+   * The SHAPE is pinned, not the number. This asserted `scale(0.95)` exactly and
+   * broke the day someone tuned the press to 0.96 — a legitimate change to a
+   * visual-design value, reported as a test failure, which is how a case earns
+   * itself a `--force` and then a deletion. What matters here is that a press
+   * answers at all, that it answers by shrinking rather than growing, and that
+   * it stays subtle; the exact hundredth is the designer's to move.
+   */
+  const launcherPress = editor.launcherCss.match(/\.de-launcher:active \{\s*transform: scale\(([\d.]+)\);/)
+  assert.ok(launcherPress, "the launcher no longer answers a press")
+  const launcherScale = Number(launcherPress[1])
+  assert.ok(
+    launcherScale > 0.9 && launcherScale < 1,
+    `a press should shrink the disc and stay subtle, got scale(${launcherScale})`
+  )
+})
+
+/*
+ * The disc is exactly as tall as the bar, and that is the point of its size.
+ *
+ * It was 44 — Agentation's figure, copied along with the behaviour — against a
+ * bar built from the inside out to 40. Two sizes four pixels apart are not a
+ * contrast, they are a mistake you only see when the editor collapses while you
+ * happen to be looking at the corner. Sized off `TOOLBAR_HEIGHT`, the two
+ * states of the chrome are one object: collapse it and the only thing that
+ * changed is the width.
+ *
+ * Asserted against the exported constant rather than against 40, so moving
+ * `TOOL` or the pill's padding carries here instead of failing here. What the
+ * case actually defends is the AGREEMENT — the moment the disc goes back to a
+ * literal, this is the thing that notices.
+ */
+check("the collapsed disc is the same height as the bar it replaces", () => {
+  const rest = editor.launcherCss.match(/\.de-launcher \{[^}]*\}/s)?.[0] ?? ""
+  const box = rest.match(/width: (\d+)px; height: (\d+)px;/)
+  assert.ok(box, "the disc no longer declares a box")
+  assert.equal(Number(box[1]), editor.TOOLBAR_HEIGHT, "the disc is not as wide as the bar is tall")
+  assert.equal(Number(box[2]), editor.TOOLBAR_HEIGHT, "the disc is not as tall as the bar")
+  /*
+   * And the bar really is that tall. It declares no `height` — the sum of its
+   * border, padding and one square IS the height — so the constant is checked
+   * against the rules that produce it rather than taken on trust. A constant
+   * that drifted from the stylesheet would otherwise let both sides of the
+   * assertion above move together and stay green.
+   */
+  const pill = editor.toolbarCss.match(/^\.de-toolbar \{[^}]*\}/ms)?.[0] ?? ""
+  assert.doesNotMatch(pill, /\n\s*height:/, "the bar declares a height, so the sum is no longer its height")
+  const padding = Number(pill.match(/padding: (\d+)px/)?.[1])
+  const border = Number(pill.match(/border: (\d+)px/)?.[1])
+  // The BAR's square, not the generic `.de-tool` the panels also wear — that
+  // one is `size.toolSize` and is a different, smaller box.
+  const square = Number(editor.toolbarCss.match(/\.de-toolbar \.de-tool \{\s*width: (\d+)px; height: \1px;/)?.[1])
+  assert.ok(padding && border && square, `could not read the bar's geometry back (${padding}/${border}/${square})`)
+  assert.equal(
+    2 * border + 2 * padding + square,
+    editor.TOOLBAR_HEIGHT,
+    "TOOLBAR_HEIGHT no longer matches the rules the bar is actually drawn with"
+  )
 })
 
 /*
  * The pair's contract, and the only case that can see both halves at once.
  *
- * One curve, because three surfaces moving at once on three curves is three
- * events rather than one editor standing down. The bar shorter than the disc,
- * because the system answering should be quicker than the person deciding. And
- * overlapping, because two things at full opacity in two different places is
- * the one arrangement that reads as a swap, while waiting for the bar to finish
- * before starting the disc reads as a slideshow.
+ * One curve for everything LEAVING, because three surfaces exiting on three
+ * curves is three events rather than one editor standing down. The bar shorter
+ * than the disc, because the system answering should be quicker than the person
+ * deciding. And overlapping, because two things at full opacity in two
+ * different places is the one arrangement that reads as a swap, while waiting
+ * for the bar to finish before starting the disc reads as a slideshow.
+ *
+ * The one exemption is the disc's SCALE, which takes `easeSpring`. The "one
+ * curve" argument is about surfaces leaving, and the disc is the only thing
+ * arriving — a 44px object landing in an empty corner, which is verbatim the
+ * call site `tokens.ts` documents that token for. Its fade stays on `ease`,
+ * because an overshooting curve on a value that clamps at 1 buys a flat hold
+ * and no bounce, and its exit stays on `ease`, because a disc that sprang on
+ * the way out would be bouncing as it stopped existing. See the note on the
+ * rule in `css/launcher.ts`.
  */
 check("the two halves share a curve, and the bar leaves faster than the disc arrives", () => {
   const ease = editor.tokens.ease
+  const spring = editor.tokens.easeSpring
   assert.ok(barExit.includes(ease), `the bar's exit is not on ${ease}`)
   assert.ok(discArrive.includes(ease), `the disc's arrival is not on ${ease}`)
-  assert.ok(!discArrive.includes(editor.tokens.easeSpring), "the disc still overshoots")
+  assert.ok(!barExit.includes(spring), "the bar springs on the way out")
+  assert.equal(
+    leg(discArrive, "opacity", "the disc's arrival").curve,
+    ease,
+    "the disc's fade is not on the shared curve"
+  )
+  assert.equal(
+    leg(discArrive, "transform", "the disc's arrival").curve,
+    spring,
+    "the disc's scale no longer springs — nothing in the chrome takes easeSpring"
+  )
 
   const exit = leg(barExit, "opacity", "the bar's exit")
   const enter = leg(discArrive, "opacity", "the disc's arrival")
@@ -1336,7 +1454,23 @@ check("the collapse publishes nothing onto the document", () => {
  * that missed.
  */
 check("everything pressable in the bar answers the press", () => {
-  assert.match(editor.toolbarCss, /\.de-toolbar \.de-tool:active:not\(\[disabled\]\) \{ transform: scale\(0\.94\); \}/)
+  /*
+   * The shape, not the number — see the launcher's press for the argument. This
+   * pinned `scale(0.94)` exactly and broke on a deliberate tune to 0.96.
+   *
+   * `:not([disabled])` is the part that is genuinely load-bearing and stays
+   * asserted verbatim: a control that cannot act must not answer as though it
+   * did, and that is a correctness claim rather than a taste one.
+   */
+  const toolPress = editor.toolbarCss.match(
+    /\.de-toolbar \.de-tool:active:not\(\[disabled\]\) \{ transform: scale\(([\d.]+)\); \}/
+  )
+  assert.ok(toolPress, "a tool in the bar no longer answers a press, or stopped excluding disabled ones")
+  const toolScale = Number(toolPress[1])
+  assert.ok(
+    toolScale > 0.9 && toolScale < 1,
+    `a press should shrink the square and stay subtle, got scale(${toolScale})`
+  )
   /*
    * The square is the only shape the press is written for, so "everything
    * pressable" holds only for as long as every control here is one. There used
@@ -1499,7 +1633,7 @@ check("clicking it hands the pointer to the app, and clicking again takes it bac
  */
 check("each state is named to assistive tech and drawn in a different shape", () => {
   const read = () => {
-    const svg = interactive().querySelector("svg")
+    const svg = shownGlyph(interactive())
     return {
       label: interactive().textContent.trim(),
       name: interactive().getAttribute("aria-label"),
@@ -2542,7 +2676,7 @@ await moves("the bar and the disc each remember their own position, and only the
   const launcher = editor.createLauncher(() => {})
   const disc = launcher.element
   window.document.body.append(disc)
-  disc.getBoundingClientRect = rectOf(0, 0, 44, 44)
+  disc.getBoundingClientRect = rectOf(0, 0, 40, 40)
   await frame()
 
   // Park the bar. The disc is on its CSS corner and must stay there.

@@ -127,15 +127,30 @@ check("a host with no icon set serves an empty catalog rather than failing", () 
 
 // ── The host, and what the browser is handed ───────────────────────────────
 
-console.log("\nThe Workspaces set")
+console.log("\nThe host app's set")
 
 const workspace = await loadConfig(requireHostConfig("icon-set-cases"))
 const hostIcons = createIconSet(workspace).read()
 const prelude = browserPrelude(workspace, { proxyPort: 4567 })
 
-check("the Workspaces host is wired to its own 152-glyph set", () => {
-  assert.equal(workspace.icons.attribute, "data-instagram-icon")
-  assert.equal(hostIcons.attribute, "data-instagram-icon")
+/**
+ * The attribute the host stamps its glyphs with, read from the host rather than
+ * written down here.
+ *
+ * Every assertion below is about the attribute travelling intact — config to
+ * prelude to route to the DOM the panel reads — and not about which string it
+ * happens to be. Pinning one app's attribute name into this file would tie a
+ * public suite to a single private checkout, and the contract under test does
+ * not depend on the name at all.
+ */
+const ICON_ATTRIBUTE = workspace.icons.attribute
+
+check("the host app is wired to its own 152-glyph set", () => {
+  // Non-vacuous about the seam: the host really did configure an attribute, and
+  // it really is a plain attribute name rather than an empty string that would
+  // make every comparison below trivially true.
+  assert.match(ICON_ATTRIBUTE, /^[a-z][a-z0-9-]*$/)
+  assert.equal(hostIcons.attribute, ICON_ATTRIBUTE)
   // Non-vacuous: an empty catalog would pass every assertion below it.
   assert.equal(hostIcons.icons.length, 152)
   assert.equal(hostIcons.icons[0].name, "AlertCircle")
@@ -148,13 +163,13 @@ check("the prelude carries the attribute, not the drawings", () => {
   // Spread rather than compared directly: the prelude runs in its own vm
   // realm, so its object literals do not share this realm's prototype.
   assert.deepEqual({ ...browserSandbox.window.__DESIGNLAYER_CONFIG__.icons }, {
-    attribute: "data-instagram-icon",
+    attribute: ICON_ATTRIBUTE,
     available: true,
   })
   // The set is ~100KB of path data. Shipping it ahead of the bundle would
   // charge every page load for a panel most sessions never open.
   assert.equal(prelude.includes(hostIcons.icons[0].nodes[0][1].d ?? "\0"), false)
-  assert.equal(prelude.includes("instagram-icon-data.json"), false)
+  assert.equal(prelude.includes(path.basename(workspace.icons.data)), false)
 })
 
 await checkAsync("GET /icons serves the set over the loopback route", async () => {
@@ -170,7 +185,7 @@ await checkAsync("GET /icons serves the set over the loopback route", async () =
     const response = await fetch(`http://127.0.0.1:${port}${workspace.apiPrefix}/icons`)
     assert.equal(response.status, 200)
     const payload = await response.json()
-    assert.equal(payload.attribute, "data-instagram-icon")
+    assert.equal(payload.attribute, ICON_ATTRIBUTE)
     assert.equal(payload.icons.length, 152)
   } finally {
     await new Promise((resolve) => server.close(resolve))
@@ -181,7 +196,7 @@ await checkAsync("GET /icons serves the set over the loopback route", async () =
 
 const dom = new JSDOM(
   `<!doctype html><html><body><main id="app">
-     <button id="host" class="p-2"><svg id="glyph" data-instagram-icon="Compass" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2"></path></svg></button>
+     <button id="host" class="p-2"><svg id="glyph" ${ICON_ATTRIBUTE}="Compass" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2"></path></svg></button>
      <svg id="plain" viewBox="0 0 24 24"><path d="M1 1"></path></svg>
    </main></body></html>`,
   { pretendToBeVisual: true, url: "http://localhost/" }
@@ -353,7 +368,7 @@ const variant = (name) => hostIcons.icons.find((icon) => icon.name === name)
 const resetGlyph = () => {
   history.resetHistory()
   toasts.length = 0
-  glyph.setAttribute("data-instagram-icon", "Compass")
+  glyph.setAttribute(ICON_ATTRIBUTE, "Compass")
   glyph.setAttribute("fill", "none")
   glyph.setAttribute("stroke", "currentColor")
   glyph.innerHTML = '<path d="M12 2"></path>'
@@ -366,14 +381,14 @@ check("a swap redraws the glyph, renames it, and is one undoable step", () => {
   assert.ok(heart, "the host set should contain Heart")
 
   writer.applyIcon(selection, heart)
-  assert.equal(glyph.getAttribute("data-instagram-icon"), "Heart")
+  assert.equal(glyph.getAttribute(ICON_ATTRIBUTE), "Heart")
   assert.notEqual(glyph.innerHTML, before)
   assert.ok(glyph.innerHTML.length > 0, "the swap emptied the glyph")
 
   const after = glyph.innerHTML
   const afterFill = glyph.getAttribute("fill")
   assert.equal(history.undo(), "Swap icon to Heart")
-  assert.equal(glyph.getAttribute("data-instagram-icon"), "Compass")
+  assert.equal(glyph.getAttribute(ICON_ATTRIBUTE), "Compass")
   assert.equal(glyph.innerHTML, before, "undo did not restore the exact markup")
   assert.equal(glyph.getAttribute("fill"), "none", "undo left the swapped paint behind")
   assert.equal(history.canUndo(), false, "one swap recorded more than one step")

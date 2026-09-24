@@ -390,24 +390,46 @@ const SOURCE_LINE = /^\*\*Source:\*\*[^\r\n]*(?:\r?\n|$)/gm
 const ABSOLUTE_PREFIX = /(^|[\s`])\/(?:[^\n`]*\/)?(?=src\/)/gm
 
 export function sanitizeChangePrompt(markdown: string): string {
-  return markdown.replace(SOURCE_LINE, "").replace(ABSOLUTE_PREFIX, "$1")
+  return shortenAbsolutePaths(markdown.replace(SOURCE_LINE, ""))
 }
 
 /**
- * One clipboard write, no fallback.
+ * The second rule alone, for text whose `**Source:**` lines are its own.
+ *
+ * The annotation brief is written in Agentation's format, where `**Source:**`
+ * is the field name — and every path on those lines already passed
+ * `isProjectSourcePath`, so dropping them would delete the one fact the brief
+ * is surest of.
+ */
+export function shortenAbsolutePaths(markdown: string): string {
+  return markdown.replace(ABSOLUTE_PREFIX, "$1")
+}
+
+/**
+ * One clipboard write, no fallback. Answers whether it landed.
  *
  * Modelled on the app's agentation Copy: the vendor component's own copy is
  * turned off and this runs in its place, synchronously inside the click task so
  * the transient user activation the Clipboard API requires still holds. There
- * is no `document.execCommand` fallback and the catch is empty on purpose — the
- * only browsers that reject this are ones that have already told the user why.
+ * is no `document.execCommand` fallback — the only browsers that reject this
+ * are ones that have already told the user why.
+ *
+ * It returns a boolean because the catch used to be empty AND the return type
+ * `void`, which made success and denial indistinguishable from the outside: a
+ * button wired to this could not confirm the copy even if it wanted to, because
+ * there was nothing to confirm from. Raising a toast from in here would still
+ * be wrong — this is a library function and the surface that owns the button is
+ * the one that knows what to say — but refusing to report is a different thing
+ * from refusing to announce.
  */
-export async function copyChangePrompt(markdown?: string): Promise<void> {
+export async function copyChangePrompt(markdown?: string): Promise<boolean> {
   const text = sanitizeChangePrompt(markdown ?? buildChangePrompt())
   try {
     await navigator.clipboard.writeText(text)
+    return true
   } catch {
     // Denied or unavailable. The change is still on screen and still listed.
+    return false
   }
 }
 

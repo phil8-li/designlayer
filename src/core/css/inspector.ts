@@ -93,8 +93,55 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  /* The containing block for the pill below. An absolutely positioned child of
+     a scroll container scrolls WITH its content, which is the whole reason the
+     pill can be one node instead of a background on each tab. */
+  position: relative;
 }
 .de-tabs::-webkit-scrollbar { display: none; }
+/*
+ * ONE PILL, WHICH MOVES.
+ *
+ * The selected tab used to paint its own \`bgHover\` surface, which meant the
+ * selection was two boxes taking turns: the old tab's ground vanished and the
+ * new tab's appeared, with nothing in between for the eye to follow. On a
+ * landmark you switch dozens of times a session that is the difference between
+ * a strip you read and a strip you re-read.
+ *
+ * A single node travelling says the same thing and says it as one object, which
+ * is also what makes it cheap: \`transform\` and \`width\` on one absolutely
+ * positioned element, no layout on the tabs, nothing per-tab to keep in sync.
+ *
+ * \`snap\` is the rung. The travel is 60-80px, but this is a control pressed
+ * constantly and the token set is explicit that at this length "the eye reads
+ * 'it went' rather than 'it is going'" — which is the correct sentence for a
+ * tab strip. \`fast\` here felt like the pill was being dragged.
+ *
+ * Behind the labels, never over them: \`.de-tab\` takes a stacking index below,
+ * and the pill is \`pointer-events: none\` so it cannot eat a click meant for the
+ * tab it is sitting under.
+ *
+ * Guarded on \`[data-de-pill]\` throughout, and \`core/tab-pill.ts\` only sets that
+ * attribute once it has measured a non-zero width. So a strip that never gets
+ * measured — JSDOM, or a tab activated before first paint — keeps the original
+ * per-tab background and loses nothing.
+ */
+.de-tab-pill {
+  position: absolute;
+  left: 0; top: 50%;
+  width: var(--de-pill-w, 0px);
+  height: ${t.size.rowHeight}px;
+  transform: translate(var(--de-pill-x, 0px), -50%);
+  border-radius: ${t.radius.md};
+  background: ${t.color.bgHover};
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform ${t.duration.snap} ${t.ease},
+    width ${t.duration.snap} ${t.ease},
+    opacity ${t.duration.snap} ${t.ease};
+}
+.de-tabs[data-de-pill] .de-tab-pill { opacity: 1; }
 /*
  * An unselected tab is a CONTROL, so it takes the control ink (rank 3 in the
  * ladder at the top of panels.ts), not the secondary one. At \`textDim\` the
@@ -109,10 +156,19 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
  * when you use it. The pill and the white ink say which one is taken; they do
  * not need a third voice that costs layout.
  *
- * The box matches \`.de-opt-tab\`, the other tab-pill in this chrome: a
- * \`rowHeight\` box on the \`md\` corner with the workhorse step inside it. Being
- * shorter than the 34px strip is the point — a pill that filled the strip
- * would be a filled header, not a control sitting in one.
+ * The box is a \`rowHeight\` box on the \`md\` corner with the workhorse step
+ * inside it. Being shorter than the 34px strip is the point — a pill that
+ * filled the strip would be a filled header, not a control sitting in one.
+ *
+ * This used to be justified by matching \`.de-opt-tab\`, the two-button
+ * pseudo-tab strip inside the floating options window, which was the chrome's
+ * other tab-pill — and the justification was always a little thin, since that
+ * strip also filled itself with \`accentFill\` where both real strips use a
+ * travelling neutral pill. The window is gone, the pseudo-strip with it, and
+ * there is one tab treatment in this product now, shared by the two real
+ * strips. Its nearest surviving relative is \`.de-opt-chip\` in the Controls
+ * pane, and that one is deliberately NOT this box: a chip is a value you pick,
+ * not a view you switch to, so it keeps the pill corner and its own padding.
  *
  * \`flex: none\` and \`nowrap\` because the failure this pair prevents is the one
  * the scroller cannot: flex items shrink before their container overflows, so
@@ -130,6 +186,14 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
   white-space: nowrap;
   cursor: pointer;
+  /* Above the pill, which is a sibling earlier in the DOM and would otherwise
+     paint over the label it is meant to sit behind. */
+  position: relative;
+  z-index: 1;
+  /* The ink crossfades with the pill it is handing over to. Colour only — a
+     background here would be the second answer to "which one am I on" that the
+     hover note below spends five paragraphs refusing. */
+  transition: color ${t.duration.snap} ${t.ease};
 }
 /*
  * HOVER BRIGHTENS THE INK AND DRAWS NO SURFACE, so the pill means one thing.
@@ -152,6 +216,10 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   background: ${t.color.bgHover};
   color: ${t.color.text};
 }
+/* Once the pill is real, it owns the surface and the tab stops drawing one —
+   two grounds at the same value, one of them travelling, would read as a
+   smear. Scoped to the measured state so an unmeasured strip is unchanged. */
+.de-tabs[data-de-pill] .de-tab[aria-selected="true"] { background: transparent; }
 /* Outside the pill, not inset into it. At the \`-3px\` the underlined tab used,
    the ring landed inside the surface and read as a second border on the pill
    rather than as a ring around it. */
@@ -189,9 +257,11 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
  * Sized from the scale rather than from a fixed box: \`min-width\` equal to the
  * height makes a single digit a circle and lets a three-digit count grow into a
  * stadium instead of clipping, and a badge that truncates its own number is
- * worse than no badge. \`tabular-nums\` keeps the tab's width from twitching as
- * the count crosses 9, which matters because the strip is a scroller and its
- * overflow point is a function of that width.
+ * worse than no badge. The tab's width must not twitch as the count crosses 9
+ * either, because the strip is a scroller and its overflow point is a function
+ * of that width — which is what tabular figures buy. This rule used to ask for
+ * them itself; they are on the chrome root now, once, and \`css/base.ts\` argues
+ * why a per-badge declaration was the wrong shape for that property.
  *
  * \`corner-shape: round\`, for the reason the switch track opts out in
  * \`css/base.ts\`: at a radius past half the height the corner box is the whole
@@ -212,11 +282,27 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   corner-shape: round;
   background: ${t.color.bgHover};
   color: ${t.color.textMuted};
-  font-variant-numeric: tabular-nums;
   font-size: ${t.type.micro};
   font-weight: ${t.type.weightValue};
-  line-height: 1;
+  line-height: ${t.type.leadingFlush};
+  /*
+   * It arrives, rather than simply being there.
+   *
+   * The badge appears the moment the first edit lands, at full size, and the
+   * strip is a flex row — so the tab it belongs to gets wider and everything to
+   * its right is shoved along, in one frame, while the user is looking at the
+   * canvas. Scaling in from the middle does not remove the reflow (the width is
+   * layout, and layout is not animatable here without measuring), but it does
+   * separate the two events: the strip makes room, and a beat later something
+   * lands in it.
+   *
+   * \`easeSpring\` on a \`snap\` is the smallest arrival in the chrome, and a count
+   * chip is the smallest object in it. It is only ever seen once per change, so
+   * it can afford a curve the rest of the strip cannot.
+   */
+  animation: de-tab-count-in ${t.duration.snap} ${t.easeSpring};
 }
+@keyframes de-tab-count-in { from { transform: scale(0.4); opacity: 0; } }
 /*
  * Chosen, the badge takes the accent.
  *

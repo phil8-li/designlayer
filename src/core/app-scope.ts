@@ -18,8 +18,16 @@
  *
  * Naming the app in the key fixes both at once. Nothing is shared that should
  * not be, and nothing is lost — switching away files your work under that app
- * and switching back brings it out again, which is what makes an app chooser
- * safe to use without being asked to confirm anything.
+ * and switching back brings it out again.
+ *
+ * That used to end "which is what makes an app chooser safe to use without
+ * being asked to confirm anything", and it is no longer true — not because this
+ * scoping stopped working, but because it was never the whole story. Notes and
+ * the preview-only ledger are filed per app and do survive a switch. The
+ * removal queue, the Angular queue and the vendor store are in memory and die
+ * with the document, and a switch SIGTERMs the editor. So the chooser arms
+ * before it goes when any of those three is non-empty, and stays one click when
+ * they are not — see the note on the click handler in \`panels/app-chooser.ts\`.
  *
  * ## Why the URL and not the name
  *

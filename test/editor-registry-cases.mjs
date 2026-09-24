@@ -510,9 +510,19 @@ await check("the only editor on the machine has nothing to switch to", async () 
     editors: () => [editorEntry()],
   }).list()
 
-  // `chooser: false` is what makes the menu say this session has nothing to
-  // switch between, which with no screen and no siblings is the truth.
-  assert.deepEqual(answer, { chooser: false, apps: [] })
+  /*
+   * AN EMPTY LIST, AND THE FEATURE STILL EXISTS.
+   *
+   * This used to assert `chooser: false`, and the browser read that as "this
+   * session has no app chooser" and said so — inside the app chooser, to
+   * everybody running a single editor with no start screen, which is the common
+   * shape. The field never meant that. It answers whether a supervisor can
+   * START something; an empty list is a fact about the machine right now, not a
+   * missing feature. So the answer is `true` with no rows, and the sentence
+   * about what the reader can do next belongs in the menu, where
+   * `test/app-chooser-cases.mjs` pins it.
+   */
+  assert.deepEqual(answer, { chooser: true, apps: [] })
 })
 
 /*
@@ -622,7 +632,10 @@ await check("a registry that cannot be read costs rows, never the answer", async
       throw new Error("EACCES: permission denied, scandir")
     },
   }).list()
-  assert.deepEqual(answer, { chooser: false, apps: [] })
+  // `chooser: true` with no rows, for the reason given on the single-editor
+  // case above: the field says a supervisor could start something, not that
+  // the menu exists. A failed read costs rows and nothing else.
+  assert.deepEqual(answer, { chooser: true, apps: [] })
 
   // And with a screen behind the session it still gets asked, because the half
   // that failed is not the half that answers this.

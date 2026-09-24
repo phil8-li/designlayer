@@ -49,9 +49,6 @@ import type { LibraryComponent } from "./types"
  */
 const MAX_SCAN = 4000
 
-/** How many of a group's components are tried before the monogram wins. */
-const GROUP_PROBES = 8
-
 /**
  * One clone per component, kept for the life of the session.
  *
@@ -75,13 +72,6 @@ const clones = new Map<string, HTMLElement>()
  */
 let nameIndex: Map<string, Element> | null = null
 let indexedCount = -1
-
-/** Drops every cached clone and the index. For a test, or a reloaded library. */
-export function resetPreviewCache(): void {
-  clones.clear()
-  nameIndex = null
-  indexedCount = -1
-}
 
 /**
  * The elements a preview may be taken from: the app's, not ours, not gone.
@@ -272,46 +262,4 @@ export function componentPreview(
   const source = cloneFor(editor, component)
   if (!source) return monogram(component.name)
   return fitted(source.cloneNode(true) as HTMLElement, box)
-}
-
-/**
- * A group's thumbnail: the first of its components that is actually on the page.
- *
- * Figma shows a rendered preview on a group row too, and a group is not a thing
- * that can be rendered — so it borrows one. Capped rather than exhaustive
- * because a group of forty components on a page holding none of them would pay
- * forty lookups to arrive at the monogram it was always going to draw, and the
- * lookups after the first are all against the same cached index anyway.
- */
-export function groupPreview(
-  editor: EditorContext,
-  label: string,
-  components: readonly LibraryComponent[],
-  box: number
-): HTMLElement {
-  for (const component of components.slice(0, GROUP_PROBES)) {
-    const source = cloneFor(editor, component)
-    if (source) return fitted(source.cloneNode(true) as HTMLElement, box)
-  }
-  return monogram(label)
-}
-
-/**
- * The colour the app paints its own page, for the plate a preview sits on.
- *
- * A component drawn for a white page is invisible on the chrome's near-black
- * well, and a component drawn for a dark page is invisible on white — so the
- * honest ground for a picture of someone else's component is the ground that
- * component is normally on. Walked up from the body because a page commonly
- * declares its background on `html` and leaves `body` transparent, and answered
- * as "" when neither says anything, which leaves the stylesheet's own token as
- * the fallback.
- */
-export function previewPlate(): string {
-  for (const node of [document.body, document.documentElement]) {
-    if (!node) continue
-    const paint = getComputedStyle(node).backgroundColor
-    if (paint && paint !== "transparent" && !paint.startsWith("rgba(0, 0, 0, 0)")) return paint
-  }
-  return ""
 }

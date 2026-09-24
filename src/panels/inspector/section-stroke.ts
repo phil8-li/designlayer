@@ -36,6 +36,7 @@
  */
 
 import { el, round } from "../../core/dom"
+import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { swatch, toHex } from "./color"
@@ -179,10 +180,21 @@ export const strokeSection: InspectorSection = (context) => {
   }
 
   const row = el("div", { class: "de-paint-row" }, [
-    swatch(computed.borderTopColor, "Stroke colour", (hex) =>
-      applyStyles([{ property: "border-color", value: hex }], "Set stroke colour")
+    swatch(computed.borderTopColor, "Stroke color", (hex) =>
+      applyStyles([{ property: "border-color", value: hex }], "Set stroke color")
     ),
-    binding ?? el("span", { class: "de-paint-value" }, [toHex(computed.borderTopColor) ?? computed.borderTopColor]),
+    // The same reachability argument `section-fill.ts` spells out on its own
+    // paint value: `toHex` returns null for a wide-gamut or function-valued
+    // colour, and the raw text ellipsises in this cell with nothing behind it.
+    binding ??
+      el(
+        "span",
+        {
+          class: "de-paint-value",
+          title: toHex(computed.borderTopColor) ?? computed.borderTopColor,
+        },
+        [toHex(computed.borderTopColor) ?? computed.borderTopColor]
+      ),
     numberField({
       id: "stroke.width",
       label: "W",
@@ -211,9 +223,16 @@ export const strokeSection: InspectorSection = (context) => {
       label: "Remove stroke",
       glyph: icon("Minus", tokens.icon.row),
       danger: true,
-      onClick: () => {
+      onClick: (event: Event) => {
         parked.delete(selection.key)
-        applyStyles([{ property: "border-width", value: "0px" }], "Remove stroke")
+        // The row closes before the rebuild arrives without it — the same order
+        // the fill row and the notes list use. `leaveRow` returns null where
+        // there is no layout to collapse, and the write stays synchronous.
+        const row = (event.currentTarget as HTMLElement).closest(".de-paint-row")
+        const write = () => applyStyles([{ property: "border-width", value: "0px" }], "Remove stroke")
+        const closing = row instanceof HTMLElement ? leaveRow(row) : null
+        if (closing) void closing.then(write)
+        else write()
       },
     }),
   ])

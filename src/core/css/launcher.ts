@@ -1,23 +1,41 @@
 /** The floating button the editor collapses into, and how it arrives. */
 
 import { tokens as t } from "../tokens"
+import { TOOLBAR_HEIGHT } from "./toolbar"
 
 /**
- * 44 across, pinned 32 off the corner.
+ * As tall as the toolbar, pinned 32 off the corner.
  *
- * The size is Agentation's, to the pixel. The inset is not — theirs is 20, and
- * this sat at 20 to match until the disc was looked at against a real app. A
- * 44px circle 20px off two edges reads as crowding the corner it is in; 32
- * gives it the air to read as floating OVER the product rather than stuck to
- * it, and it clears the scrollbars and corner affordances that live in exactly
- * that corner on the pages this editor is pointed at.
+ * The size WAS Agentation's 44, to the pixel, and that was the wrong thing to
+ * copy here. Their disc is the whole of their chrome; ours is one of two states
+ * of a bar that is 40 tall, and 44 beside 40 is not a deliberate contrast —
+ * it is near enough to read as the same size and far enough to look wrong the
+ * moment you collapse the editor while watching the corner. Taking the bar's
+ * height outright makes the two states one object: the strip you were using
+ * becomes a disc of exactly its height, so the only thing that changed is the
+ * width. It is also the smaller of the two numbers, which is what the disc
+ * wants — it sits over someone else's product doing nothing until it is needed.
+ *
+ * It stays a comfortable target: 40px clears the 24px minimum of WCAG 2.2
+ * Target Size (Minimum) with room to spare, and is the size Material gives a
+ * small FAB, which is the same object under another name.
+ *
+ * Imported rather than restated, so a change to the bar's padding or its
+ * squares carries here instead of leaving a disc that used to match.
+ *
+ * The inset is not Agentation's — theirs is 20, and this sat at 20 to match
+ * until the disc was looked at against a real app. A circle 20px off two edges
+ * reads as crowding the corner it is in; 32 gives it the air to read as
+ * floating OVER the product rather than stuck to it, and it clears the
+ * scrollbars and corner affordances that live in exactly that corner on the
+ * pages this editor is pointed at.
  *
  * Kept in agreement with `EDGE` in `shell/launcher.ts`, which is the margin a
  * DRAGGED disc clamps to — a dragged surface has to be able to land exactly
  * where an undragged one sits, or the resting position is somewhere the user
  * cannot choose.
  */
-const SIZE = 44
+const SIZE = TOOLBAR_HEIGHT
 const INSET = 32
 
 /**
@@ -71,7 +89,16 @@ export const launcherCss = `/* ---------- launcher ---------- */
   width: ${SIZE}px; height: ${SIZE}px;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0;
-  border: 1px solid ${t.color.border};
+  /*
+   * No \`border\`. \`shadow.float\` carries its own hairline now — a
+   * \`0 0 0 0.5px\` ring, the same one \`popover\` uses — and a real border on top
+   * of it is two edges drawn a half pixel apart on a ${SIZE}px circle, which is the
+   * shape that shows that worst: a \`border-radius: 50%\` border has to be
+   * rasterised around the whole circumference and picks up a stair-step the
+   * shadow's ring does not. The ring also does not take part in layout, so the
+   * disc is ${SIZE}px rather than ${SIZE + 2} and \`INSET\` means what it says.
+   */
+  border: none;
   border-radius: 50%;
   background: ${t.color.bg};
   color: ${t.color.text};
@@ -104,7 +131,7 @@ export const launcherCss = `/* ---------- launcher ---------- */
  * time, parked at the end of its own exit.
  *
  * \`display: none\` cannot be transitioned, and \`opacity\` alone would leave a
- * 44px hole in the corner swallowing clicks meant for the app. \`visibility\`
+ * ${SIZE}px hole in the corner swallowing clicks meant for the app. \`visibility\`
  * does both: it is inert and untabbable while hidden, and it is one of the few
  * properties that transitions DISCRETELY — it flips at the end of the delay,
  * which is what lets the disc finish shrinking before it stops existing.
@@ -122,13 +149,28 @@ export const launcherCss = `/* ---------- launcher ---------- */
 /*
  * Showing up, in the corner, as the bar finishes leaving.
  *
- * On \`${t.ease}\`, the curve the bar fades on and the panels slide on,
- * because three surfaces moving at once on three curves is three events. That
- * curve is \`tokens.ease\` rather than a cubic-bezier written out here: it is
- * already a strong ease-out that arrives flat, which is the shape a thing
- * landing in a corner wants, and a second near-identical curve invented for
- * this one case would be a number to keep in agreement with no way to notice
- * when it had stopped being.
+ * ON \`easeSpring\`, AND THIS IS THE ONLY RULE IN THE CHROME THAT TAKES IT.
+ *
+ * This used to be \`tokens.ease\`, argued as "three surfaces moving at once on
+ * three curves is three events". That argument is about the surfaces LEAVING,
+ * and for those two it still holds — the bar fades and the panels slide, both
+ * on \`ease\`, and neither has anything to overshoot. The disc is not one of
+ * them. It is the only thing on screen ARRIVING, it starts after the other two
+ * are already going (\`${ARRIVE_DELAY}\`), and it is a ${SIZE}px object landing in an
+ * empty corner rather than a value settling into place.
+ *
+ * Which is verbatim what \`tokens.ts\` says \`easeSpring\` is for: "the one thing
+ * that should feel like an object arriving rather than a value changing: the
+ * launcher popping in". For as long as this rule said \`ease\`, that comment
+ * described a call site that did not exist and the token had none anywhere in
+ * the codebase. One of the two had to move, and the token's reasoning is the
+ * better one.
+ *
+ * The SCALE takes the spring and nothing else does. \`opacity\` stays on \`ease\`
+ * because an overshooting curve on a value that clamps at 1 buys a flat hold
+ * and no bounce; \`background\` stays because a hover tint has nothing to
+ * overshoot; and the exit above stays because a disc that sprang on the way OUT
+ * would be bouncing as it stopped existing.
  */
 html.designlayer-chrome-hidden .de-launcher {
   visibility: visible;
@@ -137,19 +179,19 @@ html.designlayer-chrome-hidden .de-launcher {
   /*
    * The visibility flip waits out the same ${ARRIVE_DELAY} as the fade.
    *
-   * Flipping it at 0s would leave a fully transparent 44px disc over the corner
+   * Flipping it at 0s would leave a fully transparent ${SIZE}px disc over the corner
    * of the app for the whole of the morph, swallowing any click that landed
    * there. Nothing that cannot be seen should be clickable.
    */
   transition:
     opacity ${ARRIVE} ${t.ease} ${ARRIVE_DELAY},
-    transform ${ARRIVE} ${t.ease} ${ARRIVE_DELAY},
+    transform ${ARRIVE} ${t.easeSpring} ${ARRIVE_DELAY},
     background ${t.duration.fast} ${t.ease},
     visibility 0s linear ${ARRIVE_DELAY};
 }
 /* Press feedback has to beat the state rule that owns \`transform\` above. */
 html.designlayer-chrome-hidden .de-launcher:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
   transition: transform ${t.duration.fast} ${t.ease};
 }
 /*

@@ -96,8 +96,10 @@ import { onEditsChange } from "../annotations/journal"
 import { onPreviewOnlyChange } from "../core/change-prompt"
 import { editorMode } from "../core/store"
 import { el } from "../core/dom"
+import { focusControl } from "../core/focus"
 import { canRedo, canUndo, onHistoryChange, redo, undo } from "../core/history"
 import { icon, type IconName, type IconWeight } from "../core/icons"
+import { swapMark, type SwapMark } from "../core/swap-mark"
 import { chordLabel, SHORTCUTS } from "../core/keymap"
 import { registerCommand } from "../core/commands"
 import { onRemovalQueueChange } from "../core/removal"
@@ -151,24 +153,56 @@ const CONTROLS = "button, a, input, select, textarea"
 /**
  * Draw a control's glyph, and only when the weight it draws has changed.
  *
- * Every toggle in this bar redraws its mark when it flips, because ON is a FILL
+ * Every toggle in this bar changes its mark when it flips, because ON is a FILL
  * here rather than a heavier stroke — and a fill is a different `<svg>` rather
- * than a different value on the one already mounted. Replacing it
- * unconditionally would be a swap on nearly every repaint: `syncPressed` also
- * runs on selection, on history and on every queue change, and the weight is
- * the same in all of them. Two things go wrong when it does. The stroke
- * transition in `css/icons.ts` restarts from scratch on a fresh node, so a
- * glyph flickers while the user is dragging a selection about; and the node
- * under the pointer is torn out mid-hover, which drops the hover state until
- * the pointer moves again.
+ * than a different value on the one already mounted.
  *
- * The weight last drawn is held on the element rather than in a module-level
- * map, so it cannot outlive the button it describes.
+ * ## Both drawings are mounted, and the flip is a crossfade
+ *
+ * This used to be `replaceChildren`, and a replacement cannot be animated: the
+ * new node has no previous state, so it paints at its final appearance and the
+ * change is a cut. `core/swap-mark.ts` holds the general form of the fix —
+ * stack the two glyphs in one sized box and crossfade — and this takes the
+ * TOGGLE variant of it, which keeps `currentColor` instead of going green,
+ * because the accent surface under a pressed tool has already said which state
+ * it is in and a second, greener claim would contradict it.
+ *
+ * ## Why the guard outlived the rewrite
+ *
+ * `syncPressed` runs on selection, on history and on every queue change, and
+ * the weight is unchanged in nearly all of them. Under the old build an
+ * unconditional call tore the node out from under the pointer — dropping hover
+ * until it moved — and restarted the stroke transition in `css/icons.ts`, so a
+ * glyph flickered while a selection was being dragged around. Under this one a
+ * redundant call would only be a redundant `classList.toggle`, but the guard
+ * stays: it is also what keeps a repaint that changed nothing from re-running
+ * the crossfade.
+ *
+ * The pair is built on first use and cached against the element, so it cannot
+ * outlive the button it belongs to; a control whose glyph NAME changes gets a
+ * fresh pair rather than a stale one.
  */
+const glyphMarks = new WeakMap<HTMLElement, { name: IconName; mark: SwapMark }>()
+
 function drawGlyph(button: HTMLElement, name: IconName, weight: IconWeight): void {
   if (button.dataset.deWeight === weight) return
   button.dataset.deWeight = weight
-  button.replaceChildren(icon(name, GLYPH, weight))
+  let entry = glyphMarks.get(button)
+  if (!entry || entry.name !== name) {
+    entry = {
+      name,
+      mark: swapMark(name, {
+        size: GLYPH,
+        done: name,
+        restWeight: "outline",
+        doneWeight: "filled",
+        tint: "inherit",
+      }),
+    }
+    glyphMarks.set(button, entry)
+    button.replaceChildren(entry.mark.node)
+  }
+  entry.mark.show(weight === "filled")
 }
 
 /**
@@ -763,6 +797,23 @@ export function installToolbar(context: EditorContext): void {
    */
   let theme: ThemeName = storedTheme() ?? "dark"
 
+  /*
+   * Sun and Moon are both mounted, and the flip crossfades between them.
+   *
+   * `drawGlyph` cannot serve this one: its pair is two WEIGHTS of a single
+   * glyph, and these are two different drawings. Same helper underneath, same
+   * `inherit` tint for the same reason — this is a toggle, not a confirmation.
+   *
+   * `Sun` rests and `Moon` is the swapped-to state, which follows the table
+   * above: the dark theme offers the sun, so `show(true)` means light is on.
+   */
+  const themeMark = swapMark(THEMES.dark.glyph, {
+    size: GLYPH,
+    done: THEMES.light.glyph,
+    tint: "inherit",
+  })
+  themeMark.show(theme === "light")
+
   const themeButton = el(
     "button",
     {
@@ -771,7 +822,7 @@ export function installToolbar(context: EditorContext): void {
       ...tip(THEMES[theme].label),
       onclick: () => setTheme(theme === "light" ? "dark" : "light"),
     },
-    [icon(THEMES[theme].glyph, GLYPH)]
+    [themeMark.node]
   )
 
   /** Name, tip and glyph are one fact about the theme, so one function writes them. */
@@ -779,7 +830,7 @@ export function installToolbar(context: EditorContext): void {
     for (const [name, value] of Object.entries(tip(THEMES[theme].label))) {
       themeButton.setAttribute(name, value)
     }
-    themeButton.replaceChildren(icon(THEMES[theme].glyph, GLYPH))
+    themeMark.show(theme === "light")
   }
 
   const setTheme = (next: ThemeName): void => {
@@ -1081,6 +1132,37 @@ export function installToolbar(context: EditorContext): void {
    */
   registerCommand("chrome.toggle", () => context.setChromeHidden(!context.getState().chromeHidden))
   registerCommand("chrome.hide", () => context.setChromeHidden(true))
+  /*
+   * THE KEYBOARD'S WAY INTO THE CHROME, and the bar is the right place to land.
+   *
+   * The editor mounts on `<body>`, so it sits LAST in tab order behind the
+   * whole of the host app; and while a selection exists the canvas consumes Tab
+   * outright for sibling navigation. Between the two there was no route from
+   * the page into the chrome that did not involve a mouse. This is it.
+   *
+   * It lands on the first enabled TOOL rather than on the bar, because the bar
+   * is a `div`: focusing a container draws a ring around a strip and says
+   * nothing about what the reader has arrived at. The first tool is the
+   * selection tool, which is where a pointer user starts too.
+   *
+   * It UNHIDES first. A collapsed editor is `visibility: hidden`, whose whole
+   * purpose is that nothing inside it can take focus — so asking while hidden
+   * would silently do nothing, which is the one outcome a keyboard affordance
+   * must never have. `setChromeHidden(false)` on a chrome that is already up is
+   * a no-op, so the ordinary case costs nothing.
+   *
+   * The focus waits a frame for the same reason: unhiding is a state write, and
+   * the element is not focusable until the class it drives has landed.
+   * `focusControl` rather than `.focus()` so the ring is actually drawn — this
+   * is a keyboard gesture by construction, and the modality guard in
+   * `core/focus.ts` has to be told so.
+   */
+  registerCommand("chrome.focus", () => {
+    context.setChromeHidden(false)
+    requestAnimationFrame(() => {
+      focusControl(slots.toolbar.querySelector<HTMLElement>("button:not([disabled])"))
+    })
+  })
   registerCommand("history.undo", () => travel("undo"))
   registerCommand("history.redo", () => travel("redo"))
   registerCommand("notes.copy", copyBrief)

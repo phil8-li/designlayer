@@ -246,8 +246,8 @@ const EXPECTED = [
   [".de-layer-menu", "12px", 4, 1, "3px", "8px"],
   [".de-lint-ignored-row", "12px", 4, 0, "4px", "8px"],
   /*
-   * The local-file drawer on the Design system tab, and the only nest the
-   * libraries sheet declares.
+   * The local-file drawer on the Design system tab, and the first of the two
+   * nests the libraries sheet declares.
    *
    * All three rounded things it holds — a candidate row in its top corners, a
    * path field and a button across its foot — are drawn at `radius.md`, and two
@@ -256,6 +256,24 @@ const EXPECTED = [
    * call, and the same direction, as `.de-lint-ignored-row` above it.
    */
   [".de-lib-panel", "12px", 4, 0, "4px", "8px"],
+  /*
+   * The sign-in dialog, which is the chrome's SECOND modal.
+   *
+   * A wall refusing an add used to be answered in a well inside the Libraries
+   * section; it is a `<dialog>` opened with `showModal()` now. The hairline came
+   * with the change and is counted in the gap, the way `.de-shortcuts` counts
+   * its own: a card floating over a backdrop carries a border, a card sunk into
+   * a panel does not.
+   *
+   * `radius['2xl']` over a `space.lg` inset rather than the sheet's 2xl/2xl,
+   * because what reaches the bottom-right corner is different. The sheet's
+   * corner child is a `radius.sm` close control; this one's is the primary
+   * `.de-button`, which draws `radius.md` by a rule this sheet does not own. So
+   * 20 − 12 = 8 is the only pairing that leaves the two curves parallel without
+   * asking shared furniture to move — the same direction as the two entries
+   * above it.
+   */
+  [".de-lib-signin", "20px", 12, 1, "11px", "8px"],
   /*
    * THREE ASSET NESTS LEFT HERE, and the reason is worth keeping.
    *
@@ -375,6 +393,13 @@ check("the radius a nest computed is the radius its children are given", () => {
        box across the foot. `.de-button` beside it is covered by the
        `.de-lint-ignored-row` entry below, which asserts the same shared rule. */
     ".de-lib-panel": [".de-lib-candidate", ".de-lib-field"],
+    /* The sign-in dialog's one corner child: the primary button in its
+       bottom-right. The title heading leads the top edge and draws no corner,
+       and "Not now" is a bare text control with neither padding nor radius, so
+       the other three corners hold nothing. Asserted against the shared
+       `.de-button` rule on purpose — if that ever moves off `md`, this card
+       stops being concentric and should say so. */
+    ".de-lib-signin": [".de-button"],
     /* The button in its corner is shared furniture — `.de-button` draws its own
        `radius.md`, and the row was raised to `radius.lg` so that IS the nest's
        radius. Asserted against the shared rule on purpose: if `.de-button` ever
@@ -481,12 +506,15 @@ const LEAVES = {
     "its first child is a ROW, and the 20px swatch at the left of it is centred in a 24px " +
     "band — 4px in across, 6px down. Nothing reaches a corner.",
   ".de-ann-composer-text": "a <textarea>. It has no element children to nest.",
-  ".de-layer-filter": "an <input>. Same — a replaced element has no children to put in a corner.",
   ".de-opt-note": "a <p> of prose.",
   ".de-opt-why": "a <p> of prose.",
-  ".de-lib-prop":
-    "a column whose first child is `.de-lib-line`, a bare flex row of text — no radius on it " +
-    "or on the name that starts it.",
+  /*
+   * `.de-lib-prop` was here, a column whose first child was `.de-lib-line`. It
+   * dropped off on its own the same way `.de-lint-row` below did, except by
+   * deletion rather than by re-housing: the whole library-component section it
+   * belonged to had no renderer left, so the seven rules that dressed it went
+   * and the reason went with them.
+   */
   ".de-lib-card":
     "same shape one level up: `.de-lib-line` first, and the name leads it. The kind badge and " +
     "the switch are further along the row, past the corner.",
@@ -500,9 +528,6 @@ const LEAVES = {
    * staleness case below is what said so.
    */
   ".de-insert-ghost": "one child, `.de-insert-ghost-name`, which draws no corner.",
-  ".de-prompt":
-    "shares only its top-RIGHT corner (4px top, 4px right), and what is there is " +
-    "`.de-prompt-body`, a bare text column.",
 }
 
 check("every container that could share a corner has been ruled on", () => {
@@ -559,6 +584,122 @@ check("every corner the chrome draws is on the ramp, a circle, or square", () =>
     }
   }
   assert.deepEqual([...strays], [], "a corner was drawn at a size the radius ramp does not have")
+})
+
+/*
+ * EVERY ROUND THING OPTED OUT OF THE SQUIRCLE, CHECKED RATHER THAN REMEMBERED.
+ *
+ * `css/base.ts` sets `corner-shape: superellipse(2)` on the whole chrome and
+ * then lists the shapes that must stay circular, because at `border-radius:
+ * 50%` — or any radius past half the box — the corner box IS the whole side,
+ * so a superellipse does not smooth a circle, it reshapes it into a rounded
+ * square.
+ *
+ * That list is maintained by hand and has now been wrong three times: once for
+ * the switch TRACKS while their knobs were in it, once for the pills, and once
+ * for the severity dot and the lint disc, which were rendering as rounded
+ * squares in every Chromium. Each time the rule was understood and the list
+ * simply had a hole in it, which is the signature of a rule a machine should
+ * be checking.
+ *
+ * So this is that check. Any rule declaring `border-radius: 50%` is round by
+ * definition and must appear in the opt-out; a radius past half the declared
+ * height is the same case arrived at arithmetically. The list stays — it is
+ * still where the decision is recorded — but it can no longer be silently
+ * incomplete.
+ */
+check("every circle in the chrome has opted out of the squircle", () => {
+  const optOut = ALL.find((rule) => /corner-shape:\s*round/.test(rule.body))
+  assert.ok(optOut, "nothing opts out, so the chrome's round things are no longer round")
+  const exempted = optOut.selector.split(",").map((part) => part.trim())
+
+  const missing = []
+  for (const rule of ALL) {
+    if (rule.selector.includes("@") || /corner-shape/.test(rule.body)) continue
+    const radius = declaration(rule.body, "border-radius")
+    if (!radius) continue
+
+    let round = /(^|\s)50%/.test(radius)
+    if (!round) {
+      // A radius at or past half the height is the same clamp case, reached by
+      // arithmetic rather than by the keyword. Only checkable where the rule
+      // states its own height, which is most of the small round controls.
+      const height = declaration(rule.body, "height")
+      const px = (value) => (value && /^(\d+(?:\.\d+)?)px$/.test(value.trim()) ? Number.parseFloat(value) : null)
+      const r = px(radius)
+      const h = px(height)
+      if (r !== null && h !== null && h > 0 && r >= h / 2) round = true
+    }
+    if (!round) continue
+    if (exempted.some((part) => part === rule.selector)) continue
+    missing.push(`${rule.selector} { border-radius: ${radius} }`)
+  }
+
+  assert.deepEqual(
+    missing,
+    [],
+    `round shape(s) rendering as rounded squares — add them to the \`corner-shape: round\` list in css/base.ts:\n      ${missing.join("\n      ")}`
+  )
+})
+
+/*
+ * ONE PRESS, ONE VALUE.
+ *
+ * Eight controls in this chrome squeeze under the pointer and they did it at
+ * five different sizes — 0.90, 0.92, 0.94, 0.95 and nothing at 0.96. Two were
+ * genuinely out of band (a 0.90 on the settings checkbox reads as a flinch),
+ * and the rest were a consistency problem: pressing two buttons a centimetre
+ * apart moved them by visibly different amounts.
+ *
+ * `better-ui` is explicit that this is a value and not a range — "always 0.96;
+ * anything below 0.95 feels exaggerated" — so there is nothing to tune per
+ * control and no reason for a call site to hold its own number.
+ *
+ * Scoped to `:active` on purpose. A drag ghost at 0.98 and the popover
+ * entrance's 0.97 are not presses, they are a different gesture and a
+ * different animation, and sweeping every `scale()` in the sheet would have
+ * dragged both in.
+ */
+check("every press in the chrome squeezes by the same amount", () => {
+  const strays = []
+  for (const rule of ALL) {
+    if (!/:active(\s|$|[^-\w])/.test(rule.selector)) continue
+    const transform = declaration(rule.body, "transform")
+    if (!transform) continue
+    for (const [, value] of transform.matchAll(/scale\(([^)]+)\)/g)) {
+      if (value.trim() !== "0.96") strays.push(`${rule.selector} { transform: scale(${value}) }`)
+    }
+  }
+  assert.deepEqual(strays, [], `a press at a size the house does not use:\n      ${strays.join("\n      ")}`)
+})
+
+/*
+ * One cursor vocabulary, enforced rather than remembered.
+ *
+ * The split had reached 40 rules to 15 with no principle between them, and the
+ * disagreements were between neighbours: a button that opens a popover said
+ * `default` while the select beside it in the same row said `pointer`. The rule
+ * is now stated in `css/panels.ts` — every enabled control is `pointer`, and
+ * `default` belongs to disabled states and to things that are not controls.
+ *
+ * Checked by looking for the contradiction rather than by listing controls:
+ * a rule that declares `cursor: default` and is NOT a disabled selector is the
+ * failure, and that needs no inventory to stay true.
+ */
+check("no enabled control in the chrome withholds the pointer", () => {
+  const strays = []
+  for (const rule of ALL) {
+    if (declaration(rule.body, "cursor") !== "default") continue
+    // Disabled states legitimately take `default`; so do the two drag grounds,
+    // which say `grab`/`grabbing` elsewhere and fall back here while inert.
+    if (/\[disabled\]|\[aria-disabled="true"\]|:disabled/.test(rule.selector)) continue
+    strays.push(rule.selector)
+  }
+  assert.deepEqual(
+    strays,
+    [],
+    `enabled control(s) drawing no pointer:\n      ${strays.join("\n      ")}`
+  )
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

@@ -213,12 +213,33 @@ export function classifyWall(response, url = "") {
   const contentType = String(response.contentType ?? "").toLowerCase()
   const text = typeof response.text === "string" ? response.text : ""
   const origin = originOf(url) || originOf(location)
+  // Resolved up here because `wall()` reports it and the 401 branch returns
+  // before the redirect branch would otherwise have computed it.
+  const absoluteLocation = (() => {
+    if (!location) return ""
+    try {
+      return new URL(location, url || undefined).toString()
+    } catch {
+      return ""
+    }
+  })()
 
+  /*
+   * `location` is reported rather than interpreted.
+   *
+   * This module will not look at a hostname — see the header — because a
+   * classifier that recognised one vendor would be silently wrong for every
+   * other. But the redirect target is a fact it already read, and the caller
+   * that opens the site's own sign-in needs it to say WHOSE sign-in is about to
+   * appear. Handing over the evidence keeps the vendor table outside this file,
+   * where being wrong costs a button label instead of a classification.
+   */
   const wall = (kind, extra = {}) => ({
     kind,
     origin,
     audience: "",
     realm: "",
+    location: absoluteLocation,
     hint: HINTS[kind] ?? HINTS.redirect,
     ...extra,
   })
@@ -233,7 +254,7 @@ export function classifyWall(response, url = "") {
     return wall("bearer", { realm })
   }
 
-  const absolute = location ? new URL(location, url || undefined).toString() : ""
+  const absolute = absoluteLocation
 
   if (status >= 300 && status < 400 && absolute && crossOrigin(url, absolute)) {
     const clientId = oauthClientId(absolute)

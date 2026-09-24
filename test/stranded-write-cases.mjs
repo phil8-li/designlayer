@@ -643,19 +643,24 @@ await check("SW-12 emptying the outbox lands on the empty state, not on nothing"
   // over two blank bodies — and no tally is left anywhere to announce a zero.
   assert.equal(tab.node.querySelector(".de-section-title").textContent.trim(), "Settings")
   assert.equal(tab.node.querySelector(".de-ann-count"), null, "the tally came back")
-  assert.equal(button("Copy").disabled, true)
   /*
-   * The write button goes with its section; the handover stays and greys out.
+   * EVERY BUTTON LEAVES WITH THE THING IT ACTS ON, and there is no exception
+   * any more.
    *
-   * They differ because their scopes differ. "Apply to code" belongs to the
-   * edits section and is drawn with it, so an empty list has no section and no
-   * button. Send and Copy act on the whole session and live in the footer,
-   * which is always there — so the honest empty state for those two is a
-   * control that is visibly present and visibly refusing, rather than one that
-   * vanished and left the designer wondering where the handover went.
+   * "Apply to code" always did: it belongs to the edits section and is drawn
+   * with it. Send and Copy used to be the exception, present and greyed out on
+   * the grounds that a control which vanishes leaves the designer wondering
+   * where the handover went. Over an EMPTY session there is no handover to
+   * wonder about — the one line asserted above says exactly that — and three
+   * refusing controls under it were three things to read past to reach it.
+   *
+   * Copy is checked by its row rather than by its name, because the MCP
+   * address in Settings has a Copy of its own and Settings does not leave. A
+   * sweep for the word would find that one and report the outbox's as present.
    */
+  assert.equal(tab.node.querySelector(".de-ann-ctas"), null, "the handover row survived")
   assert.equal(button("Apply to code"), null, "an empty list still offers a write")
-  assert.equal(button("Send to agent").disabled, true, "an empty outbox can still be sent")
+  assert.equal(button("Send to agent"), null, "an empty outbox can still be sent")
 })
 
 await check("SW-13 no row carries an absolute path, in its text or in its title", () => {

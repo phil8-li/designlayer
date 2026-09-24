@@ -57,6 +57,28 @@ const MENU_Z = 2147483250
  */
 const MENU = nest({ of: ".de-app-menu", outer: t.radius.lg, inset: t.space.sm, hairline: 1 })
 
+/**
+ * The margin the card keeps off the viewport, and the same number twice.
+ *
+ * `panels/app-chooser.ts` clamps the card's position to `EDGE` — also 8 — so
+ * the ceiling below has to be the viewport less that margin at BOTH ends, or
+ * the card's measured height and the height it is allowed to occupy disagree
+ * and the flip calculation places it against an edge it then overhangs.
+ *
+ * Written as a token rather than as \`8\` because that is where the number comes
+ * from in both files, and a ceiling that silently stopped tracking the spacing
+ * scale would show up as a card one step too tall rather than as anything
+ * anyone would look for here.
+ *
+ * \`space.md\`, and the step it replaces is the reason to name the failure here
+ * rather than fix it silently: this read \`space.sm\`, which is 4, so the ceiling
+ * came out \`100vh - 8px\` against a card positioned 8px off each edge. The card
+ * was allowed to be 8px taller than the room it had, which is not enough to
+ * notice and exactly enough to put the last row's lower half under the window
+ * edge on the short viewport this ceiling exists for.
+ */
+const MENU_EDGE = t.space.md
+
 export const appChooserCss = `/* ---------- app chooser ---------- */
 /*
  * A heading you can press, which is the whole brief.
@@ -89,7 +111,7 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
   text-align: left;
-  cursor: default;
+  cursor: pointer;
   transition: background ${t.duration.fast} ${t.ease};
 }
 /* 32px is over the 24px line in the hover rule, so it takes the quiet step its
@@ -145,15 +167,31 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * note at the top of this file: the overlay is a stacking context under the
  * rail, so a card mounted there is unclipped and invisible at the same time.
  *
- * The width floor is what a two-line row needs before the url starts
- * truncating; the ceiling keeps the card from spanning a wide window just
- * because one project lives at a deep path. Between them the card sizes to its
- * content, which on a typical machine is two or three rows.
+ * The width floor is the column the card drops out of — a card narrower than
+ * the 240px panel above it reads as belonging to something else — and the
+ * ceiling keeps it from spanning a wide window just because one package has a
+ * long scoped name. Between them the card sizes to its content, and above the
+ * viewport it stops and scrolls.
+ *
+ * That ceiling is new and it was a hole rather than an omission. A row is 42px,
+ * which is 84px at 200% zoom; the registry's own notes record five editors
+ * running on the machine this was written on, so five rows plus the trailing
+ * note is taller than a short window — and the card simply hung off the bottom
+ * edge with no scrollbar, which put the rows NEAREST the trigger out of reach.
+ *
+ * \`overscroll-behavior: contain\` is the other half. The window-capture
+ * \`scroll\` listener in \`panels/app-chooser.ts\` closes this menu, and it now
+ * ignores events inside the card — but without this the wheel gesture that
+ * reaches the end of the list carries on into the page behind it, which scrolls
+ * the app under an open menu anchored to a control that has just moved.
  */
 .de-app-menu {
   position: fixed;
   z-index: ${MENU_Z};
   min-width: 232px; max-width: 340px;
+  max-height: calc(100vh - ${MENU_EDGE * 2}px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: ${MENU.padding};
   background: ${t.color.bgRaised};
   border: ${MENU.hairline}px solid ${t.color.border};
@@ -162,13 +200,28 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   pointer-events: auto;
 }
 /*
- * Two lines, because a row has two facts to carry and they are not the same
- * kind of fact: what the app is called, and where it is running. One line
- * holding both would make the reader parse a separator to find the name, and
- * the name is what the click is chosen on.
+ * ONE LINE: a name, and a figure trailing it.
+ *
+ * This was a column of two lines, and the argument for the column was that a
+ * row carries two facts of different kinds — what the app is called, and where
+ * it is running — and that one line holding both would make the reader parse a
+ * separator to find the name. That is a good argument against cramming a
+ * SENTENCE in beside a name, and the second line duly filled with one: a full
+ * url, a middle dot, and a clause. Three facts on two lines, per row, in a
+ * control whose whole question is which of these am I on and which could I be.
+ *
+ * What is left beside the name is four digits, and four digits need no
+ * separator to be told from a name. The name takes the row and the figure
+ * trails it, which is the ordering rule for a row — identifying content leads,
+ * metadata trails — and it puts every port in the card on one trailing edge,
+ * where two of them can be compared by eye instead of by reading.
+ *
+ * \`baseline\` rather than \`center\`: the two items are 12px and 11px, and
+ * centring two type sizes against each other lands the smaller one a fraction
+ * high against a name it is supposed to sit beside.
  */
 .de-app-menu-row {
-  display: flex; flex-direction: column; gap: ${t.space.xs}px;
+  display: flex; align-items: baseline; gap: ${t.space.md}px;
   width: 100%;
   padding: ${t.space.sm}px ${t.space.md}px;
   /* Read off the card's nest, not matched to it by hand — see \`MENU\`. */
@@ -177,56 +230,191 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   color: ${t.color.text};
   font: inherit;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
 }
-/* A row on a raised surface lifts to \`bgHover\`, per the hover rule in
-   panels.ts — the card is already a step off the ground, so the quiet step
-   would be invisible on it. */
-.de-app-menu-row:hover:not(:disabled) { background: ${t.color.bgHover}; }
+/*
+ * A row on a raised surface lifts to \`bgRaisedHover\`, and the comment this
+ * replaces had the right rule and the wrong token.
+ *
+ * It said "a row on a raised surface lifts to \`bgHover\`", which on this card
+ * is not a lift at all: the menu is \`bgRaised\` — \`lift(14)\`, #4a4a4a — and
+ * \`bgHover\` is \`lift(12)\`, #454545. Pointing at a row made it DARKER than the
+ * card it sits in, so the hover read as a press, or as nothing.
+ *
+ * \`bgRaisedHover\` exists for exactly this and says so in \`tokens.ts\`: one rung
+ * above the surface it sits on, in whichever direction that theme lifts. In
+ * light the card is white and the rung is \`press(6)\`, which is darker and
+ * correct — a light theme recesses.
+ *
+ * Focus takes the same ground for the same reason. It also draws a ring, so it
+ * was never invisible; it was just disagreeing with hover about which way this
+ * surface moves.
+ */
+.de-app-menu-row:hover:not([aria-disabled="true"]) { background: ${t.color.bgRaisedHover}; }
 .de-app-menu-row:focus-visible {
   outline: 2px solid ${t.color.accent};
   outline-offset: -2px;
-  background: ${t.color.bgHover};
+  background: ${t.color.bgRaisedHover};
 }
 /*
- * A switch is in flight and the rows are dead, so they say so.
+ * Unpressable, and there are two ways to be.
+ *
+ * A switch in flight kills every row for as long as the request is out; an app
+ * the scanner could not place on disk is dead from the moment it is drawn. Both
+ * wear the same ink, because both answer the same question.
  *
  * \`textDisabled\` rather than \`opacity\`, for the reason that role exists: a
  * fade takes the ink and the fill toward whatever is behind them together and
- * lands a disabled label under the contrast floor. This keeps both lines
- * readable — the reader still needs to see which app they picked.
- */
-.de-app-menu-row:disabled { color: ${t.color.textDisabled}; cursor: default; }
-/*
- * An app the scanner found but could not place on disk — running, listed, and
- * not openable, because the editor rewrites source files and there is no folder
- * to rewrite them in.
+ * lands a disabled label under the contrast floor. This keeps the row readable
+ * — the reader still needs to see which app they picked.
  *
- * It keeps the disabled ink from the rule above but not its silence: the second
- * line stays at \`textDim\` rather than fading with the rest, because that line
- * is the only thing on screen saying WHY the row is dead. A uniformly greyed
- * row reads as "not available just now" and invites a second click; this one
- * has to read as "here is the reason".
+ * \`aria-disabled\`, and NOT the native attribute this selector used to read.
+ * \`disabled\` takes the row out of the accessibility tree, and out with it goes
+ * the \`aria-label\` that is the only place the "no project folder" reason is
+ * written — so the users who cannot see the greyed second line were the exact
+ * users the explanation was hidden from. It also makes the row the reader just
+ * pressed unfocusable in the same frame, and the browser answers that by
+ * dropping them to the top of the document.
  */
-.de-app-menu-row--unplaced .de-app-menu-where { color: ${t.color.textDim}; }
-.de-app-menu-name {
-  font-weight: ${t.type.weightValue};
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+.de-app-menu-row[aria-disabled="true"] { color: ${t.color.textDisabled}; cursor: default; }
+/*
+ * Pointer-dead only while a switch is in flight.
+ *
+ * \`pointer-events: none\` on the unplaced row would take its hover and its
+ * cursor with it, and that row is the one the reader most needs to point at and
+ * read. The in-flight row has nothing to say that it was not saying a second
+ * ago, so nothing is lost by making it inert.
+ */
+.de-app-menu-row--busy { pointer-events: none; }
+/*
+ * Armed: the next click on this row ends the session and takes unapplied edits
+ * with it.
+ *
+ * The same pair \`.de-ann-clear--armed\` uses, because it is the same control in
+ * a different shape — a destructive action that has asked once and is waiting
+ * to be asked again — and a second spelling of "armed" in this chrome is how
+ * the two drift apart.
+ *
+ * Hover does not lift off it. The row is already carrying the warning, so color
+ * is not the channel the state travels on; it is the channel that makes a
+ * reader moving fast enough to need the warning stop for it. A hover step on
+ * top would read as the row coming back to normal under the cursor.
+ */
+.de-app-menu-row--danger,
+.de-app-menu-row--danger:hover {
+  background: ${t.color.danger};
+  color: ${t.color.onSemantic};
 }
 /*
- * Where it is running: rank 4, and the one line in the card that WRAPS rather
- * than truncating.
+ * The name takes the row, and gives up nothing.
  *
- * Every loopback url on the machine is the same string up to the port, so an
- * ellipsis lands on \`http://127.0.0.1:30…\` and hides the only part that tells
- * two prototypes apart. Two lines of small text is a cheaper price than a row
- * the reader cannot identify; \`word-break\` is what keeps a long project path
- * from pushing past the card's edge on the way.
+ * It used to truncate here exactly as it does on the trigger, and it should
+ * not: the trigger is a 32px band with a chevron to fit and no choice, while
+ * this card is up to 340px wide with no height at all to run out of. The
+ * question the list answers is which of two checkouts is which, and the two
+ * differ in the TAIL of the name — the part an ellipsis eats. So the name wraps
+ * instead, which costs a second line on the rare name that needs one and hides
+ * nothing on any of them. \`break-word\` is for the scoped package with no space
+ * in it, which would otherwise push past the card's edge rather than wrap.
+ */
+.de-app-menu-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: ${t.type.weightValue};
+  overflow-wrap: break-word;
+}
+/*
+ * The trailing figure: a port, or the three words that stand in for one.
+ *
+ * \`flex: none\` and \`nowrap\` together are the whole of the guarantee that a row
+ * does not change height while it is being handed over. The slot holds four
+ * digits at rest and a one-word progress phrase mid-switch, and neither can
+ * wrap or be clipped; \`panels/app-chooser.ts\` used to measure the row and pin
+ * the height in an inline style to buy the same thing, back when this was a
+ * wrapping url.
+ *
+ * The quiet ink is conditional, and the condition is the one state where this
+ * slot has no ink of its own to choose. An armed row is a danger fill with
+ * exactly one legible ink on it, and the figure takes that ink by inheriting
+ * the row's — rather than by a second rule naming \`onSemantic\`, which is a
+ * copy of the row's decision that has to be kept in step with it by hand, and
+ * which reads as a pair with the card behind it rather than with the fill it is
+ * actually on. The unplaced row needs no rule of its own either: it is not a
+ * danger row, so its three words stay at \`textDim\` and legible while the rest
+ * of the row goes to \`textDisabled\` — which is the point, since those words are
+ * the only thing saying why the row is dead.
  */
 .de-app-menu-where {
-  color: ${t.color.textDim};
+  flex: none;
   font-size: ${t.type.caption};
-  word-break: break-word;
+  white-space: nowrap;
+}
+.de-app-menu-row:not(.de-app-menu-row--danger) .de-app-menu-where {
+  color: ${t.color.textDim};
+}
+/*
+ * The mark on a row that is a navigation rather than a process swap.
+ *
+ * A row backed by an editor that is already serving moves the page; a row
+ * without one asks a supervisor to SIGTERM this editor. The reader has to be
+ * able to tell those apart before pressing either, and the clause that used to
+ * say so — \`editor already running\` — spent four words per row on it. An arrow
+ * says the same thing in the width of a glyph, and \`base.ts\` already gives
+ * every svg in the chrome \`flex: none\`, so it cannot be squeezed out by a long
+ * name the way the words could.
+ *
+ * Rank 4, like the figure it follows: it is a mark about the row, not a second
+ * control inside it. \`align-self\` because the row aligns on the baseline and a
+ * glyph has none to speak of — it would hang off the bottom of the text.
+ */
+.de-app-menu-row svg {
+  align-self: center;
+  color: ${t.color.textDim};
+}
+/*
+ * THE ROW REPORTING ITS OWN HANDOVER.
+ *
+ * Switching apps asks a supervisor to stop one process and start another, and
+ * it takes seconds. What the reader used to get was a toast that expires after
+ * four of them and a menu whose rows went grey — so by the time anything
+ * changed, the only thing that had explained it was gone, and the page behind
+ * stopped answering because the server was gone too. The longest wait in the
+ * product, furnished with the least.
+ *
+ * The SWEEP says the wait is progressing rather than merely happening, which is
+ * the distinction a greyed row cannot draw. It is the same indeterminate mark
+ * the audit button uses, at the same rung, because they are the same statement.
+ *
+ * The ink comes up to \`text\` because the slot has stopped holding metadata and
+ * started holding the only account of what is happening to the page. Nothing
+ * here holds the phrase to one line any more: the slot does that at rest and in
+ * every other state, so the rule that used to is gone rather than restated.
+ *
+ * Reduced motion keeps the statement and drops the travel: a still wash still
+ * distinguishes the row being handed over from the rows that are merely
+ * disabled beside it.
+ */
+.de-app-menu-row[data-de-switching] {
+  position: relative;
+  overflow: hidden;
+}
+.de-app-menu-row[data-de-switching]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, ${t.color.borderStrong}, transparent);
+  animation: de-app-switching calc(${t.duration.base} * 6) linear infinite;
+  pointer-events: none;
+}
+@keyframes de-app-switching {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+.de-app-menu-row[data-de-switching] .de-app-menu-where { color: ${t.color.text}; }
+@media (prefers-reduced-motion: reduce) {
+  .de-app-menu-row[data-de-switching]::after {
+    animation: none;
+    background: ${t.color.bgRaisedHover};
+  }
 }
 /*
  * The app you are already editing.
@@ -241,7 +429,9 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   box-shadow: inset 2px 0 0 ${t.color.accent};
   color: ${t.color.text};
 }
-.de-app-menu-row--current .de-app-menu-name { color: ${t.color.accent}; }
+/* The current app's name is a WORD in the accent, so it takes the ink rung
+   rather than the stroke rung — 4.23:1 against 5.4:1 in light. */
+.de-app-menu-row--current .de-app-menu-name { color: ${t.color.accentText}; }
 /*
  * Looking, empty, no chooser, failed — every answer the menu can give that is
  * not a list of apps.
@@ -256,7 +446,7 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   padding: ${t.space.sm}px ${t.space.md}px;
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
-  line-height: 1.45;
+  line-height: ${t.type.leadingBody};
   word-break: break-word;
 }
 

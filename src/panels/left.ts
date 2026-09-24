@@ -1,14 +1,15 @@
 /**
- * The left panel: two views over the page you are editing.
+ * The left panel: three views over the app you are editing.
  *
  * **Layers** is the tree this panel has always been — the shared layer graph,
  * mounted by `installLayersPanel`, which appends straight into whatever slot it
  * is handed. **Code** is the selected element as source, the same view the right
- * inspector used to carry as its third tab.
+ * inspector used to carry as its third tab. **Controls** is every tunable the
+ * running app exposes through its own control panel.
  *
  * ## Why Code is here and not in the inspector
  *
- * Both of these tabs answer "what IS this", and they answer it at the two scales
+ * Both of those tabs answer "what IS this", and they answer it at the two scales
  * a person actually asks it: the tree says where the element sits in the page,
  * and the code view says what it is written as. Reading one and then the other
  * is one question asked twice, so they belong in one strip — and putting them
@@ -23,6 +24,28 @@
  * design — the fields in it are built to a fixed width, while a line of JSX is
  * as long as it is. The tree has the same shape of content and the same need
  * for room, which is why this panel was already the one people drag wider.
+ *
+ * ## Why Controls is here, when it is the one tab you EDIT things in
+ *
+ * For a while the argument above read as "the left rail is the read-only side",
+ * and a third tab full of live inputs would break it. That reading was wrong,
+ * and the app chooser sitting directly above this strip has always been the
+ * counterexample: it is an editable control, and the most consequential one in
+ * the product, since picking a different app ends the session.
+ *
+ * The rule the two tabs above actually draw is about SCOPE. The right panel
+ * operates on the selection; this column holds the subject and the browsing. A
+ * leva-style control does not edit an element — `readInventory()` takes no
+ * selection argument, and writing one goes to the app's own store — so what it
+ * edits is the app, and the app is this column's subject. Substitute nouns into
+ * the Assets argument below and the placement writes itself: a control is worth
+ * showing in the inspector when it is bound to the thing you selected, and
+ * worth browsing here when you are scrolling past a hundred and seventy of them.
+ *
+ * It also retires a floating `role="dialog"` that existed for one reason: to
+ * survive deselection. That is this panel's ordinary behavior — it does not
+ * unmount when the selection clears, it merely repaints Code — so the window
+ * was a hand-built approximation of a surface the product already had.
  *
  * ## What left with Assets, and where it went
  *
@@ -70,8 +93,11 @@
  */
 
 import { el } from "../core/dom"
+import { smoothScroll } from "../core/motion"
+import { installTabPill } from "../core/travelling-surface"
 import { registerCommand } from "../core/commands"
 import { codeTab } from "./inspector/tab-code"
+import { controlsTab } from "./controls"
 import { installAppChooser } from "./app-chooser"
 import { installLayersPanel } from "./layers"
 import type { EditorContext } from "../core/context"
@@ -115,12 +141,14 @@ export function installLeftPanel(context: EditorContext): void {
 
   const layersPane = pane("layers")
   const codePane = pane("code")
+  const controlsPane = pane("controls")
 
   const strip = el("div", {
     class: "de-tabs",
     role: "tablist",
     "aria-label": "Left panel views",
   })
+  const pill = installTabPill(strip)
 
   /*
    * The panes are in the document BEFORE either view is mounted into them.
@@ -152,7 +180,7 @@ export function installLeftPanel(context: EditorContext): void {
    * until this panel grows a real one.
    */
   const chooser = installAppChooser(context)
-  context.slots.left.append(chooser.node, strip, layersPane, codePane)
+  context.slots.left.append(chooser.node, strip, layersPane, codePane, controlsPane)
 
   /*
    * The tree mounts into its pane by being handed a context that says the pane
@@ -180,6 +208,18 @@ export function installLeftPanel(context: EditorContext): void {
   const code = codeTab(context)
   codePane.append(code.node)
 
+  /*
+   * And the controls pane, mounted exactly the way the code view is.
+   *
+   * `controlsTab` hands its DOM back rather than writing into a slot, for the
+   * same reason: it is a view, not a panel, and the only thing it needs from
+   * the context is the store and the toast. It gets the REAL context, not the
+   * adapted one the tree takes — it touches no slot, so the substitution would
+   * be one with no effect, which the chooser's comment above refuses to make.
+   */
+  const controls = controlsTab(context)
+  controlsPane.append(controls.node)
+
   const tabs: TabDefinition[] = [
     /*
      * Layers first, and it is the tab you land on.
@@ -205,6 +245,30 @@ export function installLeftPanel(context: EditorContext): void {
       pane: codePane,
       update: () => code.update(),
     },
+    /*
+     * Controls last, and it is the only tab here that is not about the
+     * selection at all.
+     *
+     * That is also why it is last rather than second. Layers and Code are read
+     * at the rhythm of picking things — you select, you glance at the tree, you
+     * glance at the source — and a tab wedged between them would sit in the
+     * path of a gesture people make dozens of times a session to show something
+     * that did not change when the selection did. Browsing the app's controls
+     * is a thing you go and do; it deserves a slot, not the middle of somebody
+     * else's loop.
+     *
+     * `update` is a real call, unlike Layers'. The pane reads the host's
+     * control store and the primary selection, and while it subscribes to the
+     * store itself for the live-drag case, the selection arrives through this
+     * panel's own subscription — which is what keeps the scope chip honest
+     * about whether there is anything to scope to.
+     */
+    {
+      id: "controls",
+      label: "Controls",
+      pane: controlsPane,
+      update: () => controls.update(),
+    },
   ]
 
   let activeId = tabs[0].id
@@ -228,6 +292,18 @@ export function installLeftPanel(context: EditorContext): void {
     strip.append(button)
     definition.pane.hidden = definition.id !== activeId
   }
+
+  /*
+   * Place the pill under the tab that mounted selected.
+   *
+   * A frame late, because the strip is in the document by now but has not been
+   * laid out — the buttons measure zero until the browser has painted once, and
+   * `installTabPill` refuses a zero measurement rather than publishing a pill
+   * of no width parked at the origin. This is also the write that trips the
+   * helper's first-placement guard, so the initial position is a jump and every
+   * one after it is a move.
+   */
+  requestAnimationFrame(() => pill.track(buttons.get(activeId)))
 
   /**
    * Switching tabs updates the tab you switch TO, and only that one.
@@ -258,13 +334,26 @@ export function installLeftPanel(context: EditorContext): void {
       definition.pane.hidden = !selected
     }
     /*
-     * Two tabs fit this panel at every width the seam allows, so the strip has
-     * nothing to scroll — but the panel is draggable and the labels are not
-     * ours to bound, so the same guard the inspector uses is cheap insurance.
+     * Three tabs, and the strip is a scroller now rather than insurance.
+     *
+     * Two short words fit this panel at every width the seam allows. "Layers ·
+     * Code · Controls" does not: the panel drags down to `panelMinWidth`, which
+     * is 180px, and three pills with `space.md` padding a side clear that
+     * before the labels are even measured. So the chosen tab has to bring
+     * itself into view, exactly as the inspector's does — the strip draws no
+     * scrollbar, and without this there would be no way to reach a tab that had
+     * fallen off the end.
+     *
      * Guarded twice over: JSDOM does not implement `scrollIntoView`, and the
      * tab suites drive this function directly.
      */
-    buttons.get(id)?.scrollIntoView?.({ block: "nearest", inline: "nearest" })
+    buttons.get(id)?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: smoothScroll() })
+    // After the scroll, not before: `scrollIntoView` can move the strip under
+    // the pill, and the offsets the pill reads are content-relative, so a
+    // measurement taken first would be correct about a layout that no longer
+    // holds. Nothing here is async — the scroll is synchronous and `nearest`
+    // usually does nothing at all — so this is still one frame.
+    pill.track(buttons.get(id))
     tabs.find((definition) => definition.id === id)?.update()
   }
 
@@ -288,6 +377,12 @@ export function installLeftPanel(context: EditorContext): void {
    * never watched it. The code view is the opposite: it is a rendering of the
    * primary selection and nothing else, and without this it would sit showing
    * the element you selected before last.
+   *
+   * Controls needs the same notification for a smaller reason: its content is
+   * app-scoped, but its scope CHIP is not. Whether "This element" can be picked
+   * at all, and what it prunes to when it is, both move with the selection, so
+   * a pane that never heard about one would offer a scope over an element that
+   * is no longer chosen.
    *
    * Narrowed to the one field on purpose. `hovered` is written on every
    * pointermove, and repainting a syntax-highlighted block for each of those
@@ -323,9 +418,13 @@ export function installLeftPanel(context: EditorContext): void {
    * and Code moved over from the inspector — three keys went silently dead,
    * because a command nobody registers is a no-op.
    *
-   * Only the slots that exist are registered. A two-tab panel leaves ⌥3
-   * unclaimed and the key falls through to the page, which is the whole point
-   * of `runCommand` reporting whether it found anything.
+   * Only the slots that exist are registered, and this array is the reason
+   * that clause is written the way it is: the panel carried two tabs for a
+   * release, ⌥3 fell through to the page, and adding Controls claimed the key
+   * with no edit here at all. `runCommand` reporting whether it found anything
+   * is what makes an unclaimed slot a no-op rather than a swallowed keystroke —
+   * and `shell/shortcuts.ts` reads tab names off the live strip, so the sheet
+   * names the new tab without being told about it either.
    *
    * Opening the panel is part of the command, not a separate concern: a key
    * that switched a tab inside a closed panel would look like a key that did

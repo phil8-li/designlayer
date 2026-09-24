@@ -27,7 +27,7 @@
  *
  * ## Why the plain names are a table and not a transform
  *
- * `no-raw-colors` → "Hardcoded colours" cannot be derived. Dropping `no-` and
+ * `no-raw-colors` → "Hardcoded colors" cannot be derived. Dropping `no-` and
  * unhyphenating gets there for that one rule and produces "Declaration property
  * value no unknown" for the next, which is worse than the id it replaced: an id
  * is at least recognisably an id, and a mangled phrase reads like English that
@@ -50,7 +50,7 @@ import type { LintFinding } from "./store"
  * project is one heading, which is right: it is one problem.
  */
 const RULE_NAMES: Record<string, string> = {
-  "no-raw-colors": "Hardcoded colours",
+  "no-raw-colors": "Hardcoded colors",
   "no-undeclared-token": "Tokens that do not exist",
   "duplicate-token-values": "Duplicate tokens",
   "no-inline-styles": "Inline styles",

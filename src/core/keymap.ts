@@ -87,12 +87,50 @@ export function isTextEntry(node: EventTarget | null): boolean {
 }
 
 /**
+ * Where a key press actually came from, shadow roots included.
+ *
+ * `event.target` is RETARGETED at a shadow boundary: a keystroke typed into a
+ * `<textarea>` inside somebody's shadow root arrives at this editor as its
+ * host element, which is not a text field by any test. The editor then read it
+ * as a bare key press on the page and spent it on a single-letter shortcut.
+ *
+ * That is not a hypothetical. Typing a sentence into a companion toolbar whose
+ * UI lives in a shadow root came out as "Noe oggle red bubble" — every `a`,
+ * `c`, `h`, `s` and `t` eaten, because those five letters are tools on the
+ * keymap below and each one was `preventDefault`ed on its way to the caret.
+ * Any host app with a shadow-DOM text field loses characters the same way.
+ *
+ * `composedPath()[0]` is the real innermost target, before retargeting.
+ */
+function deepTarget(event: Event): EventTarget | null {
+  return event.composedPath()[0] ?? event.target
+}
+
+/** Whether a key press landed in a text field, wherever that field lives. */
+export function isTextEntryEvent(event: Event): boolean {
+  return isTextEntry(deepTarget(event))
+}
+
+/**
+ * Whether a key press landed in chrome — this editor's, the host's dev GUI, or
+ * a companion's.
+ *
+ * Asked of the whole composed path rather than of one node, because the two
+ * ends answer different halves: a shadow host carries the trusted selector a
+ * companion declared, while the nodes inside its shadow root are the ones a
+ * `closest()` from the outside can never reach.
+ */
+export function isChromeEvent(event: Event): boolean {
+  return event.composedPath().some((node) => isChrome(node))
+}
+
+/**
  * Keys pressed inside our own chrome belong to that control. Without this the
  * layers tree's arrows would nudge the selected element, and Tab on `window`
  * capture would make every panel unreachable by keyboard.
  */
 export function ownsCanvasKeys(event: KeyboardEvent): boolean {
-  return !isChrome(event.target) && !isTextEntry(event.target)
+  return !isChromeEvent(event) && !isTextEntryEvent(event)
 }
 
 /* ══════════════════════════ The Figma keymap ══════════════════════════════ */
@@ -179,7 +217,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     chord: { key: "v" },
     aliases: [{ key: "a" }],
     label: "Inspect — a click selects an element",
-    figma: "Move tool (V). A is Figma's Frame tool, which has no meaning here, so it is a second key for this.",
+    figma: "Move tool (V). A is Figma’s Frame tool, which has no meaning here, so it is a second key for this.",
     group: "Tools",
   },
   {
@@ -218,6 +256,33 @@ export const SHORTCUTS: readonly Shortcut[] = [
     chord: { code: "Backslash", mod: true, shift: true },
     label: "Show or hide the left panel",
     figma: "Show/hide left panel (⇧⌘\\)",
+    group: "View",
+  },
+  /*
+   * THE WAY IN, which this keymap did not have.
+   *
+   * Every other row moves something around once you are already inside the
+   * editor. Nothing put a keyboard user INTO it. The chrome is appended to
+   * `<body>`, so it is last in tab order behind the whole of the host app — and
+   * while anything is selected the canvas takes Tab outright (see `select.next`
+   * below), so a keyboard user standing in the app cannot reach the chrome by
+   * tabbing at all until they press Escape first. The editor was pointer-first
+   * at the one moment it could least afford to be.
+   *
+   * ⇧⌘1 rather than a bare letter, because this has to keep working while a
+   * prototype holds the plain keys — the loan this file's header describes. Not
+   * an ⌥ digit either: ⌥1..⌥3 and ⌥8..⌥0 are the panel slots already.
+   *
+   * Figma has no counterpart to copy, and `figma` says so rather than inventing
+   * a lineage. Figma owns its window and is never re-entered from somewhere
+   * else; that is exactly the difference between an app and a guest on someone
+   * else's page.
+   */
+  {
+    command: "chrome.focus",
+    chord: { code: "Digit1", mod: true, shift: true },
+    label: "Move focus to the editor toolbar",
+    figma: "No Figma equivalent — Figma owns its window and is never a guest on a page",
     group: "View",
   },
   /*
@@ -270,7 +335,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     command: "panel.inspector.tab2",
     chord: { code: "Digit9", alt: true },
     label: "Inspector: second view",
-    figma: "Prototype panel (⌥9) — this editor's second inspector tab, in its slot",
+    figma: "Prototype panel (⌥9) — this editor’s second inspector tab, in its slot",
     group: "View",
   },
   {
@@ -320,10 +385,31 @@ export const SHORTCUTS: readonly Shortcut[] = [
     group: "Selection",
     owner: "canvas",
   },
+  /*
+   * TAB IS CLAIMED WHILE SOMETHING IS SELECTED, AND THE LABEL SAYS HOW TO GET
+   * IT BACK.
+   *
+   * `canvas/index.ts` calls `preventDefault()` on Tab whenever there is a
+   * selection and focus is outside the chrome — which is where focus sits after
+   * any canvas click. So Tab moves nothing, including into the app under edit.
+   * That is the Figma behavior and it is deliberate, but on its own it is a
+   * keyboard trap: WCAG 2.1.2 allows a widget to claim Tab only if the user is
+   * ADVISED of the way out, and nothing advised them.
+   *
+   * Escape is the way out — it clears the selection, and with nothing selected
+   * `canvas/index.ts` returns before the `preventDefault()`. The exit already
+   * worked; it was undocumented, which under 2.1.2 is the whole of the failure.
+   * Saying it on the two rows that claim the key is the cheapest fix that
+   * actually satisfies the criterion.
+   *
+   * The structural fix — giving the canvas a focusable representation so Tab is
+   * a widget key rather than a stolen one — is the better answer and is a
+   * larger piece of work; it is recorded in the audit rather than done here.
+   */
   {
     command: "select.next",
     chord: { key: "tab" },
-    label: "Select the next sibling",
+    label: "Select the next sibling — Esc hands Tab back to the page",
     figma: "Select next sibling (Tab)",
     group: "Selection",
     owner: "canvas",
@@ -331,7 +417,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "select.prev",
     chord: { key: "tab", shift: true },
-    label: "Select the previous sibling",
+    label: "Select the previous sibling — Esc hands Tab back to the page",
     figma: "Select previous sibling (⇧Tab)",
     group: "Selection",
     owner: "canvas",
@@ -585,7 +671,7 @@ export function matchShortcut(event: KeyboardEvent): Shortcut | null {
  * selection lane answers them on its own terms.
  */
 export function shortcutFor(event: KeyboardEvent, chromeHidden: boolean): Shortcut | null {
-  if (isTextEntry(event.target)) return null
+  if (isTextEntryEvent(event)) return null
   const shortcut = matchShortcut(event)
   if (!shortcut || shortcut.owner === "canvas") return null
   if (chromeHidden && !shortcut.whileHidden) return null
@@ -612,26 +698,6 @@ export function historyAction(event: KeyboardEvent): "undo" | "redo" | null {
 }
 
 /**
- * Show or hide the whole editor, on Figma's key.
- *
- * Cmd+. on a Mac, Ctrl+. elsewhere. Unlike every other shortcut it is NOT gated
- * on the chrome being visible: the editor is invisible in half of the states
- * this toggles between, so the one key that brings it back has to work from
- * wherever the focus happens to be — including from inside the app, which is
- * exactly where the pointer has been while the chrome was away. That exception
- * is `whileHidden` on its row.
- *
- * A text field is the one place it does not fire, and that is the browser's
- * call rather than ours: Cmd+. is not a text-editing command, but a designer
- * mid-word in the inspector pressing it expects to stay mid-word, and a chrome
- * that vanished under a caret would lose the edit.
- */
-export function isChromeToggle(event: KeyboardEvent): boolean {
-  if (isTextEntry(event.target)) return false
-  return matchShortcut(event)?.command === "chrome.toggle"
-}
-
-/**
  * Escape's last meaning: stand the editor down to the disc.
  *
  * Escape is not a chord this table can own, because it is already the canvas's
@@ -655,7 +721,7 @@ export function isChromeToggle(event: KeyboardEvent): boolean {
  */
 export function isCollapseFallback(event: KeyboardEvent, chromeHidden: boolean): boolean {
   if (chromeHidden) return false
-  if (isTextEntry(event.target)) return false
+  if (isTextEntryEvent(event)) return false
   return event.key === "Escape"
 }
 

@@ -1,13 +1,8 @@
 # DesignLayer
 
-**Figma-like editing for a React or Angular app that is already running.**
-
-```sh
-npx designlayer
-```
-
-Select an element in the page, change its layout, styles and design tokens, and
-the edit is written back into the component source.
+A visual editor for a running React or Angular dev server. It proxies your app,
+lets you select an element in the page, edit its layout, styles and design
+tokens, and writes the change back into the component source.
 
 Nothing in your app imports it, and nothing in it imports your app. It attaches
 from the outside, at the proxy, so adopting it is additive and dropping it
@@ -114,7 +109,7 @@ With no arguments it opens a start screen in your browser and asks which app to
 edit, which page of it to open, and where its source is.
 
 - **Which app.** It scans the usual dev-server ports and lists what answered, by
-  page title, so `Workspaces` is what you click rather than `127.0.0.1:3000`.
+  page title, so `Host App` is what you click rather than `127.0.0.1:3000`.
   Nothing running yet is fine — type the URL you want and it will start the app
   for you. A running app usually knows its own folder, so picking a row fills
   the folder in for you; a row that cannot work its folder out clears the field
@@ -185,6 +180,30 @@ through its framework-agnostic core rather than its React adapter, because this
 overlay is plain DOM. The library owns the drag, the bounds, the keyboard map
 and the settle; the panels keep their own stylesheet, and nothing about how the
 chrome looks at rest moved to make room for it.
+
+### The canvas is your app's viewport
+
+The panels do not cover your app — they take room from it. The strip between
+them is inset as padding on `<html>`, so an app laid out in percentages reflows
+into it on its own, and two more things are made to agree with it:
+
+- **Viewport units.** `100vw` means the window, and the window does not change
+  when a panel opens, so an app sized that way used to stay full width and run
+  on underneath the inspector. Those declarations are re-pointed at the canvas
+  while the editor is up, in the live CSSOM — no file is touched, and hiding the
+  editor with <kbd>⌘.</kbd> puts every one of them back.
+- **Breakpoints.** A `@media (max-width: 1024px)` is asked about the canvas
+  rather than the window, so a 940px canvas inside a 1440px window wears the
+  layout it would wear in a 940px window — measured on a real prototype, down to
+  the pixel. Close the inspector and the app crosses its own breakpoints as it
+  widens.
+
+Four things stay on the window, because nothing here can honestly move them:
+`position: fixed` chrome (inherent to insetting without a transform, and the
+alternative would break shared-element morphs), stylesheets served from another
+origin, `vw` written into an inline `style` attribute, and `matchMedia` in your
+app's own JavaScript. If one part of a layout ignores the panels, it is almost
+always one of those four.
 
 ### Switching apps
 
@@ -422,6 +441,38 @@ identical, because the adapter produces the catalog rather than a second kind of
 catalog. `manifest` and `adapter` are mutually exclusive; supplying both is
 refused at startup instead of silently ranked.
 
+### A design system behind a sign-in
+
+Point the panel at an internal component catalog — a Storybook on your company's
+network, a token file behind SSO — and the editor will hit the same wall a
+stranger would. It fetches that link from its own process on your machine, which
+holds none of the sessions your browser holds, so a site you can open in the
+next tab is still closed to it.
+
+You are not asked for a token, and on the walls this was built for you could not
+supply one anyway: on an SSO proxy of this shape, every cookie in the exchange
+is `HttpOnly` and `document.cookie` on that page returns nothing at
+all. So the editor opens **that site's own sign-in** in a browser window, you
+sign in the way you always do, and the session it produces is picked up for you:
+
+1. Paste the link. The add is refused and the panel says which site is private.
+2. Press **Sign in with Google** — or whichever provider the site redirects to;
+   the button is named from the redirect rather than guessed.
+3. Finish in the window that opens. It closes itself and the add is replayed.
+
+The session is verified against the link before it is stored, so the panel can
+never claim you are signed in to a site whose libraries still fail. It is
+remembered in a browser profile under the editor's state directory, which means
+the next library behind the same sign-on needs no window at all — the editor
+retries silently first and only asks when the provider does.
+
+`Forget` on a signed-in row drops both halves: the credential the editor holds
+and that origin's session inside the profile, so the next sign-in genuinely
+asks.
+
+If a site cannot be opened that way, **I have an access token** is still there,
+folded away, with the OAuth client id the refusal carried.
+
 ### Tailwind aliases, v4 and v3
 
 On Tailwind v4 the theme lives in the stylesheet, so the editor reads
@@ -456,8 +507,8 @@ list of alternatives:
 
 ```js
 icons: {
-  attribute: "data-instagram-icon",
-  data: "src/components/icons/instagram-icon-data.json",
+  attribute: "data-acme-icon",
+  data: "src/components/icons/acme-icon-data.json",
 },
 ```
 
@@ -541,6 +592,92 @@ your stylesheet reads them to make room.
 
 Both variable names are configurable. Leave the whole `chrome` block out if you
 have no dev GUI — an empty selector list is legal and correct.
+
+### Companions
+
+A companion is somebody else's dev-time browser tooling, loaded onto the page
+beside the editor rather than instead of it — an annotation toolbar, a
+feature-flag switcher, a locale picker. The editor injects one script into every
+page it proxies, and a companion rides in on that injection, so nothing dev-only
+has to be added to an app that ships.
+
+It is declared as a bundle plus the selectors that bundle draws under. The
+second half is what makes it usable: the canvas treats everything it did not
+draw as the app, so without them a click on a companion's button selects the
+button instead of pressing it. The selectors join `chrome.trustedSelectors`.
+
+```js
+// designlayer.config.mjs
+companions: ["./tools/flag-switcher/companion.json"],
+```
+
+```json
+{
+  "name": "flag-switcher",
+  "script": "./flag-switcher.js",
+  "trustedSelectors": ["[data-flag-switcher]"]
+}
+```
+
+The script must be a self-contained browser bundle — an IIFE, no imports, no
+exports. Paths inside a manifest are read against the manifest, so a companion
+and its bundle travel together. A bare `.js` path is also accepted, for a
+companion with no chrome of its own to declare. A declared companion that is not
+there fails at startup rather than launching an editor silently missing it.
+
+`DESIGNLAYER_COMPANIONS` names the same manifests for the whole machine, in a
+list separated by `:` or `,`. That is the lane for tooling that belongs to the
+person rather than to the project — one annotation toolbar wired into every app
+they open, with nothing added to any of their repositories.
+
+Bundles are concatenated after the editor's own, each fenced, so a companion
+that throws on evaluation costs itself and nothing else.
+
+A companion whose gesture is clicking the app — an annotation toolbar is the
+obvious one — has to say so, because `inspecting` mode is exactly what swallows
+that click. `window.__DESIGNLAYER__.claimPointer(name)` holds the editor in
+`interactive` for as long as the claim is held and returns the release:
+
+```js
+const release = window.__DESIGNLAYER__?.claimPointer?.("flag-switcher")
+// …later, when your tool disarms
+release?.()
+```
+
+Look the API up at claim time rather than at load: companion bundles evaluate
+before the editor has finished booting.
+
+The user still outranks a claim — pressing Inspect while one is held puts the
+editor back. A companion has to disarm itself when that happens, or both tools
+answer the same click and one gesture does two things: measured on a real page,
+a single click both selected a `<span>` into the inspector and opened an
+annotation box on it. `onModeChange` is how a companion finds out.
+
+```js
+window.__DESIGNLAYER__?.onModeChange?.((mode) => {
+  if (mode !== "interactive") disarmMyTool()
+})
+```
+
+Between the two, the editor's mode is the single switch on the page, and both
+tools end up on the correct side of it whichever one the person reached for.
+
+A companion that paints over the editor needs a z-index above `.de-root`
+(2147483000) and above the surfaces the editor raises over itself: the note
+layer at 2147483100, the pickers and menus through 2147483300, and the toast at
+2147483646. Going to the very top is only safe if your full-viewport layers are
+`pointer-events: none` — one that takes the pointer up there puts an invisible
+sheet over the editor and the app both.
+
+A companion that sits *beside* the chrome rather than over it usually ends up
+depending on two things this repository owns: the `--de-*` custom properties
+that say where the panels are, and `.de-root`'s z-index, which anything drawing
+above the panels has to clear. Both are a real contract, and neither is
+enforceable from here — a companion built from its own source under
+`~/.local/share/designlayer/companions/` is invisible to any search of this
+repository. Renaming the `de-` prefix or restacking `.de-root` therefore means
+editing each companion's source and rebuilding it in the same change. Both
+values carry that warning at their definitions in `src/core/css/base.ts`.
 
 ### Contextual controls and source defaults
 
@@ -804,7 +941,7 @@ only while Option/Alt measurement is active.
 
 ```sh
 npm test                                        # no host needed
-DESIGNLAYER_HOST=../Workspaces npm test       # plus the host-pinned suites
+DESIGNLAYER_HOST=../host-app npm test           # plus the host-pinned suites
 npm run test:standalone-next                    # needs a host
 ```
 
@@ -813,7 +950,7 @@ Most of the suite runs against this repository alone. Four suites —
 app's own catalog, breakpoints and icon set, deliberately: they are the net that
 catches a change to the tool silently changing what a real app sees. They find
 that app through `test/host.mjs`, which is the single owner of "where is the
-host": `DESIGNLAYER_HOST` if set, otherwise a `Workspaces` checkout beside
+host": `DESIGNLAYER_HOST` if set, otherwise a `host-app` checkout beside
 this one. With neither present they print a skip and exit 0, so a bare clone is
 green and a skip never reads as a pass.
 

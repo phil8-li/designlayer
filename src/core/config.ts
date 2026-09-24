@@ -139,20 +139,8 @@ export interface DesignLayerConfig {
   designSystem: DesignSystemCatalog
   icons: IconSetConfig
   host: HostConfig
-  agentation: AgentationConfig
 }
 
-/**
- * The annotation toolbar's two settings.
- *
- * `endpoint` is a URL this bundle only ever hands to Agentation, which fetches
- * it itself — so a null is not an error state, it is "keep the notes in this
- * tab and let the designer copy them out".
- */
-export interface AgentationConfig {
-  enabled: boolean
-  endpoint: string | null
-}
 
 /**
  * The app under the overlay: where it is, and what its project calls itself.
@@ -245,11 +233,6 @@ const FALLBACK: DesignLayerConfig = {
   apiBase: "/__designlayer",
   chooserUrl: null,
   app: { url: null, name: null },
-  // Off when the prelude said nothing. Every other fallback in this object
-  // describes a stock host; this one describes a page the editor was loaded
-  // into by something that predates the setting, and mounting a third-party
-  // toolbar there on a guess is the one failure mode worth refusing outright.
-  agentation: { enabled: false, endpoint: null },
   chrome: {
     trustedSelector: "",
     dockedPanel: {
@@ -450,29 +433,9 @@ function read(): DesignLayerConfig {
     designSystem: readDesignSystem(raw.designSystem, breakpoints, containerBreakpoints),
     icons: readIconSet(raw.icons),
     host: readHost(raw.host),
-    agentation: readAgentation(raw.agentation),
   }
 }
 
-/**
- * The endpoint is checked for loopback for the same reason `chooserUrl` is.
- *
- * Everything else in this payload is data the bundle reads; this one is an
- * origin the toolbar POSTs annotations to — element paths, computed styles and
- * whatever the designer typed. A prelude that named a remote host would exfil
- * the page, so a non-loopback URL is dropped and the toolbar falls back to
- * keeping its notes in the tab.
- */
-function readAgentation(value: unknown): AgentationConfig {
-  if (!isRecord(value) || value.enabled === false) return FALLBACK.agentation
-  // `readLoopbackUrl` answers with `URL.href`, which always carries a trailing
-  // slash on a bare origin. Agentation concatenates `${endpoint}/sessions`, so
-  // the slash that makes the URL canonical is the one that makes its requests
-  // 404 — trimmed here rather than in the server payload, because the server
-  // is not the side that knows how this string gets used.
-  const endpoint = readLoopbackUrl(value.endpoint)
-  return { enabled: true, endpoint: endpoint ? endpoint.replace(/\/+$/, "") : null }
-}
 
 /**
  * Read once at module load. The prologue runs before this bundle and the server

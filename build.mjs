@@ -24,6 +24,7 @@ const tsconfig = path.join(root, "tsconfig.json")
 const watch = process.argv.includes("--watch")
 const check = process.argv.includes("--check")
 
+
 /**
  * React's own dead-code probe, removed — because this bundle is not minified.
  *
@@ -106,6 +107,7 @@ const dropSonnerGlobalCss = {
     })
   },
 }
+
 
 const shared = {
   absWorkingDir: root,

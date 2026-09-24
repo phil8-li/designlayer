@@ -56,7 +56,7 @@ export interface IconData {
  *
  * `auto` is the outline, and lets the stylesheet add the extra stroke when the
  * control reports itself selected in a list of its peers — which is how "on
- * means heavier" stays one rule rather than 78 call sites.
+ * means heavier" stays one rule rather than 80 call sites.
  *
  * `filled` is what a TOGGLE asks for while it is on. A stroke half a unit
  * heavier is a relative signal: legible beside the same glyph in its off state,
@@ -836,6 +836,29 @@ const ICONS = {
     ],
     ],
   },
+  "ExternalLink": {
+    // lucide/ExternalLink — inks 18.0x18.0 of 24
+    shapes: [
+    [
+      "path",
+      {
+        "d": "M15 3h6v6",
+      },
+    ],
+    [
+      "path",
+      {
+        "d": "M10 14 21 3",
+      },
+    ],
+    [
+      "path",
+      {
+        "d": "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
+      },
+    ],
+    ],
+  },
   "Eye": {
     // lucide/Eye — inks 20.0x14.0 of 24
     shapes: [
@@ -1236,6 +1259,23 @@ const ICONS = {
       "path",
       {
         "d": "M12 8h.01",
+      },
+    ],
+    ],
+  },
+  "InfoMark": {
+    // lucide/Info — inks 0.0x12.0 of 24
+    shapes: [
+    [
+      "path",
+      {
+        "d": "M12 18L12 12",
+      },
+    ],
+    [
+      "path",
+      {
+        "d": "M12 6L12.015 6",
       },
     ],
     ],
@@ -2468,7 +2508,21 @@ export function drawIcon(data: IconData, size: IconSize = 16, weight: IconWeight
  * which.
  */
 export function icon(name: IconName, size: IconSize = 16, weight: IconWeight = "auto"): SVGSVGElement {
-  return drawIcon(ICONS[name], size, weight)
+  const svg = drawIcon(ICONS[name], size, weight)
+  /*
+   * THE MARKER CARRIES THE NAME NOW, where it used to carry an empty string.
+   *
+   * Every rule that reads it is written `svg[data-de-glyph]`, which matches on
+   * presence and is unaffected. What the value adds is the ability to say
+   * something about ONE mark — and there is exactly one thing worth saying,
+   * which is the optical correction for `Cursor` in `css/icons.ts`.
+   *
+   * Set here and not in `drawIcon`, because `drawIcon` also renders the HOST
+   * app's own icons, whose names belong to a set this package did not author. A
+   * rule written against one of ours must not be able to reach one of theirs.
+   */
+  svg.setAttribute(ICON_MARKER_ATTRIBUTE, name)
+  return svg
 }
 
 /**

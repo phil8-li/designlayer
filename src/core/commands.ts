@@ -80,8 +80,3 @@ export function runCommand(id: CommandId): boolean {
   }
   return true
 }
-
-/** Test seam: forget every registration without reloading the module graph. */
-export function resetCommandsForTest(): void {
-  registry.clear()
-}

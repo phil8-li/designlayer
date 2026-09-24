@@ -29,9 +29,10 @@
  */
 
 import { el, round } from "../../core/dom"
+import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
-import { alphaOf, swatch, toHex } from "./color"
+import { alphaOf, restated, swatch, toHex } from "./color"
 import { miniButton, numberField, section } from "./field"
 import { svgTarget, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
@@ -49,12 +50,40 @@ function isPainted(color: string): boolean {
   return color !== "transparent" && alphaOf(color) > 0
 }
 
-/** `rgb()`/hex plus an alpha, as the shortest string that still round-trips. */
-function withAlpha(color: string, alpha: number): string {
-  const hex = toHex(color) ?? "#000000"
-  if (alpha >= 1) return hex
-  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))
-  return `rgba(${r},${g},${b},${round(alpha, 3)})`
+/**
+ * The same colour at a different alpha, as the shortest string that round-trips
+ * — or `null` when it cannot be produced without inventing a colour.
+ *
+ * ## The bug this replaces wrote black into people's source
+ *
+ * It was `toHex(color) ?? "#000000"`. `toHex` understands hex and `rgb()` and
+ * nothing else, and Chrome does NOT normalise wide-gamut colours on the way
+ * out: an element authored `oklch(0.7 0.15 250)` computes to that same string.
+ * So `toHex` returned null, the fallback took over, and dragging the opacity
+ * field replaced the designer's colour with **pure black** — at every alpha,
+ * including 100%, because the `alpha >= 1` path returned the fallback hex too.
+ * Verified in Chrome against `oklch()`, `lab()` and `color(display-p3 …)`.
+ *
+ * ## What it does now
+ *
+ * The sRGB path is unchanged, because it is the common one and it round-trips
+ * exactly. Anything else is re-stated through relative colour syntax in its own
+ * colour space (`restated`), which changes the alpha and touches nothing else.
+ *
+ * And when even that is not possible — an unrecognised function, a bare keyword
+ * — it returns `null` and the caller declines. Refusing to write is the only
+ * honest answer for an editor that is about to put a value in somebody's source
+ * file: a wrong colour is worse than an unchanged one, because the unchanged
+ * one is still what they authored.
+ */
+function withAlpha(color: string, alpha: number): string | null {
+  const hex = toHex(color)
+  if (hex) {
+    if (alpha >= 1) return hex
+    const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))
+    return `rgba(${r},${g},${b},${round(alpha, 3)})`
+  }
+  return restated(color, round(alpha, 3))
 }
 
 export const fillSection: InspectorSection = (context) => {
@@ -142,8 +171,26 @@ export const fillSection: InspectorSection = (context) => {
    * restores exactly the split the `.de-paint-value` span it replaces had.
    */
   const row = el("div", { class: "de-paint-row" }, [
-    swatch(value, "Fill colour", (hex) => apply(withAlpha(hex, alpha), "Set fill")),
-    binding ?? el("span", { class: "de-paint-value" }, [toHex(value) ?? value]),
+    swatch(value, "Fill color", (hex) => {
+      // The well hands back a hex the OS picker produced, so this branch always
+      // resolves — but it is routed through the same guard as the others rather
+      // than trusting that, because the day it stops being true is the day it
+      // writes a colour nobody chose.
+      const next = withAlpha(hex, alpha)
+      if (next) apply(next, "Set fill")
+    }),
+    /*
+     * The `title` is not decoration on a hex code: `toHex` returns null for
+     * anything it cannot convert — `oklch()`, `color(display-p3 …)`, a gradient
+     * — and the raw function text lands in this cell instead, inside a `flex:1`
+     * box that ellipsises. On a wide-gamut display Chrome hands those back
+     * unconverted, so the Fill row's entire answer becomes
+     * `color(display-p…`. The full value has to stay reachable.
+     */
+    binding ??
+      el("span", { class: "de-paint-value", title: toHex(value) ?? value }, [
+        toHex(value) ?? value,
+      ]),
     numberField({
       id: "fill.alpha",
       label: "A",
@@ -153,8 +200,21 @@ export const fillSection: InspectorSection = (context) => {
       max: 100,
       suffix: "%",
       disabled: !painted,
-      onPreview: (next) => selection.element.style.setProperty("background-color", withAlpha(value, next / 100)),
-      onCommit: (next) => apply(withAlpha(value, next / 100), "Set fill opacity"),
+      /*
+       * Both halves decline rather than guess. The preview is the one the user
+       * sees and the commit is the one that reaches their file; a colour this
+       * module cannot re-state safely gets neither, so the element keeps the
+       * paint it was authored with and the field simply does not take.
+       */
+      onPreview: (next) => {
+        const preview = withAlpha(value, next / 100)
+        if (preview) selection.element.style.setProperty("background-color", preview)
+      },
+      onCommit: (next) => {
+        const committed = withAlpha(value, next / 100)
+        if (committed) apply(committed, "Set fill opacity")
+        else context.editor.toast(`Opacity needs a color this editor can re-state — ${value} is left as authored`, "error")
+      },
     }),
     miniButton({
       label: painted ? "Hide fill" : "Show fill",
@@ -174,9 +234,23 @@ export const fillSection: InspectorSection = (context) => {
       label: "Remove fill",
       glyph: icon("Minus", tokens.icon.row),
       danger: true,
-      onClick: () => {
+      onClick: (event: Event) => {
         parked.delete(selection.key)
-        apply("transparent", "Remove fill")
+        /*
+         * The row closes before the rebuild arrives without it.
+         *
+         * `apply` writes and then invalidates, and the invalidate rebuilds all
+         * thirteen sections — so the row the user pressed is gone on the next
+         * frame with nothing to say it left. `leaveRow` collapses it first and
+         * the write follows, which is the same order the notes and libraries
+         * lists use. Where there is no layout to collapse (JSDOM, an unpainted
+         * panel) `leaveRow` returns null and the write is synchronous, exactly
+         * as it was.
+         */
+        const row = (event.currentTarget as HTMLElement).closest(".de-paint-row")
+        const closing = row instanceof HTMLElement ? leaveRow(row) : null
+        if (closing) void closing.then(() => apply("transparent", "Remove fill"))
+        else apply("transparent", "Remove fill")
       },
     }),
   ])

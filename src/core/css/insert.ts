@@ -58,9 +58,16 @@ export const insertCss = `/* ---------- component placement ---------- */
  * reads as "between these children" when there are none. An outline says the
  * true thing — the component is going INSIDE this — and it is the same shape
  * the selection chrome uses for "this element", so it needs no explaining.
+ *
+ * The fill is \`selectionSurface\` for the reason \`css/canvas.ts\` gives on the
+ * marquee: \`accentSoft\` is an opaque row band, and this mark is painted over
+ * the product. An empty container is empty of ELEMENTS, not of pixels — it
+ * still has the app's own background, its padding, whatever a pseudo-element
+ * put there — and an opaque slab over it is the editor deciding you do not need
+ * to see where the thing is going to land.
  */
 .de-insert-indicator--outline {
-  background: ${t.color.accentSoft};
+  background: ${t.color.selectionSurface};
   box-shadow: inset 0 0 0 ${t.size.hairline}px ${t.color.accent};
   border-radius: ${t.radius.md};
 }

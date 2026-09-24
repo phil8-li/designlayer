@@ -23,10 +23,9 @@
  */
 
 import { clear, el } from "../../core/dom"
-import { icon } from "../../core/icons"
+import { swapMark } from "../../core/swap-mark"
 import { CODE_VIEWS, codeText, elementCode, type CodeTokenKind, type CodeView } from "../../core/element-code"
 import type { EditorContext } from "../../core/context"
-import { tokens } from "../../core/tokens"
 
 export interface InspectorTab {
   node: HTMLElement
@@ -75,11 +74,26 @@ export function codeTab(editor: EditorContext): InspectorTab {
     "Select an element on the canvas, or pick a layer, to read it as code.",
   ])
   const status = el("span", { class: "de-code-status" })
-  const copyButton = el("button", {
-    class: "de-button",
-    type: "button",
-    title: "Copy this view to the clipboard",
-  })
+  /*
+   * The glyph and the word are two nodes, and only the word is ever rewritten.
+   *
+   * This button used to `clear()` itself and re-append both on every state
+   * change — which is the pattern `core/swap-mark.ts` exists to replace, and
+   * which the Changes tab's identical button had already stopped doing. Two
+   * copy buttons in one product, one crossfading to a tick and one cutting to
+   * it, is one product with two answers.
+   */
+  const copyGlyph = swapMark("Copy")
+  const copyLabel = el("span", {}, ["Copy"])
+  const copyButton = el(
+    "button",
+    {
+      class: "de-button",
+      type: "button",
+      title: "Copy this view to the clipboard",
+    },
+    [copyGlyph.node, copyLabel]
+  )
 
   /*
    * The write is issued synchronously inside the click task, before anything
@@ -121,8 +135,8 @@ export function codeTab(editor: EditorContext): InspectorTab {
   }
 
   function setCopyLabel(copied: boolean): void {
-    clear(copyButton)
-    copyButton.append(icon(copied ? "Check" : "Copy", tokens.icon.row), copied ? "Copied" : "Copy")
+    copyGlyph.show(copied)
+    copyLabel.textContent = copied ? "Copied" : "Copy"
   }
 
   function showCopied(): void {
@@ -155,6 +169,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
       code.hidden = true
       empty.hidden = false
       where.textContent = ""
+      where.removeAttribute("title")
       copyButton.disabled = true
       setStatus("Nothing selected")
       return
@@ -163,11 +178,24 @@ export function codeTab(editor: EditorContext): InspectorTab {
     code.hidden = false
     empty.hidden = true
     copyButton.disabled = false
-    // Basename, not the full path: the panel is 260px wide, and the tail is
-    // the part that identifies the file to someone who already knows the repo.
+    /*
+     * Basename, not the full path: the panel is 260px wide, and the tail is the
+     * part that identifies the file to someone who already knows the repo.
+     *
+     * And the full path in `title`, because the basename is a SECOND
+     * truncation on top of the ellipsis `.de-code-source` already draws — it
+     * gets at most half the header row, so `ProjectCardGridItemMedia.tsx:214`
+     * arrives as `ProjectCardGridIt…`. Two repos open in two editors, or two
+     * `index.tsx` in one, and the header names neither. The tooltip is the only
+     * place the whole reference exists; it costs one attribute and the chrome's
+     * tip picks `title` up with no listener (`core/tooltip.ts`).
+     */
     where.textContent = selection.source
       ? `${selection.source.filePath.split("/").pop()}:${selection.source.lineNumber}`
       : ""
+    if (selection.source) {
+      where.title = `${selection.source.filePath}:${selection.source.lineNumber}`
+    } else where.removeAttribute("title")
 
     const tokens = elementCode(selection, view)
     generated = codeText(tokens)

@@ -35,7 +35,7 @@ export const codeCss = `/* ---------- code tab ---------- */
   color: ${t.color.text};
   font-family: ${t.font.mono};
   font-size: ${t.type.body};
-  line-height: 1.55;
+  line-height: ${t.type.leadingCode};
   tab-size: 2;
   white-space: pre;
 }

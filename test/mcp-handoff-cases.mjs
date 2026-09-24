@@ -869,22 +869,32 @@ await check("the agent group has a button that hands it over, and Copy survives"
   )
 })
 
-await check("it is disabled with an empty outbox", () => {
+await check("it is not offered at all with an empty outbox", () => {
   emptyOutbox()
   /*
-   * Present and refusing, rather than absent.
+   * ABSENT, where this case used to insist on present-and-refusing.
    *
-   * Send acts on the whole session, so it lives in the footer beside Copy
-   * rather than under either section's heading — and a footer is always drawn.
-   * Disabled is therefore the honest empty state here: the control a designer
-   * knows about stays where they left it and plainly cannot be used, instead of
-   * disappearing and leaving them to wonder whether the handover moved.
+   * The old argument was that a control a designer knows about should stay
+   * where they left it and plainly refuse, rather than disappear and leave
+   * them wondering whether the handover had moved. That holds for a control
+   * that comes and goes mid-session; it does not hold for the state BEFORE a
+   * session exists, which is the only state this row is now missing from. A
+   * first-time reader met four disabled controls above a sentence explaining
+   * that there is nothing to hand over yet — the sentence is the answer, and
+   * the buttons were three more things to read past to reach it.
    *
-   * `sendNow()` checks the outbox again before posting, so the guarantee this
-   * case exists for holds on the path that would have to break it, not only on
-   * the button's disabled flag.
+   * The guarantee this case exists for is unchanged and is asserted below on
+   * the path that would have to break it: `sendNow()` re-checks the outbox
+   * before posting, so an empty session cannot be sent even if something put
+   * the button back.
    */
-  assert.equal(sendButton().disabled, true, "an empty outbox could still be sent")
+  assert.equal(sendButton(), null, "the handover row sat over an empty session")
+
+  // And it comes back with the first thing worth handing over.
+  note("Something to send", window.document.body)
+  tab.update()
+  assert.ok(sendButton(), "a note did not bring the handover row back")
+  assert.equal(sendButton().disabled, false)
 })
 
 await check("it sends the brief, the files and the origin", async () => {

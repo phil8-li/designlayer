@@ -480,6 +480,34 @@ await check("destroying the shell takes the rail and its listeners with it", () 
   assert.equal(inset("--de-left"), "")
 })
 
+/*
+ * The chrome says what is selected, and it used to say nothing at all.
+ *
+ * Selecting is the commonest act in this editor: the outline moves and the
+ * inspector repaints with an element's whole property stack. There was no live
+ * region anywhere in the shell, so none of that reached a screen reader.
+ *
+ * Asserted on the region's CONTRACT rather than on a sentence, because the
+ * wording should stay free to improve. What has to hold is that it exists, that
+ * it is polite — a selection can change several times a second while somebody
+ * walks the tree, and an assertive region interrupts itself on every one — and
+ * that it is hidden in a way that is still announced. `display: none` would
+ * make it decorative.
+ */
+await check("the shell carries a live region for what it selects", () => {
+  const mounted = mount({})
+  const node = mounted.announcer
+  assert.ok(node, "the shell has nowhere to announce a selection from")
+  assert.equal(node.getAttribute("aria-live"), "polite")
+  assert.equal(node.getAttribute("aria-atomic"), "true")
+  assert.ok(mounted.root.contains(node), "the region is built but never mounted")
+  const rule = /\.de-announcer\s*\{([^}]*)\}/s.exec(editor.shellCss)
+  assert.ok(rule, ".de-announcer has no rule in the shell stylesheet")
+  assert.doesNotMatch(rule[1], /display:\s*none/)
+  assert.doesNotMatch(rule[1], /visibility:\s*hidden/)
+  assert.match(rule[1], /clip-path|clip:/)
+})
+
 if (failures > 0) {
   console.error(`\n${failures} resize case(s) failed`)
   process.exit(1)

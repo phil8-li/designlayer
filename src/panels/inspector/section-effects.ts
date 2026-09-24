@@ -22,6 +22,7 @@
  */
 
 import { el, round } from "../../core/dom"
+import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { swatch, toHex } from "./color"
@@ -186,7 +187,7 @@ export const effectsSection: InspectorSection = (context) => {
 
     return el("div", { class: "de-paint-card" }, [
       el("div", { class: "de-paint-row" }, [
-        swatch(row.shadow.color, "Effect colour", (hex) => replace(index, { color: hex }, "Set effect colour")),
+        swatch(row.shadow.color, "Effect color", (hex) => replace(index, { color: hex }, "Set effect color")),
         selectField({
           id: `effects.${index}.type`,
           label: "Effect type",
@@ -211,7 +212,16 @@ export const effectsSection: InspectorSection = (context) => {
           label: "Remove effect",
           glyph: icon("Minus", tokens.icon.row),
           danger: true,
-          onClick: () => commit(rows.filter((_, at) => at !== index), "Remove effect"),
+          onClick: (event: Event) => {
+            // The whole CARD leaves, not just its first row: an effect is four
+            // rows of one object, and collapsing the top one would leave three
+            // orphaned lines standing where the thing they described was.
+            const card = (event.currentTarget as HTMLElement).closest(".de-paint-card")
+            const write = () => commit(rows.filter((_, at) => at !== index), "Remove effect")
+            const closing = card instanceof HTMLElement ? leaveRow(card) : null
+            if (closing) void closing.then(write)
+            else write()
+          },
         }),
       ]),
       el("div", { class: "de-row--split" }, [scalar("x", "X", "Offset X"), scalar("y", "Y", "Offset Y")]),

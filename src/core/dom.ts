@@ -10,20 +10,6 @@ import { config } from "./config"
 
 export const CHROME_ATTR = "data-designlayer"
 
-/**
- * The attribute Agentation marks its portal root with.
- *
- * Named here, beside our own mark, because two separate surfaces have to agree
- * on it and neither of them is the agentation lane: the hit-test below, which
- * must not offer the toolbar to the canvas, and `shell/shell.ts`, which must
- * drive input INTO it. A string literal in both places would be one rename away
- * from a toolbar that is half-trusted.
- *
- * It is a fact about somebody else's DOM, so it is stated once and not derived
- * from `config.agentation`: the attribute is on the page or it is not, and that
- * is a better question than whether a setting said it should be.
- */
-export const AGENTATION_ROOT_ATTR = "data-agentation-root"
 
 /**
  * The mark on a layer the user has deleted but the framework has not.
@@ -45,16 +31,9 @@ export const AGENTATION_ROOT_ATTR = "data-agentation-root"
 export const DELETED_ATTRIBUTE = "data-de-deleted"
 
 /**
- * Our own shell, the vendor root and the annotation toolbar are structural —
- * they exist in every host this editor is loaded into — so they stay literal.
- * Everything else the host wants excluded (its dev GUI, its debug bars) arrives
- * from `chrome.trustedSelectors` in the config.
- *
- * `[data-agentation-root]` is listed unconditionally, though the toolbar is a
- * setting that can be off. A selector matching nothing costs nothing, and
- * deriving the list from `config.agentation.enabled` would make the hit-test
- * consult a setting to answer a question that is really about the DOM: if that
- * attribute is on the page, whatever is under it is not the app.
+ * Our own shell and the vendor root are structural — they exist in every host —
+ * so they stay literal. Everything else the host wants excluded (its dev GUI,
+ * its debug bars) arrives from `chrome.trustedSelectors` in the config.
  *
  * An empty host list is legal and documented, so the parts are filtered before
  * joining: a trailing comma is not a valid selector, and `closest()` would then
@@ -63,7 +42,6 @@ export const DELETED_ATTRIBUTE = "data-de-deleted"
 const CHROME_SELECTOR = [
   `[${CHROME_ATTR}]`,
   "#react-rewrite-root",
-  `[${AGENTATION_ROOT_ATTR}]`,
   config.chrome.trustedSelector,
 ]
   .filter((part) => part.length > 0)

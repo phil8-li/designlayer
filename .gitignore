@@ -24,6 +24,15 @@ test/.icon-set-fixture/
 # Regenerate, never commit.
 .icon-lab/
 
+# Scratch output of tools/before-after.mjs: one state per row, rendered at two
+# revisions. Both columns are built from git, so it is reproducible from the
+# repository alone. Regenerate, never commit.
+.demos/
+
+# The interface audit reports the demos were written from. Findings, not
+# sources — the ones worth keeping become tests or comments.
+.audit/
+
 # Which remote machine `launch/DesignLayer.command` opens the editor against.
 # One line naming somebody's dev box — theirs, not this repository's, and the
 # launcher refuses to run rather than falling back to a hostname baked in here.

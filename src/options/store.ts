@@ -2,7 +2,7 @@
  * Saved option sets: client cache plus HTTP persistence.
  *
  * Editor state is the only cache — panels read `optionSets` from the store they
- * already subscribe to, so a variant saved in the inspector cannot disagree
+ * already subscribe to, so an option saved in the inspector cannot disagree
  * with what another lane sees. The server file is the durable copy.
  */
 
@@ -153,7 +153,15 @@ function createStore(editor: EditorContext): OptionsStore {
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
       })
-      .catch(() => editor.toast("Could not save this option", "error"))
+      // The element on screen already wears the option; only the durable copy
+      // failed. "Try again" is the whole recovery, and without it the reader is
+      // told a write failed with no idea whether to redo the styling as well.
+      .catch(() =>
+        editor.toast(
+          "Could not save this option — the editor’s own server refused it. Try again.",
+          "error"
+        )
+      )
   }
 
   const drop = (key: string) => {
@@ -167,7 +175,12 @@ function createStore(editor: EditorContext): OptionsStore {
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
       })
-      .catch(() => editor.toast("Could not remove these options", "error"))
+      .catch(() =>
+        editor.toast(
+          "Could not remove these options — the editor’s own server refused it. Try again.",
+          "error"
+        )
+      )
   }
 
   const setFor = (selection: Selection): ElementOptionSet => {
@@ -182,7 +195,7 @@ function createStore(editor: EditorContext): OptionsStore {
   }
 
   /**
-   * Records the element's pre-option look the first time it becomes a variant.
+   * Records the element's pre-option look the first time it gains an option.
    * Persisting it is what lets "revert" and "delete the active option" still
    * work after a reload — the session Map alone dies with the page, which left
    * elements permanently stuck in a deleted option's styling.
@@ -249,8 +262,8 @@ function createStore(editor: EditorContext): OptionsStore {
         text: snapshot.text,
         createdAt: Date.now(),
       }
-      // Saving is not an edit, but it is the moment the element becomes a
-      // variant — re-apply so the queued source write matches what is shown.
+      // Saving is not an edit, but it is the moment the element gains its
+      // first option — re-apply so the queued source write matches what is shown.
       applySnapshot(selection, writer, snapshot, `Save option "${option.name}"`)
       commit({ ...set, activeOptionId: option.id, options: [...set.options, option] })
     },

@@ -5,6 +5,7 @@
  */
 
 import { config } from "./config"
+import type { ToastAction } from "./toast"
 import {
   elementKey,
   getState,
@@ -67,7 +68,15 @@ export interface EditorContext {
   /** Rebuilds every registered panel. Cheap: panels diff internally. */
   refresh(): void
   onRefresh(fn: () => void): () => void
-  toast(message: string, kind?: "info" | "error"): void
+  /**
+   * Says what just happened, and — for the one case that needs it — offers to
+   * take it back.
+   *
+   * `action` is a single optional undo rather than a general options bag, for
+   * the reason `core/toast.ts` gives on `ToastAction`: a toast reports, and the
+   * only interaction that belongs on a report is unmaking it.
+   */
+  toast(message: string, kind?: "info" | "error", action?: ToastAction): void
   /** Base URL for designlayer server routes, e.g. `/__designlayer`. */
   apiBase: string
 }
@@ -220,8 +229,23 @@ export function createContext(bridge: RewriteBridge, slots: EditorSlots): Editor
       return () => refreshListeners.delete(fn)
     },
 
-    toast(message, kind = "info") {
-      bridge.toast(message, kind)
+    /*
+     * Through the bridge, which is OUR seam and not only the vendor's.
+     *
+     * Calling `notify` directly from here looks tidier and is wrong twice over.
+     * `withEditorToast` in `core/bridge.ts` replaces the vendor's method with
+     * `notify` precisely so that no path in the product can paint the old
+     * toast — so the bridge IS the one place every message passes through, and
+     * a second route around it is the thing that file exists to prevent. It is
+     * also the seam the suites substitute: a context built over a stub bridge
+     * observes what the editor said without standing up React and a shadow
+     * root, and a direct call would make every one of those cases blind.
+     *
+     * The third parameter is ours, not the vendor's — see the note on `toast`
+     * in `RewriteBridge`.
+     */
+    toast(message, kind = "info", action) {
+      bridge.toast(message, kind, action)
     },
   }
 

@@ -308,7 +308,15 @@ async function seedLibraries(context, rows) {
 }
 
 /** The shape every wall has, so a new field cannot appear without a case. */
-const WALL_KEYS = ["audience", "hint", "kind", "origin", "realm"]
+/*
+ * The wall's whole shape, and `location` earns its place in it.
+ *
+ * It is the redirect the site answered with, reported so the caller that opens
+ * the site's own sign-in can name the provider on a button. The rule this list
+ * has always enforced still holds: these are facts for a panel to render, and
+ * anything that reintroduces a "run this" field has to come back through here.
+ */
+const WALL_KEYS = ["audience", "hint", "kind", "location", "origin", "realm"]
 
 // ── Reading the wall ───────────────────────────────────────────────────────
 
@@ -1187,18 +1195,22 @@ await checkAsync("a URL that is merely unreachable is installed, listed and kept
 })
 
 /*
- * GAP, asserted as it behaves rather than as it is described.
+ * A GHOST ROW IS REPAIRED BY PASTING THE LINK AGAIN — and this case used to
+ * pin the opposite, as a documented gap.
  *
- * `addUrl`'s idempotence check runs against `readEntries`, which does not
- * sweep — so a ghost row left by an older build is handed straight back, with
- * its empty catalog and its sign-in sentence, even when the credential that
- * would open the site is already stored. The comment in `list()` says the file
- * is swept "so the next add of the same URL is a clean install rather than a
- * collision with a ghost that `addUrl`'s own idempotence check would hand
- * straight back", and that only holds if a `list()` happened in between. This
- * case pins both halves: the hand-back, and the clean install after a sweep.
+ * The gap was in `addUrl`'s idempotence check: it ran against `readEntries`,
+ * matched the existing row, and handed it straight back WITHOUT fetching. So a
+ * row left empty by an earlier failure — a wall that has since been signed in
+ * to, or a reading bug that has since been fixed — stayed empty, and re-pasting
+ * the link, the one gesture a person would try, provably did nothing. The only
+ * way out was to notice the Remove button and use it first.
+ *
+ * Adding the same URL now re-reads it, so this asserts the repair. The sweep
+ * half of the old case is kept, because it is a different mechanism and still
+ * true: `list()` drops a walled ghost entirely rather than leaving it in the
+ * file.
  */
-await checkAsync("GAP: an unswept ghost is handed back by add until list() has run", async () => {
+await checkAsync("a ghost row is repaired by adding the same link again", async () => {
   const recorded = recordingFetch({
     "*": walledUnless((headers) => headers.authorization === `Bearer ${BEARER}`),
   })
@@ -1218,19 +1230,34 @@ await checkAsync("GAP: an unswept ghost is handed back by add until list() has r
       },
     ])
 
-    // Signed in, and still handed the ghost — no fetch is even attempted.
-    const stale = await context.store.add({ url: CATALOG_URL })
-    assert.equal(stale.library.id, "atlas-ghost")
-    assert.equal(stale.library.counts.components, 0)
-    assert.match(stale.library.error, /needs sign-in/i)
-    assert.equal(recorded.sent.length, 0)
+    /*
+     * The credential is stored, so the re-read gets through and the row that
+     * was a ghost comes back carrying the catalog — in place, keeping the id,
+     * the name and the switch the designer had already set.
+     */
+    const repaired = await context.store.add({ url: CATALOG_URL })
+    assert.equal(repaired.library.id, "atlas-ghost", "the repair moved the row instead of filling it")
+    assert.equal(repaired.library.counts.components, 2, "adding the same link again did not re-read it")
+    assert.ok(!repaired.library.error, `the stale sentence survived: ${repaired.library.error}`)
+    assert.ok(recorded.sent.length > 0, "the re-add never went to the network")
+    assert.equal((await context.store.list()).libraries.length, 1, "the repair added a second row")
 
-    // One `list()` sweeps it, and the same add then installs properly.
+    // And the sweep still does its own job: a row that is STILL walled is
+    // dropped by `list()` rather than left in the file as a ghost.
+    await context.auth.forgetCredential(CATALOG_ORIGIN)
+    await seedLibraries(context, [
+      {
+        id: "atlas-ghost",
+        name: "Atlas",
+        enabled: true,
+        source: { kind: URL_SOURCE_KIND, path: CATALOG_URL },
+        addedAt: 1700000000000,
+        catalog: null,
+        detail: "",
+        error: "Needs sign-in: this site refused the editor. Sign in to it below, or paste a public URL.",
+      },
+    ])
     assert.deepEqual((await context.store.list()).libraries, [])
-    const fresh = await context.store.add({ url: CATALOG_URL })
-    assert.notEqual(fresh.library.id, "atlas-ghost")
-    assert.equal(fresh.library.counts.components, 2)
-    assert.ok(!fresh.library.error)
   } finally {
     await context.cleanup()
   }

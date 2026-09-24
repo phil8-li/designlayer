@@ -322,9 +322,19 @@ check("neither host asks the designer to turn component detection on", () => {
   assert.deepEqual(asksAboutComponents(angularPanel), [], "the Angular panel is back to asking")
 })
 
-check("the options actions are always drawn, on both", () => {
+check("the saved-style verbs are always drawn, on both", () => {
+  /*
+   * They used to sit in a footer of their own, last in the panel, because the
+   * list they act on is absent until something is saved. They are the first row
+   * of that section now and the section is unconditional — which is the whole
+   * point of the rearrangement, and the thing a host could quietly lose.
+   *
+   * The way out to the app controls is deliberately NOT here. It only exists
+   * when a control is bound to the selected element, and neither fixture wires
+   * a control panel up, so on both hosts its absence is correct.
+   */
   for (const panel of [reactPanel, angularPanel]) {
-    for (const name of ["Save as option", "All design options"]) {
+    for (const name of ["Save current style", "Update saved style", "Revert to original"]) {
       assert.ok(panel.controls.includes(name), `${name} is missing`)
     }
   }

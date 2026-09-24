@@ -16,6 +16,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
+import { companionSelectors, resolveCompanions } from "./server/companions.mjs"
 import { DEFAULT_THEME_NAMESPACES } from "./server/design-system-aliases.mjs"
 import {
   DEFAULT_TAILWIND_BREAKPOINTS,
@@ -96,6 +97,11 @@ export const DEFAULT_CONFIG = {
       edgeGap: 8,
     },
   },
+  // Other people's dev-time browser tooling, loaded beside the editor rather
+  // than instead of it — a bundle, plus the selectors it draws under so the
+  // canvas never mistakes it for the app. Empty by default: the editor pulls
+  // nothing onto a page the host did not ask for. See server/companions.mjs.
+  companions: [],
   // The host's icon set: the DOM attribute an icon names itself with, and the
   // JSON of drawings the picker offers as its variants. Absent by default —
   // a stock app has no such attribute, and the icon section stays hidden.
@@ -122,21 +128,6 @@ export const DEFAULT_CONFIG = {
     trackingUnit: null,
   },
   controls: { leva: null },
-  /**
-   * Agentation's annotation toolbar, mounted beside the editor's own chrome.
-   *
-   * Configurable rather than hard-wired because it is the only surface in this
-   * package that talks to a process the editor does not start: `endpoint` is
-   * the `agentation-mcp` HTTP server a coding agent reads annotations from. The
-   * toolbar is local-first, so an endpoint nothing answers on degrades to
-   * copy-paste rather than to an error, and `endpoint: null` asks for that
-   * deliberately.
-   *
-   * 4747 is that package's own default and, like `ports.mcp` above, it is typed
-   * into an agent's config by hand — so it is a fixed number rather than
-   * "auto". `enabled: false` leaves the toolbar unmounted entirely.
-   */
-  agentation: { enabled: true, endpoint: "http://127.0.0.1:4747" },
   tailwind: {
     version: 3,
     colorWords: [],
@@ -490,6 +481,7 @@ export function resolveConfig(raw = {}, { configPath = null, cwd = process.cwd()
   )
 
   const icons = resolveIconSetConfig(merged.icons, projectRoot)
+  const companions = resolveCompanions(merged.companions, projectRoot)
   const devServer = detectDevServer(projectRoot)
   const framework = resolveHostFramework(projectRoot, merged.host?.framework)
   const tailwindPresent =
@@ -500,6 +492,13 @@ export function resolveConfig(raw = {}, { configPath = null, cwd = process.cwd()
   const apiPrefix = merged.apiPrefix.startsWith("/")
     ? merged.apiPrefix.replace(/\/+$/, "")
     : `/${merged.apiPrefix.replace(/\/+$/, "")}`
+
+  // De-duplicated, because the same selector arriving from the host config and
+  // from a companion manifest would otherwise be matched twice on every hit
+  // test, and shown twice everywhere the list is reported.
+  const trustedSelectors = Object.freeze([
+    ...new Set([...merged.chrome.trustedSelectors, ...companionSelectors(companions)]),
+  ])
 
   return Object.freeze({
     ...merged,
@@ -522,9 +521,15 @@ export function resolveConfig(raw = {}, { configPath = null, cwd = process.cwd()
     stateDir,
     endpointFile: path.join(stateDir, "endpoint.json"),
     apiPrefix,
+    companions,
     chrome: Object.freeze({
       ...merged.chrome,
-      trustedSelector: merged.chrome.trustedSelectors.join(","),
+      // A companion's own selectors join the host's. It is the same statement —
+      // "this is chrome, not canvas" — and making the host restate it would
+      // mean a machine-wide companion could never be trusted at all, since the
+      // project whose page it lands on has never heard of it.
+      trustedSelectors,
+      trustedSelector: trustedSelectors.join(","),
       dockedPanel: Object.freeze({
         ...merged.chrome.dockedPanel,
         chromeSelector: merged.chrome.dockedPanel.chromeSelectors.join(","),
@@ -660,15 +665,6 @@ export function browserPrelude(config, runtime = {}) {
         : null,
     },
     ports: { proxy: runtime.proxyPort ?? null, ws: runtime.wsPort ?? null },
-    // Whether to mount the annotation toolbar, and where it syncs. A URL and a
-    // boolean, which is the whole of what the browser half needs: the endpoint
-    // is contacted by the toolbar itself, not by this process, so nothing here
-    // has checked that anything answers on it.
-    agentation: {
-      enabled: config.agentation.enabled !== false,
-      endpoint:
-        typeof config.agentation.endpoint === "string" ? config.agentation.endpoint : null,
-    },
     // The screen this editor was chosen from, so the chrome can offer a way
     // back to it. Null for every session that had no such screen, and the
     // launcher has already refused anything that is not a loopback http URL —

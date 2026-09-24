@@ -17,18 +17,40 @@
  *    nothing on screen says so — the menu just looks like it has lost track of
  *    which app you are on. The case that pins this lists the current app at
  *    `[::1]` and the config at `127.0.0.1`;
- *  - **a dropped connection on the switch is the SUCCESS path.** The supervisor
- *    kills this editor — the process serving the page and the route the POST is
- *    in flight to — as soon as it accepts. Treating the rejected fetch as an
- *    error would put a failure message on screen after every successful switch.
- *    A JSON refusal is the opposite case and has its own case below;
- *  - **the arm/confirm window.** Unapplied work lives in this tab and nowhere
- *    else, so the first click on a row has to name what it would cost and the
- *    second has to go through. A regression here is invisible until the day
- *    somebody loses an afternoon of edits to a misaimed click;
- *  - **a note where the rows would be, never an empty card.** Silence reads as
- *    "there are no apps", which is a different and much worse answer than "one
- *    moment" or "this session has no chooser behind it".
+ *  - **a dropped connection on the switch is USUALLY the success path.** The
+ *    supervisor kills this editor — the process serving the page and the route
+ *    the POST is in flight to — as soon as it accepts. Treating the rejected
+ *    fetch as an error would put a failure message on screen after every
+ *    successful switch. Treating it as success unconditionally was worse: a
+ *    loopback fetch that failed for any other reason put a handover on screen
+ *    over an editor that was working, and held the card open against Escape
+ *    while it did. So the page asks whether its own proxy is still answering,
+ *    and both answers are pinned. A JSON refusal is a third case, also below;
+ *  - **the arm/confirm window, and the fact that it is usually not there.** The
+ *    removal queue, the Angular queue and the vendor store live in this tab and
+ *    nowhere else, and a SIGTERM takes all three with the document. So a row
+ *    pressed with work outstanding names what the next click would cost and
+ *    goes on the second press, and a row pressed with nothing outstanding goes
+ *    on the first. Both halves are pinned, because each is a regression in the
+ *    other direction: an unconditional confirm makes a navigation something you
+ *    perform twice, and no confirm at all loses an afternoon of edits to a
+ *    misaimed click;
+ *  - **a note where the rows would be — never an empty card, and never a note
+ *    that is false.** Silence reads as "there are no apps", which is worse than
+ *    "one moment". The note that used to stand here for a session with no start
+ *    screen was worse still: it told a reader who had just opened the app
+ *    chooser that this session had no app chooser;
+ *  - **one line per row, and what each state spends it on.** A row printed
+ *    three facts on two lines — the name, then the full url, then a clause or a
+ *    folder — plus a paragraph under the list, for a control whose whole
+ *    question is which app am I on and which could I be. Every character of
+ *    those urls before the port was identical on every row, because loopback is
+ *    the only thing this editor can be pointed at. So the cases below pin what
+ *    the slot beside the name holds in each state — a port, three words on the
+ *    row that cannot be opened, a verb and a count while armed, one word while
+ *    handing over — and pin the two rules that let the row change what it says
+ *    without changing its height, which is what an inline `min-height` used to
+ *    buy by measuring.
  *
  * ## What jsdom can and cannot answer
  *
@@ -526,6 +548,33 @@ await check("the control shows the name of the app being edited", () => {
 })
 
 /*
+ * The band is one line of a 240px column, so it truncates, and truncation with
+ * no route to the full value is the failure this pins.
+ *
+ * Two checkouts of one project, or two branches of it, differ in the TAIL of
+ * the name — which is the part the ellipsis eats. Before the tip there was no
+ * surface anywhere in the chrome that showed the name whole: the trigger cuts
+ * it and so did every row in the menu below it, so a reader looking at
+ * `@acme/design-system-play…` could not find out which of two checkouts they
+ * were editing, which is the single question this control exists to answer.
+ *
+ * The project's own tip and not `title`: it is delegated from the document, so
+ * it reaches a node built here with no listener, and it paints above the menu
+ * by construction. It is asserted by attribute because `tooltip.ts` is a
+ * document-level singleton the panel suites do not install — the contract this
+ * control owes is the attribute, and the card is that module's case to make.
+ */
+await check("the truncated name has somewhere to be read in full", () => {
+  const name = withName.trigger.querySelector(".de-app-chooser-name")
+  assert.equal(name.getAttribute("data-de-tip"), "shop-web")
+  // Never both: a leftover `title` paints the OS tip over ours a second later.
+  assert.equal(name.getAttribute("title"), null)
+  // The accessible name already carries the whole thing, so the tip does not
+  // touch it — a control named twice announces itself twice.
+  assert.equal(name.getAttribute("aria-label"), null)
+})
+
+/*
  * No app name known is the state a `--dev` session opens in, and the control
  * must be the SAME control there: same box, same glyph, one modifier class that
  * changes nothing but the ink. A control that is a button when it has a value
@@ -615,30 +664,64 @@ await check("a control that has never seen an answer says it is looking", async 
 // put on screen once, deliberately, where they can be seen to depend on it.
 await opened(withName)
 
-await check("each running app becomes a row that says what it is and where", () => {
+await check("each running app becomes a row that is a name and a port", () => {
   const rows = withName.rows()
   assert.equal(rows.length, 3)
   assert.deepEqual(
     rows.map((row) => row.querySelector(".de-app-menu-name").textContent),
-    // The package name, then the title, then the url it answers on. The last
-    // two are fallbacks and both are reachable: a prototype started outside a
-    // project has no package.json, and a page with no <title> has no title.
-    ["shop-web", "Docs site", "http://127.0.0.1:5173"]
+    // The package name, then the title, then the folder it was started from,
+    // and only then the url. All three fallbacks are reachable: a prototype
+    // started outside a project has no package.json, a page with no <title> has
+    // no title, and an editor row is handed an empty title by contract.
+    ["shop-web", "Docs site", "sketch"]
   )
   assert.deepEqual(
     rows.map((row) => row.querySelector(".de-app-menu-where").textContent),
-    [
-      "http://[::1]:3000 \u00b7 shop",
-      // The trailing separator is dropped rather than becoming an empty folder
-      // name — a path from a Windows host arrives spelled the other way round.
-      "http://127.0.0.1:4200 \u00b7 docs",
-      "http://127.0.0.1:5173 \u00b7 sketch",
-    ]
+    // The PORT, and nothing else, which is the whole of this case.
+    //
+    // This slot used to hold `http://[::1]:3000 · shop`: the full url, a middle
+    // dot, and the project folder — with a clause about the row's KIND in place
+    // of the folder on two of the three kinds. Everything in it before the port
+    // is the same string on every row any machine can produce, because loopback
+    // is the only thing this editor can be pointed at; and the folder is either
+    // already the row's name or a second word for what the name just said. The
+    // port is what is left when the repeated part comes out, and it is also the
+    // part that tells two checkouts of one project apart, which is the question
+    // this list exists to answer.
+    //
+    // Read off the url rather than the `port` field, and the first row is why
+    // the two spellings of loopback do not matter: `server/apps.mjs` types that
+    // field `number | null` while the browser's own interface promises a
+    // number, so the url is the half that is always there.
+    ["3000", "4200", "5173"]
   )
   for (const row of rows) {
     assert.equal(row.tagName, "BUTTON")
     assert.equal(row.getAttribute("role"), "menuitem")
+    // Two children and no third. The only row kind that gets a third is the
+    // editor row, and what it gets is a glyph rather than a clause — see the
+    // navigation cases further down.
+    assert.equal(row.childElementCount, 2, `a row grew a third thing: ${row.textContent}`)
+    // The name is whole rather than clipped, so there is nothing for a tooltip
+    // to reveal and no `title` promising otherwise. The TRIGGER is the surface
+    // with no room, and it keeps its truncation and its `tip()`.
+    assert.equal(row.querySelector(".de-app-menu-name").getAttribute("title"), null)
   }
+})
+
+/*
+ * And nothing under the list, in the shape of session that has nothing wrong
+ * with it.
+ *
+ * The note under the rows explains one thing — how to open an app whose project
+ * folder could not be found — and it is worth a sentence when there is such a
+ * row and worth nothing when there is not. Standing it under every list turns
+ * the commonest view of this control into a list of three names followed by a
+ * paragraph about a case none of them are in.
+ */
+await check("an ordinary list carries no sentence under it", () => {
+  assert.equal(withName.rows().length, 3)
+  assert.equal(withName.note(), null, "a list with nothing wrong with it was explained anyway")
 })
 
 /*
@@ -684,34 +767,31 @@ await check("clicking the app you are already editing only closes the menu", () 
 })
 
 /*
- * Four answers that are not a list of apps, and all four are 200s in the
+ * Three answers that are not a list of apps, and all three are 200s in the
  * contract because "there is nothing to choose" is an answer rather than a
- * fault. What matters is that each one puts a SENTENCE where the rows would be:
- * an empty card is indistinguishable from a broken one.
+ * fault. What matters is that each one puts a SENTENCE where the rows would be
+ * — an empty card is indistinguishable from a broken one — and that each
+ * sentence names something the reader can DO. A failure that reports only that
+ * it failed leaves the reader with the same problem and one more fact.
  */
 for (const [name, arrange, expected] of [
   [
-    "this session was started without a start screen",
-    () => (server.apps = { chooser: false, apps: [] }),
-    /nothing to switch between/,
-  ],
-  [
-    "nothing else is running",
-    () => (server.apps = { chooser: true, apps: [] }),
-    /Nothing else is running/,
+    "this is the only app running",
+    () => (server.apps = { apps: [] }),
+    /Start another with designlayer in its project folder/,
   ],
   [
     "the server could not reach the start screen",
-    () => (server.apps = { chooser: true, apps: [], error: "The start screen did not answer." }),
+    () => (server.apps = { apps: [], error: "The start screen did not answer." }),
     /The start screen did not answer\./,
   ],
   [
     "the request never arrived at all",
     () => (server.appsUnreachable = true),
-    /Could not reach the editor server/,
+    /Reload the page to try again/,
   ],
 ]) {
-  await check(`${name}: the menu says so instead of showing an empty card`, async () => {
+  await check(`${name}: the menu says so, and says what to do about it`, async () => {
     server.reset()
     arrange()
     // Cold, so there is no banked list for the menu to keep showing. A warm
@@ -725,13 +805,67 @@ for (const [name, arrange, expected] of [
     assert.match(note.textContent, expected)
     assert.ok(readsAsASentence(note.textContent), `not a sentence: ${note.textContent}`)
     ui.destroy()
-    press(withName.trigger)
   })
 }
+
+/*
+ * The sentence this control used to open with, in the commonest shape there is,
+ * was that this control did not exist.
+ *
+ * A single editor with no start screen behind it answered `chooser: false`, and
+ * the menu drew "this session was started without the app chooser, so there is
+ * nothing to switch between" — inside the app chooser, which the reader had
+ * just opened, and which works the moment a second editor comes up. It named no
+ * way to make one come up either, so the lesson it taught was that the control
+ * is dead here and not worth opening again.
+ *
+ * The replacement has to survive two tests that the old string failed: it must
+ * be true of every session, and it must name the thing that puts a row in this
+ * list. The command is that thing, and it is the same command that started the
+ * editor the reader is looking at.
+ */
+await check("with only one app running it says how to get a second one listed", async () => {
+  server.reset()
+  server.apps = { apps: [] }
+  const ui = await opened(mount(ghost))
+  const text = ui.note().textContent
+  assert.doesNotMatch(text, /nothing to switch between/, "the old claim came back")
+  assert.doesNotMatch(text, /without the app chooser/, "the menu denied its own existence again")
+  assert.match(text, /Only this app is running\./)
+  assert.match(text, /designlayer in its project folder/)
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * A session that HAS a start screen has two ways forward, and the screen is the
+ * quicker one — so it is named as well, not instead. The command works in every
+ * session, including this one, which is why it leads.
+ */
+await check("a session with a start screen is offered that too, not instead", async () => {
+  server.reset()
+  server.apps = { apps: [] }
+  const ui = await opened(mount(named))
+  const text = ui.note().textContent
+  assert.match(text, /designlayer in its project folder/)
+  assert.match(text, /http:\/\/127\.0\.0\.1:3455\//)
+  ui.destroy()
+  server.reset()
+})
 
 console.log("\nOpening, closing and the keyboard")
 
 server.reset()
+
+/*
+ * The cases below all drive one long-lived control, so they state where it
+ * starts rather than inheriting it. That used to be a trailing `press` at the
+ * end of every case in the block above — a toggle standing in for an
+ * assignment, which only worked while the number of cases up there stayed even,
+ * and which broke this whole section for a reason nobody reading the failure
+ * could see.
+ */
+if (withName.menu.style.display !== "none") press(withName.trigger)
 
 await check("a second press on the control closes it again", async () => {
   await opened(withName)
@@ -795,6 +929,108 @@ await check("Home and End jump to the ends, and one row owns the tab stop", () =
   press(withName.trigger)
 })
 
+/*
+ * The tab stop exists before any arrow key has been pressed.
+ *
+ * Every row mounts `tabindex="-1"` and the roving focus was the only thing that
+ * ever wrote a `0` — so a pointer user who opened the menu and then reached for
+ * the keyboard had no resting position to land on, and Tab left the card
+ * without focus ever having been inside it.
+ */
+await check("a menu opened by pointer already has somewhere for Tab to land", async () => {
+  await opened(withName)
+  assert.deepEqual(
+    withName.rows().map((row) => row.tabIndex),
+    [0, -1, -1],
+    "the list was drawn with no tab stop in it"
+  )
+  press(withName.trigger)
+})
+
+/*
+ * Tab leaves, and the menu goes with it.
+ *
+ * This key was simply not handled. The card stayed painted over content the
+ * reader was now tabbing through, still reporting `aria-expanded="true"`, with
+ * nothing inert behind it — and forward-Tab only appeared to work by accident,
+ * because the menu is the last node in `<body>`, so focus landed in the
+ * browser's own chrome, the window blurred, and the blur handler closed it.
+ * That is to say: the keyboard user's way out of this control was to leave the
+ * page.
+ *
+ * `preventDefault` is deliberately NOT called, which is the half that makes it
+ * the APG contract rather than just a dismissal: focus goes back to the trigger
+ * and the browser's own Tab then moves to whatever follows the trigger, so the
+ * reader resumes where the control sits instead of where the card was floating.
+ */
+await check("Tab dismisses the menu and hands the tab order back to the trigger", async () => {
+  await opened(withName)
+  withName.rows()[1].focus()
+  const tab = new window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+  window.document.dispatchEvent(tab)
+  assert.equal(withName.menu.style.display, "none", "the menu was left open behind the focus")
+  assert.equal(withName.trigger.getAttribute("aria-expanded"), "false")
+  assert.equal(window.document.activeElement, withName.trigger)
+  assert.equal(tab.defaultPrevented, false, "the browser's own Tab was swallowed")
+})
+
+/*
+ * A wheel gesture aimed at the card is the opposite of evidence that the reader
+ * has moved on.
+ *
+ * Scroll closes this menu, which is the right trade for a surface anchored to a
+ * control in a panel that scrolls independently — following the anchor would
+ * mean measuring on every frame of somebody else's scroll. But the listener is
+ * on `window` in capture, so it saw scrolls inside the card too, and the card
+ * scrolls now: five registered editors plus the trailing note is taller than a
+ * short window at 200% zoom, and the registry's own notes record five editors
+ * running on the machine this was written on. Reaching for the tail of the list
+ * dismissed the list.
+ */
+await check("scrolling inside the card keeps it; scrolling the page closes it", async () => {
+  await opened(withName)
+  withName.rows()[0].dispatchEvent(new window.Event("scroll", { bubbles: true }))
+  assert.notEqual(withName.menu.style.display, "none", "reaching for the tail of the list closed it")
+  window.document.getElementById("app").dispatchEvent(new window.Event("scroll", { bubbles: true }))
+  assert.equal(withName.menu.style.display, "none")
+})
+
+/*
+ * A resize gets the same answer, one step further out. `position()` runs on
+ * open and on a changed payload, so a window resized while the card is up
+ * leaves a `fixed` card sitting where the trigger used to be — a floating
+ * surface that no longer touches its anchor misreports what it belongs to.
+ * Closing is cheaper and more honest than following.
+ */
+await check("resizing the window closes the card rather than stranding it", async () => {
+  await opened(withName)
+  window.dispatchEvent(new window.Event("resize"))
+  assert.equal(withName.menu.style.display, "none")
+})
+
+/*
+ * The chrome's shared entrance, and nothing on the way out.
+ *
+ * `de-arrive` is the one class every floating surface in this chrome opens
+ * with, so a card that skipped it would be the one surface that appears without
+ * explanation. It is removed on close rather than swapped for an exit: a
+ * dismissal has to be complete at the instant it is asked for, and a card still
+ * in the document is one that still absorbs the next Escape. The removal is
+ * also what re-arms it, since a CSS animation runs when the class lands.
+ */
+await check("the card plays the chrome's entrance, and leaves without one", async () => {
+  await opened(withName)
+  assert.ok(withName.menu.classList.contains("de-arrive"), "the card appeared with no entrance")
+  press(withName.trigger)
+  assert.ok(
+    !withName.menu.classList.contains("de-arrive"),
+    "a dismissed card kept the class that plays its entrance"
+  )
+  await opened(withName)
+  assert.ok(withName.menu.classList.contains("de-arrive"), "the entrance played once and never again")
+  press(withName.trigger)
+})
+
 withName.destroy()
 
 // ── Switching, which ends this page ────────────────────────────────────────
@@ -802,11 +1038,21 @@ withName.destroy()
 console.log("\nSwitching to another app")
 
 /*
- * With nothing to lose the click goes straight through. The body carries the
- * url and the project folder because the start screen needs both — it stats the
- * folder and reads its scripts — and an explicit `devScript: null` because an
- * absent key would leave it guessing whether the browser meant "use the
- * default" or "this is an old build".
+ * With nothing to lose the click goes straight through, and this is the half
+ * the armed step must not be allowed to eat.
+ *
+ * Picking an app off a list is a navigation — the same gesture as clicking a
+ * layer or a tab — and a navigation that answers the first click with a
+ * question has to be performed twice every time, including the overwhelming
+ * majority of times when the session is holding nothing at all. An
+ * unconditional confirm is a regression even though it is the safer-sounding
+ * one, which is why it has a case of its own rather than living as a clause in
+ * the case below.
+ *
+ * The body carries the url and the project folder because the start screen
+ * needs both — it stats the folder and reads its scripts — and an explicit
+ * `devScript: null` because an absent key would leave it guessing whether the
+ * browser meant "use the default" or "this is an old build".
  */
 await check("with nothing unapplied, one click asks the server to switch", async () => {
   server.reset()
@@ -825,22 +1071,23 @@ await check("with nothing unapplied, one click asks the server to switch", async
 })
 
 /*
- * One click, and it switches — even with work outstanding.
+ * With work outstanding the first click buys a warning and the second buys the
+ * switch.
  *
- * This row used to arm on the first press and go on the second, carrying a
- * warning that named the unsaved work a switch would cost. The warning was
- * true, and the fix was not to word it better: it was to stop the switch
- * costing anything. Notes pinned to a page and the ledger of changes the writer
- * could not express are both filed per app now, so switching away files them
- * under that app and switching back brings them out again.
+ * For one build this row went on the first click whatever the session was
+ * holding, and the comment defending that said the switch had been made free:
+ * the pinned notes and the preview-only ledger moved to per-app storage, so
+ * switching away files them rather than losing them. Both true. Neither of them
+ * is the removal queue, the Angular queue or the vendor store, which are in
+ * memory, have no `beforeunload` anywhere in the package, and go with the
+ * document when a supervisor kills it. A designer with a column of unapplied
+ * inspector edits lost every one of them to a click on a row that looked
+ * exactly like the safe one beside it.
  *
- * What the confirmation cost was the thing the menu is for. Picking an app off
- * a list is a navigation, the same gesture as clicking a layer or a tab, and a
- * navigation that answers the first click with a question has to be performed
- * twice every time — including the overwhelming majority of times when there
- * was nothing at stake at all.
+ * What the armed step must NOT do is charge everybody for that. It appears only
+ * when there is something to lose, which is what the next case is about.
  */
-await check("a row switches on the first click, with work outstanding or not", async () => {
+await check("with work outstanding, the first press warns and the second switches", async () => {
   server.reset()
   const ui = await opened(mount(named, { pending: true }))
   const row = ui.rows()[1]
@@ -849,27 +1096,115 @@ await check("a row switches on the first click, with work outstanding or not", a
   await settle()
   assert.equal(
     server.calls.filter((call) => call.method === "POST").length,
-    1,
-    "the click asked a question instead of switching"
+    0,
+    "a session holding unapplied edits was switched away on one click"
   )
-  // Nothing on screen asks anything, and nothing reports a loss: there is none.
+  // The row still says which app it is — losing that would make the warning
+  // impossible to place — and the port's slot names the OUTCOME of the next
+  // click rather than asking a question the toast then has to answer.
+  //
+  // A verb and a count, and no sentence around them. "Switch anyway — N
+  // unapplied changes will be lost" was the wording when this slot was a line
+  // of its own; it is now the slot that holds four digits, and every word in it
+  // is width taken off the name beside it. The instruction lives in the toast
+  // and the whole of it in the accessible name, both asserted below.
   assert.equal(row.querySelector(".de-app-menu-name").textContent, "Docs site")
-  assert.ok(
-    !ui.toasts.some((toast) => toast.kind === "error"),
-    "a switch with work outstanding reported it as a problem"
+  assert.match(row.querySelector(".de-app-menu-where").textContent, /^Discards \d+ unapplied change/)
+  assert.ok(row.classList.contains("de-app-menu-row--danger"), "the armed row carries no fill")
+  assert.match(row.getAttribute("aria-label"), /will be lost/)
+  // The words are in the toast as well, because a reader looking at the canvas
+  // rather than at the menu gets one chance to be told what is at stake.
+  //
+  // The DEFAULT rung, not `error`: `DURATION.error` is `Infinity`, and a card
+  // that never dismisses outlives the `ARMED_MS` window it is instructing. The
+  // row stands itself down after six seconds and the card would go on telling
+  // the reader to click again, where clicking again now only re-arms.
+  assert.equal(ui.toasts.at(-1).kind, "info")
+  assert.match(ui.toasts.at(-1).message, /discards \d+ unapplied change/)
+
+  press(row)
+  await settle()
+  assert.equal(
+    server.calls.filter((call) => call.method === "POST").length,
+    1,
+    "the second press did not go through"
   )
   ui.destroy()
   server.reset()
 })
 
 /*
- * The promise underneath that, stated where the chooser can be held to it: the
- * work a switch used to warn about is keyed per app rather than per page, so it
- * is filed rather than lost. `core/app-scope.ts` owns the key and its own suites
- * own the round trip; this case exists so that removing the scope shows up here,
- * in the control whose behaviour depends on it, and not only three files away.
+ * And it stands itself down, so a row armed by a misaimed click is not left
+ * one stray press away from ending the session.
+ *
+ * Six seconds is the window the annotations tab's clear-all uses, and this
+ * borrows it rather than inventing a second number for the same gesture. The
+ * case drives the clock directly instead of waiting it out: what is being
+ * pinned is that a timer exists and that firing it puts the row back exactly
+ * as it was, not the particular number of milliseconds.
  */
-await check("the work a switch used to warn about is filed per app, not dropped", () => {
+await check("an armed row goes back to being an ordinary row if it is left alone", async () => {
+  server.reset()
+  const ui = await opened(mount(named, { pending: true }))
+  const row = ui.rows()[1]
+  const resting = row.querySelector(".de-app-menu-where").textContent
+  const restingLabel = row.getAttribute("aria-label")
+
+  press(row)
+  assert.notEqual(row.querySelector(".de-app-menu-where").textContent, resting)
+  await sleep(6100)
+  assert.equal(
+    row.querySelector(".de-app-menu-where").textContent,
+    resting,
+    "the row stayed armed after the window closed"
+  )
+  assert.equal(row.getAttribute("aria-label"), restingLabel)
+  assert.ok(!row.classList.contains("de-app-menu-row--danger"))
+  // And the press that follows is a first press again, not the confirmation of
+  // a question the reader has long since forgotten answering.
+  press(row)
+  await settle()
+  assert.equal(server.calls.filter((call) => call.method === "POST").length, 0)
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * Closing the menu disarms it too. A row that stayed armed across a close would
+ * turn the next open into a menu where one row — indistinguishable from the
+ * others, since the card is drawn fresh — goes on a single click.
+ */
+await check("closing the menu takes the armed row's second click away with it", async () => {
+  server.reset()
+  const ui = await opened(mount(named, { pending: true }))
+  press(ui.rows()[1])
+  key("Escape")
+  await opened(ui)
+  press(ui.rows()[1])
+  await settle()
+  assert.equal(
+    server.calls.filter((call) => call.method === "POST").length,
+    0,
+    "a menu reopened onto a row that was still armed from last time"
+  )
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * The half of a session's work that a switch genuinely does not cost, stated
+ * where the chooser can be held to it.
+ *
+ * Pinned notes and the preview-only ledger are keyed per app rather than per
+ * page, so switching files them under the app they belong to and switching back
+ * brings them out. That is why the armed step counts unapplied EDITS and says
+ * nothing about notes: naming them would be warning about a loss that does not
+ * happen, and a warning that overstates is one people learn to click through.
+ * `core/app-scope.ts` owns the key and its own suites own the round trip; this
+ * case exists so that removing the scope shows up here, in the control whose
+ * copy depends on it, and not only three files away.
+ */
+await check("notes and the preview-only ledger are filed per app, not dropped", () => {
   assert.notEqual(
     named.appScopedKey("designlayer.annotations."),
     ghost.appScopedKey("designlayer.annotations."),
@@ -939,10 +1274,61 @@ await check("a proxy that never goes quiet is a switch that did not take", async
 })
 
 /*
+ * A dropped POST over a proxy that is still answering is not a handover.
+ *
+ * The success-on-a-dropped-connection reading is right about the case it was
+ * written for — the supervisor kills the process serving this page, so the
+ * happy path frequently ends with no response at all — and it had no way to
+ * tell that case from a loopback fetch that failed for any other reason. Read
+ * as success, a transient failure put "Starting Docs site" on screen over an
+ * editor that was working perfectly, pinned the card against Escape, an outside
+ * click and a window blur, and left it there until a fifteen-second budget ran
+ * out. The error it was avoiding was cosmetic; this one blocks the editor.
+ *
+ * The distinguishing question is one the page can ask: is my own proxy still
+ * there. It costs one loopback round trip on a gesture that was about to end
+ * the page, and both answers are pinned — this case for alive, the case above
+ * for dead.
+ */
+await check("a dropped POST over a live proxy is reported, not narrated as a handover", async () => {
+  server.reset()
+  // The POST fails and the proxy keeps answering, which is the combination the
+  // old reading could not see.
+  server.switchUnreachable = true
+  const ui = await opened(mount(named))
+  press(ui.rows()[1])
+  await settle()
+
+  assert.deepEqual(navigations, [], "it left the page over a switch that never happened")
+  assert.deepEqual(reloads, [])
+  assert.doesNotMatch(ui.note().textContent, /Starting Docs site/, "it narrated a handover anyway")
+  assert.equal(ui.toasts.at(-1).kind, "error")
+  // The sentence names a recovery rather than a status code. `Could not switch
+  // apps (502)` was the old one: a number the reader cannot act on, standing in
+  // for the sentence that would have told them how.
+  assert.match(ui.note().textContent, /^Could not switch to Docs site\./)
+  assert.match(ui.note().textContent, /try again, or start the app from http:\/\/127\.0\.0\.1:3455\//)
+  assert.doesNotMatch(ui.note().textContent, /\(\d{3}\)/, "a raw HTTP status reached the reader")
+
+  // And the card is dismissible, because nothing is happening to this page.
+  key("Escape")
+  assert.equal(ui.menu.style.display, "none", "a working editor was left under a card that will not close")
+  // The rows come back rather than staying dead over a switch that did not take.
+  await opened(ui)
+  assert.deepEqual(
+    ui.rows().map((row) => row.getAttribute("aria-disabled")),
+    [null, null, null]
+  )
+  ui.destroy()
+  server.reset()
+})
+
+/*
  * Every ordinary way of dismissing the menu is something a person does
  * reflexively in the seconds a handover takes, and the menu is holding the only
  * explanation on screen for an app that has stopped responding. So the handover
- * pins it open.
+ * pins it open — but only while it is genuinely in flight; the case above is
+ * the other side of that.
  */
 await check("nothing dismisses the menu while the handover is in flight", async () => {
   server.reset()
@@ -989,21 +1375,38 @@ await check("a refusal with a reason is reported and goes nowhere", async () => 
  * One choice per page. A second row pressed while the first is in flight would
  * queue a switch to an app this editor will never see, and the rows say so
  * rather than silently swallowing the press.
+ *
+ * `aria-disabled` and not the native attribute, and the difference is where the
+ * keyboard user ends up. `disabled` makes an element unfocusable in the same
+ * frame it is set, so the row the reader just pressed drops focus to `<body>` —
+ * their reward for choosing an app is to be thrown to the top of the document
+ * while the switch is still in flight. The class beside it is what carries
+ * `pointer-events: none`, which is the half the pointer needs and the half the
+ * keyboard must not have.
  */
-await check("every row goes dead while a switch is in flight", async () => {
+await check("the rows refuse a second choice without dropping the reader's place", async () => {
   server.reset()
   let release = () => {}
   server.gate = new Promise((resolve) => (release = resolve))
   const ui = await opened(mount(named))
-  press(ui.rows()[1])
+  const chosen = ui.rows()[1]
+  chosen.focus()
+  press(chosen)
+  assert.deepEqual(
+    ui.rows().map((row) => row.getAttribute("aria-disabled")),
+    ["true", "true", "true"]
+  )
   assert.deepEqual(
     ui.rows().map((row) => row.disabled),
-    [true, true, true]
+    [false, false, false],
+    "the native attribute came back and took the focused row with it"
   )
+  assert.equal(window.document.activeElement, chosen, "the row the reader pressed lost focus")
+  assert.ok(chosen.classList.contains("de-app-menu-row--busy"))
   await settle()
   assert.deepEqual(
-    ui.rows().map((row) => row.disabled),
-    [true, true, true],
+    ui.rows().map((row) => row.getAttribute("aria-disabled")),
+    ["true", "true", "true"],
     "the rows came back to life with the request still out"
   )
   release()
@@ -1018,14 +1421,71 @@ await check("every row goes dead while a switch is in flight", async () => {
   server.reset()
 })
 
+/*
+ * The row reports its own handover in the slot that held its port, in one word,
+ * and it no longer measures itself to do it.
+ *
+ * There used to be a `min-height` written into the row's inline style before
+ * the phrase went in, and it was doing real work at the time: the row was two
+ * lines, the second of them a wrapping url, so a phrase swapped into it could
+ * come out one line or two and the card resized under a pointer that was
+ * waiting for the page to be replaced. A one-line row whose trailing slot is
+ * `flex: none; white-space: nowrap` cannot do that, so the measurement went —
+ * and it is pinned as GONE, because dead code that measures something looks far
+ * more necessary than dead code that does not, and the next reader of this file
+ * would put it back.
+ *
+ * The constraint it protected is pinned too, in the only two places it can be:
+ * the row keeps its name and its element count while the phrase is up, and the
+ * sheet holds the slot to one line (see the stylesheet cases at the end).
+ */
+await check("the row says it is switching where it said its port, and does not measure itself", async () => {
+  server.reset()
+  let release = () => {}
+  server.gate = new Promise((resolve) => (release = resolve))
+  const ui = await opened(mount(named))
+  const chosen = ui.rows()[1]
+  assert.equal(chosen.querySelector(".de-app-menu-where").textContent, "4200")
+  press(chosen)
+
+  assert.equal(chosen.getAttribute("data-de-switching"), "")
+  assert.equal(chosen.querySelector(".de-app-menu-where").textContent, "Switching\u2026")
+  // One word, because the slot takes its width out of the name beside it and a
+  // phrase long enough to push a long name onto a second line would move the
+  // card exactly as the old wrapping url did.
+  assert.equal(chosen.querySelector(".de-app-menu-where").textContent.split(/\s+/).length, 1)
+  // Still the same row, saying which app it is: the reader has to be able to
+  // see WHAT is being handed over, not just that something is.
+  assert.equal(chosen.querySelector(".de-app-menu-name").textContent, "Docs site")
+  assert.equal(chosen.childElementCount, 2, "the handover grew the row a line of its own")
+  assert.equal(chosen.style.minHeight, "", "the row measured itself to hold a height it cannot change")
+
+  release()
+  server.gate = null
+  await settle()
+  ui.destroy()
+  server.reset()
+})
+
 // ── The server half ────────────────────────────────────────────────────────
 
 console.log("\nRelaying the question to the start screen")
 
-await check("a session with no start screen answers 200 and never asks one", async () => {
+/*
+ * An empty list is a fact about the machine, not a missing feature.
+ *
+ * This used to answer `chooser: false` when there was no screen and no sibling
+ * editor, and the browser read that as "this session has no app chooser" and
+ * said so, in the app chooser, to everybody running a single editor — which is
+ * most people. The field never meant that: it answers whether a supervisor can
+ * START something. So the empty list goes back as an empty list, and the menu
+ * writes its own empty state, which is the only place that knows what the
+ * reader could do about it.
+ */
+await check("one editor and no start screen is an empty list, not a missing chooser", async () => {
   server.reset()
   const apps = createAppSwitcher({ chooserUrl: null, editors: () => [] })
-  assert.deepEqual(await apps.list(), { chooser: false, apps: [] })
+  assert.deepEqual(await apps.list(), { chooser: true, apps: [] })
   assert.deepEqual(server.calls, [], "it went looking for a screen that does not exist")
   assert.equal(apps.chooserUrl, null)
 })
@@ -1334,15 +1794,34 @@ await check("an app with an editor of its own is offered, with no start screen i
   const rows = ui.rows()
   assert.equal(rows.length, 1)
   assert.equal(rows[0].querySelector(".de-app-menu-name").textContent, "shop-admin")
-  assert.equal(rows[0].disabled, false)
+  assert.equal(rows[0].getAttribute("aria-disabled"), null)
+  // The two kinds of row are no longer the same row with different plumbing.
+  // One moves the page; the other asks a supervisor to kill this editor, and
+  // the reader has to be able to tell them apart before pressing either.
+  //
+  // A MARK rather than the clause that used to say it. `editor already running`
+  // was four words per row spent on a fact the reader only needs in order to
+  // answer one question — is pressing this cheap — and an arrow answers that
+  // question in the width of a glyph, leaving the slot free for the port. The
+  // glyph is `aria-hidden` by construction, so the whole of the distinction is
+  // still in the accessible name for anyone who cannot see it.
+  assert.equal(rows[0].querySelector(".de-app-menu-where").textContent, "4200")
+  assert.equal(rows[0].childElementCount, 3, "the row that navigates carries no mark")
+  const mark = rows[0].lastElementChild
+  assert.equal(mark.tagName.toLowerCase(), "svg")
+  assert.equal(mark.getAttribute("aria-hidden"), "true")
+  assert.match(rows[0].getAttribute("aria-label"), /already has an editor running/)
   ui.destroy()
   server.reset()
 })
 
 /*
- * The whole difference, in one assertion: it goes there, and it asks nobody.
+ * The whole difference: it goes there, and no supervisor is involved.
+ *
+ * It does ask ONE thing first, and the thing it asks is the destination. See
+ * the case below for why.
  */
-await check("clicking it goes to that editor, without asking a server first", async () => {
+await check("clicking it moves the page, with no process swapped anywhere", async () => {
   server.reset()
   server.apps = { chooser: true, apps: [clone(EDITOR_ROW)] }
   const ui = mount(ghost)
@@ -1365,6 +1844,69 @@ await check("clicking it goes to that editor, without asking a server first", as
 })
 
 /*
+ * It goes on the first click even with a column of unapplied edits behind it,
+ * and that is a deliberate asymmetry rather than an oversight.
+ *
+ * The document ends either way, so the queues end either way — that much is the
+ * same as the app row. What is not the same is the way back: the editor this
+ * lands on lists the one it came from, so a misaimed click is undone by one
+ * press of the same control, whereas a handover that never completes leaves no
+ * control at all. The confirm is spent on the irreversible one.
+ */
+await check("an editor row goes on one click even with work outstanding", async () => {
+  server.reset()
+  server.apps = { chooser: true, apps: [clone(EDITOR_ROW)] }
+  const ui = mount(ghost, { pending: true })
+  await opened(ui)
+  press(ui.rows()[0])
+  await settle()
+  assert.deepEqual(navigations, ["http://127.0.0.1:3464"], "it asked a question instead of going")
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * A row is only as fresh as the last `GET /apps`, because the registry sweeps
+ * for dead editors at read time and at no other time. An editor killed between
+ * the refresh and the click leaves a row that looks perfectly alive — and
+ * following it replaced a working editor with the browser's own "site can't be
+ * reached" page, taking the chooser with the document, so the only route back
+ * was typing the old address from memory.
+ *
+ * One round trip against the destination buys that back, on a gesture that was
+ * about to cost a whole page load anyway.
+ */
+await check("a row whose editor died between the refresh and the click goes nowhere", async () => {
+  server.reset()
+  server.apps = { chooser: true, apps: [clone(EDITOR_ROW)] }
+  const ui = mount(ghost)
+  await opened(ui)
+
+  // Killed now, with the row already drawn: this is the whole of the race. The
+  // registry stops listing it at the same moment, because a sweep that runs at
+  // read time is exactly what makes the drawn row stale in the first place.
+  const live = serve
+  globalThis.fetch = window.fetch = async (input, init) => {
+    if (String(input) === "http://127.0.0.1:3464") throw new Error("Failed to fetch")
+    return live(input, init)
+  }
+  server.apps = { chooser: true, apps: [] }
+  press(ui.rows()[0])
+  await settle()
+  globalThis.fetch = window.fetch = live
+
+  assert.deepEqual(navigations, [], "the page went to an editor that is not there")
+  assert.equal(ui.toasts.at(-1).kind, "error")
+  assert.match(ui.toasts.at(-1).message, /shop-admin is no longer running\./)
+  // And the list went back for a fresh answer rather than leaving a row the
+  // reader has just been told is dead sitting there to be pressed again.
+  assert.deepEqual(ui.rows(), [], "the stale row survived the probe that killed it")
+  assert.match(ui.note().textContent, /Only this app is running/)
+  ui.destroy()
+  server.reset()
+})
+
+/*
  * An editor row is switchable whatever else is missing from it. The folder is
  * what the slow path needs in order to start something; this path starts
  * nothing, so a row with no project root behind it is still a live address.
@@ -1378,8 +1920,8 @@ await check("an editor row with no project folder is still somewhere to go", asy
   const ui = mount(ghost)
   await opened(ui)
   const row = ui.rows()[0]
-  assert.equal(row.disabled, false, "a live editor was refused for want of a folder")
-  assert.doesNotMatch(row.querySelector(".de-app-menu-where").textContent, /not found/)
+  assert.equal(row.getAttribute("aria-disabled"), null, "a live editor was refused for want of a folder")
+  assert.equal(row.querySelector(".de-app-menu-where").textContent, "4200", "it reported a missing folder")
   press(row)
   await settle()
   assert.deepEqual(navigations, ["http://127.0.0.1:3464"])
@@ -1581,10 +2123,20 @@ await (async () => {
     const [, dead] = ui.rows()
     assert.ok(dead, "the app vanished from the list instead of being marked")
     assert.ok(dead.classList.contains("de-app-menu-row--unplaced"))
-    assert.equal(dead.disabled, true, "a row that cannot work was left pressable")
+    assert.equal(dead.getAttribute("aria-disabled"), "true", "a row that cannot work was left pressable")
+    // Not the native attribute, which is the whole of the next case: `disabled`
+    // takes the element out of the accessibility tree and the `aria-label`
+    // below is the only place the reason lives.
+    assert.equal(dead.disabled, false, "the reason went back behind a native disabled")
     // The reason is ON the row. A greyed row with no explanation reads as "not
     // available just now" and invites a second click.
-    assert.match(dead.querySelector(".de-app-menu-where").textContent, /source folder not found/)
+    //
+    // In three words, in the slot every other row spends on its port — which is
+    // the trade this state is FOR: the port disambiguates two checkouts of one
+    // project, and there is nothing to disambiguate on a row that cannot be
+    // opened at all. `http://127.0.0.1:9100 · source folder not found` said the
+    // same thing with a url in front of it that no reader could act on.
+    assert.equal(dead.querySelector(".de-app-menu-where").textContent, "No project folder")
     assert.match(dead.getAttribute("aria-label"), /could not find its project folder/)
   })
 
@@ -1599,11 +2151,22 @@ await (async () => {
     assert.ok(readsAsASentence(note.textContent))
   })
 
-  await check("a dead row is skipped by the arrow keys rather than trapping them", () => {
-    // `focusRow` walks live rows only, so the one switchable app is the only
-    // thing the keyboard can land on — pressing Down twice must not park focus
-    // on a control that refuses to do anything.
+  await check("the reason a row cannot be opened is reachable from the keyboard", () => {
+    /*
+     * This row used to be skipped by the arrow keys, on the argument that
+     * parking focus on a control which refuses to act wastes a keystroke. The
+     * argument is right about a row killed mid-switch and wrong about this one:
+     * the explanation IS the row's purpose — it is why the row is drawn at all
+     * rather than dropped — and it lives in an `aria-label` that only focus
+     * reaches. Skipping it delivered the reason to exactly the readers who
+     * could already see the second line, and hid it from the ones who could
+     * not.
+     */
     key("ArrowDown")
+    key("ArrowDown")
+    assert.equal(window.document.activeElement, ui.rows()[1], "the walk stepped over the reason")
+    assert.match(window.document.activeElement.getAttribute("aria-label"), /project folder/)
+    // And it still wraps, so the walk is a loop rather than a dead end.
     key("ArrowDown")
     assert.equal(window.document.activeElement, ui.rows()[0])
   })
@@ -1614,6 +2177,24 @@ await (async () => {
     assert.equal(server.calls.length, before, "a folderless app was still sent to the server")
   })
 
+  /*
+   * The way out is named whether or not there is a start screen to name.
+   *
+   * The note used to render only when `config.chooserUrl` was set, which gated
+   * the one sentence in this menu that offers a recovery on the one session
+   * shape least likely to have one. An unopenable row in a session with no
+   * screen got the reason and nothing else at all.
+   */
+  await check("with no start screen the way out is still named", async () => {
+    unplacedServer()
+    const bare = await opened(mount(ghost))
+    const note = bare.note()
+    assert.ok(note, "an unopenable row was left with no way out at all")
+    assert.match(note.textContent, /running designlayer from that folder/)
+    assert.doesNotMatch(note.textContent, /start screen/, "it offered a screen this session has not got")
+    bare.destroy()
+  })
+
   ui.destroy()
   server.reset()
 })()
@@ -1621,19 +2202,19 @@ await (async () => {
 // ── What the menu says when it has no rows to show ─────────────────────────
 
 /*
- * Four of the menu's five states are a sentence and nothing else: looking,
- * nothing running, no chooser behind the session, and the request failed.
+ * Most of the menu's states are a sentence and nothing else: looking, nothing
+ * else running, and the request failed.
  *
  * A bare `<div>` is not a permitted child of `role="menu"`, and a screen reader
  * walking the menu's children is entitled to drop it — which would announce
- * four of those five states as an empty menu. The disabled menu item is the
- * standard way to say "there is one thing here and it is not actionable", and
- * it stays out of the arrow keys' way for free, because the roving focus walks
+ * those states as an empty menu. The disabled menu item is the standard way to
+ * say "there is one thing here and it is not actionable", and it stays out of
+ * the arrow keys' way for free, because the roving focus walks
  * `.de-app-menu-row` and this is not one.
  */
 await check("a sentence where the rows would be is still a thing the menu contains", async () => {
   server.reset()
-  server.apps = { chooser: true, apps: [] }
+  server.apps = { apps: [] }
   const ui = await opened(mount(named))
   const note = ui.note()
   assert.ok(note, "the menu is empty rather than explaining itself")
@@ -1648,14 +2229,127 @@ await check("a sentence where the rows would be is still a thing the menu contai
   server.reset()
 })
 
-// ── The stylesheet ─────────────────────────────────────────────────────────
-
-console.log("\nThe two rules jsdom cannot answer")
+/*
+ * A menu opened from the keyboard onto a sentence used to be an open menu that
+ * said nothing at all.
+ *
+ * `open(fromKeyboard)` set a flag, and only the row-drawing path ever read it —
+ * every note path returned before reaching it. So Enter on the trigger opened a
+ * card, left focus on the trigger, and answered the next ArrowDown with
+ * nothing, because there were no rows to walk. In the session shape where this
+ * menu's only content IS a sentence, that is a control reporting
+ * `aria-expanded="true"` over an empty box.
+ *
+ * The note already carries `tabindex="-1"`, so the fix costs nothing but the
+ * reading of the flag.
+ */
+await check("opening from the keyboard onto a sentence puts the reader on the sentence", async () => {
+  server.reset()
+  server.apps = { apps: [] }
+  const ui = mount(named)
+  // `detail: 0` is the click a keyboard synthesises from Enter or Space, and it
+  // is how this control tells a keystroke from a hand.
+  ui.trigger.dispatchEvent(new window.MouseEvent("click", { bubbles: true, detail: 0 }))
+  await settle()
+  assert.equal(window.document.activeElement, ui.note(), "the menu opened and focus stayed behind")
+  ui.destroy()
+  server.reset()
+})
 
 /*
- * jsdom has no cascade and no layout, so both of these are asserted against the
- * text of the sheet — which is where the facts live anyway. Each one is a rule
- * whose loss is invisible in structure and fatal on screen.
+ * And the same open onto a LIST lands on the first row, which is the half that
+ * already worked and is pinned here so the two cannot drift apart.
+ */
+await check("opening from the keyboard onto a list puts the reader on the first row", async () => {
+  server.reset()
+  const ui = mount(named)
+  ui.trigger.dispatchEvent(new window.MouseEvent("click", { bubbles: true, detail: 0 }))
+  await settle()
+  assert.equal(window.document.activeElement, ui.rows()[0])
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * The sentence written mid-switch is announced, and it is announced because the
+ * node it lands in was already in the document.
+ *
+ * A live region only reports mutations that happen INSIDE it while it is
+ * mounted. Every state of this menu used to arrive as a fresh subtree handed to
+ * `replaceChildren`, which is precisely the mutation a live region cannot see —
+ * so the handover sentence, the failure sentence and the empty state were all
+ * silent, and a screen-reader user watched an open menu say nothing while their
+ * editor was being killed.
+ *
+ * The note lives inside the region rather than beside it: a separate hidden
+ * copy of the same sentence is two strings that can disagree, and the first
+ * time they did nobody would notice.
+ */
+await check("the sentence lands in a node that was already there to announce it", async () => {
+  server.reset()
+  const ui = await opened(mount(named))
+  const region = ui.menu.querySelector('[role="status"]')
+  assert.ok(region, "there is nothing here that can announce a change")
+  assert.equal(region.parentElement, ui.menu)
+  // Rows are on screen, so the region is empty and costs no height.
+  assert.equal(region.textContent, "")
+
+  press(ui.rows()[1])
+  await settle()
+  assert.equal(
+    ui.menu.querySelector('[role="status"]'),
+    region,
+    "the live region was replaced along with the rows, which is what made it silent"
+  )
+  assert.equal(region.firstElementChild, ui.note())
+  assert.match(region.textContent, /Starting Docs site/)
+  ui.destroy()
+  server.reset()
+})
+
+/*
+ * Focus follows the sentence when the sentence took the reader's row away.
+ *
+ * `showNote` mid-switch detaches whatever the keyboard was on, and a detached
+ * element hands focus to `<body>` — so choosing an app from the keyboard
+ * dropped the reader out of the editor at the exact moment something was
+ * happening that they needed to be told about. It only moves focus when the
+ * menu HELD focus: a reader who has gone back to the canvas is told by the live
+ * region instead, and is not dragged back.
+ */
+await check("a switch that destroys the focused row hands focus to the explanation", async () => {
+  server.reset()
+  const ui = await opened(mount(named))
+  const row = ui.rows()[1]
+  row.focus()
+  press(row)
+  await settle()
+  assert.equal(window.document.activeElement, ui.note(), "focus was dropped on the body")
+  ui.destroy()
+  server.reset()
+
+  const elsewhere = await opened(mount(named))
+  window.document.getElementById("app").setAttribute("tabindex", "-1")
+  window.document.getElementById("app").focus()
+  press(elsewhere.rows()[1])
+  await settle()
+  assert.equal(
+    window.document.activeElement,
+    window.document.getElementById("app"),
+    "a reader looking at the canvas was dragged back into the menu"
+  )
+  elsewhere.destroy()
+  server.reset()
+})
+
+// ── The stylesheet ─────────────────────────────────────────────────────────
+
+console.log("\nThe rules jsdom cannot answer")
+
+/*
+ * jsdom has no cascade and no layout, so these are asserted against the text of
+ * the sheet — which is where the facts live anyway. Each one is a rule whose
+ * loss is invisible in structure and fatal on screen.
  */
 await check("a long app name truncates rather than pushing the chevron off the row", () => {
   const nameRule = rule(named.appChooserCss, ".de-app-chooser-name")
@@ -1667,6 +2361,94 @@ await check("a long app name truncates rather than pushing the chevron off the r
   assert.match(nameRule, /white-space: nowrap;/)
   // The glyph never gives up its width to the name.
   assert.match(rule(named.appChooserCss, ".de-app-chooser svg"), /flex: none;/)
+})
+
+/*
+ * And the same name in a ROW does the opposite, which is the point.
+ *
+ * The two boxes get two answers because they have different room. The trigger
+ * is a 32px band with a chevron to fit and no choice; a row is inside a card up
+ * to 340px wide with no height to run out of, so the whole name fits, on a
+ * second line when it has to. Truncating in BOTH was the state this control
+ * shipped in for a while, and it meant a reader looking at
+ * `@acme/design-system-play…` had nowhere in the editor to find out which of
+ * two checkouts they were about to open — which is the one question this list
+ * exists to answer.
+ */
+await check("a long app name wraps in a row rather than losing its tail", () => {
+  const nameRule = rule(named.appChooserCss, ".de-app-menu-name")
+  assert.doesNotMatch(nameRule, /text-overflow: ellipsis;/, "the row started hiding the tail again")
+  assert.doesNotMatch(nameRule, /white-space: nowrap;/)
+  // The scoped package with no space in it, which would push past the card's
+  // edge rather than wrap.
+  assert.match(nameRule, /overflow-wrap: break-word;/)
+  // And it is the item that gives, so the figure beside it keeps its place.
+  assert.match(nameRule, /min-width: 0;/)
+})
+
+/*
+ * THE RULE THAT REPLACED AN INLINE `min-height`.
+ *
+ * `panels/app-chooser.ts` used to measure the row before writing a progress
+ * phrase into it and pin the measurement, because the phrase was landing in a
+ * line that wrapped. These two declarations are what make that measurement
+ * unnecessary: a slot that cannot grow and cannot wrap holds a port, three
+ * words and a one-word phrase at the same height, so the row is the same height
+ * in every state it has.
+ *
+ * Losing either one is invisible in jsdom and invisible on screen until a
+ * handover, at which point the card resizes under a pointer that is waiting for
+ * the page to be replaced — which is the whole failure the pin was bought to
+ * prevent.
+ */
+await check("the trailing figure cannot wrap, so the row cannot change height mid-handover", () => {
+  const slot = rule(named.appChooserCss, ".de-app-menu-where")
+  assert.match(slot, /flex: none;/)
+  assert.match(slot, /white-space: nowrap;/)
+})
+
+/*
+ * The armed row's ink is the row's, not a second copy of the row's decision.
+ *
+ * The figure is quiet everywhere except on a danger fill, where it inherits —
+ * so there is exactly one rule in this sheet deciding what is legible on that
+ * fill, and it is the rule that sets the fill. A descendant rule naming
+ * `onSemantic` a second time is the shape the palette has already shipped two
+ * contrast bugs in: it stays true while the thing under it moves.
+ */
+await check("the figure takes the armed row's ink by inheriting it, not by restating it", () => {
+  assert.doesNotMatch(
+    named.appChooserCss,
+    /\.de-app-menu-row--danger \.de-app-menu-where/,
+    "the armed row's ink was copied onto the figure instead of inherited"
+  )
+  assert.match(
+    named.appChooserCss,
+    /\.de-app-menu-row:not\(\.de-app-menu-row--danger\) \.de-app-menu-where/
+  )
+})
+
+/*
+ * The card's ceiling, which is not this lane's work and is the thing a lane
+ * rewriting every rule in the file is most likely to drop.
+ *
+ * Five registered editors at 200% zoom is taller than a short window — the
+ * registry's own notes record five on the machine this was written on — and
+ * before the ceiling existed the overflow simply hung off the bottom edge with
+ * no scrollbar, putting the rows NEAREST the trigger out of reach.
+ */
+await check("the card still stops at the viewport and scrolls past it", () => {
+  const menuRule = rule(named.appChooserCss, ".de-app-menu")
+  // 16, and the number is pinned rather than matched loosely because it was
+  // wrong: the sheet read `space.sm` where the positioner reads 8, so the
+  // ceiling was `100vh - 8px` and the card was allowed to be one edge taller
+  // than the room it had. Off by an amount too small to see and exactly big
+  // enough to hide the last row's lower half.
+  assert.match(menuRule, /max-height: calc\(100vh - 16px\);/)
+  assert.match(menuRule, /overflow-y: auto;/)
+  // Without this the wheel gesture that reaches the end of the list carries on
+  // into the page behind an open menu anchored to a control that just moved.
+  assert.match(menuRule, /overscroll-behavior: contain;/)
 })
 
 await check("the menu is a fixed card that paints above the panel it drops out of", () => {

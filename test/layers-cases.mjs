@@ -301,7 +301,24 @@ check("selection paints aria-selected on exactly the selected rows", () => {
 })
 
 check("the row keeps its motionless chrome and its rounded band", () => {
-  assert.match(layersCss, /\.de-layer \{[^}]*transition: none;[^}]*animation: none;/s)
+  /*
+   * MOTIONLESS is about the row's BOX, not its tint. The blanket
+   * `transition: none` this used to assert was borrowed from canvas chrome,
+   * where `selection.ts` rewrites geometry every frame and a transition makes
+   * the outline trail the element. A row in a scrolling list has no frame loop,
+   * and the blanket was silencing four unrelated state changes — hover, select,
+   * tree focus, hidden — on an argument that applied somewhere else. It fades
+   * its tint on `snap` now; see the note on the rule in `css/layers.ts`.
+   */
+  const rowRule = /\.de-layer \{([^}]*)\}/s.exec(layersCss)
+  assert.ok(rowRule, ".de-layer rule is missing from the layers stylesheet")
+  const rowTransition = /transition:([^;]*);/s.exec(rowRule[1])
+  assert.ok(rowTransition, ".de-layer must declare a transition, even if it is none")
+  assert.doesNotMatch(
+    rowTransition[1],
+    /\b(all|transform|translate|scale|width|height|top|left|right|bottom|inset|margin|padding)\b/,
+    "the row animates its own box inside a scrolling list"
+  )
   // Through the token, not a literal: the kit's radius scale moved from 2/4/6/10
   // to 4/8/12/16 and a hardcoded 4 here would have gone on passing while the
   // row it describes had visibly changed shape.
@@ -454,6 +471,169 @@ check("the lock is session state: no source write, still selectable", () => {
   press(action(5, "lock"))
   assert.ok(!isLocked($("box")))
   assert.equal(action(5, "lock").getAttribute("aria-label"), "Lock div")
+})
+
+/*
+ * THE ONE CROSS-ELEMENT VIEW OF SAVED STYLES, AND WHY IT IS HERE.
+ *
+ * The floating design-options window carried a "Saved variants" tab listing
+ * every element in the app with a saved style. It was the only place that view
+ * has ever existed, and it went when the window was deleted — so this is the
+ * replacement, and these cases exist to stop it quietly going a second time.
+ *
+ * Better placed than it was. That tab could not act on a row without
+ * `findElement()`, forty lines that re-derived a selection by tag-scanning the
+ * document and failed outright for any element not on the current screen. A row
+ * here already IS the element: pressing it selects the thing whose saved styles
+ * the right panel then offers the verbs for.
+ *
+ * The cases below assert the CONTRACT — a count appears, it is announced, a row
+ * with nothing saved shows nothing — and never the badge's wording or its ink,
+ * so the treatment can improve without anybody coming back here.
+ */
+console.log("\nSaved styles, counted on the row")
+
+const savedBadge = (index) => rows()[index].querySelector(".de-layer-saved")
+
+/**
+ * The store key for a row, taken from the store rather than recomputed.
+ *
+ * `optionSets` is keyed by the same string `describe()` builds, and rebuilding
+ * it here would be a second derivation that could agree with the panel today
+ * and drift tomorrow. Selecting the row makes the real one observable.
+ */
+const keyOfRow = (index) => {
+  click(index)
+  return getState().selection[0].key
+}
+
+const savedSet = (key, names) => ({
+  key,
+  activeOptionId: null,
+  baseline: null,
+  options: names.map((name, i) => ({
+    id: `opt-${i}`,
+    name,
+    className: "",
+    style: {},
+    text: null,
+  })),
+})
+
+check("a row with nothing saved against it says nothing", () => {
+  setState({ optionSets: {} })
+  const badge = savedBadge(1)
+  assert.ok(badge, "the row has nowhere to report a saved style at all")
+  assert.equal(badge.textContent, "")
+  assert.equal(badge.getAttribute("aria-label"), null, "an empty badge is still announced")
+})
+
+check("an element with saved styles carries the count, and says what it counts", () => {
+  const key = keyOfRow(1)
+  setState({ optionSets: { [key]: savedSet(key, ["Compact", "Roomy"]) } })
+  const badge = savedBadge(1)
+  assert.equal(badge.textContent, "2")
+  // A bare numeral beside a layer name says nothing to a screen reader.
+  assert.match(badge.getAttribute("aria-label"), /2 saved styles/)
+  // A report, not a control. The row is the thing you press.
+  assert.equal(badge.tagName, "SPAN")
+  assert.equal(badge.getAttribute("role"), null)
+})
+
+check("one saved style is not announced as though it were several", () => {
+  const key = keyOfRow(1)
+  setState({ optionSets: { [key]: savedSet(key, ["Compact"]) } })
+  assert.equal(savedBadge(1).textContent, "1")
+  assert.match(savedBadge(1).getAttribute("aria-label"), /1 saved style\b/)
+})
+
+check("emptying a set takes the count away with it", () => {
+  const key = keyOfRow(1)
+  setState({ optionSets: { [key]: savedSet(key, []) } })
+  assert.equal(savedBadge(1).textContent, "", "a set with no options still claims a count")
+  setState({ optionSets: {} })
+})
+
+check("a row with no saved styles spends no width on saying so", () => {
+  /*
+   * The badge takes space only when it has something in it, which is the
+   * opposite of what the action strip does one rule below — and the difference
+   * is what each one is triggered by. The strip appears on HOVER, so reserving
+   * its width is what stops the name jumping under a pointer merely passing
+   * over. This appears when a style is SAVED: a deliberate action on this row,
+   * nowhere near the pointer, and absent on almost every row of a real tree.
+   * Reserving 18px and a gap on hundreds of rows to spare one row a shift it
+   * earned is the wrong trade in a 240px panel.
+   *
+   * The name of this case used to claim the reverse while asserting this, which
+   * is worse than either choice: a reader checking the layout would have taken
+   * the sentence for the answer.
+   */
+  assert.match(layersCss, /\.de-layer-saved:empty\s*\{[^}]*display: none;/s)
+  // And it is not the accent. In this tree the accent means SELECTED — the row
+  // fill, the canvas outline, the current app in the chooser — and two meanings
+  // on one colour in one row is what makes neither of them readable.
+  const rule = /\.de-layer-saved\s*\{([^}]*)\}/s.exec(layersCss)
+  assert.ok(rule, ".de-layer-saved is missing from the layers stylesheet")
+  assert.doesNotMatch(rule[1], /accent/)
+})
+
+/*
+ * A MULTI-SELECTION CAN BE ASSEMBLED WITHOUT A POINTER, and it could not.
+ *
+ * Align, distribute, the multi-edit and the batch delete are all gated behind
+ * a selection of more than one row, and the only way to build one was
+ * Shift-click or Cmd-click. A keyboard user could reach every one of those
+ * controls and operate none of them.
+ *
+ * The chords deliberately mirror the pointer's, so there is one model to learn.
+ */
+console.log("\nAssembling a selection from the keyboard")
+
+const arrow = (index, key, init = {}) =>
+  rows()[index].dispatchEvent(
+    new window.KeyboardEvent("keydown", { key, bubbles: true, ...init })
+  )
+
+check("shift and an arrow extend the selection the way shift-click does", () => {
+  click(1)
+  assert.equal(selection().length, 1)
+  arrow(1, "ArrowDown", { shiftKey: true })
+  assert.equal(selection().length, 2, "shift+arrow did not extend the selection")
+  arrow(2, "ArrowDown", { shiftKey: true })
+  assert.equal(selection().length, 3)
+  // And it extends from the ANCHOR, so coming back shrinks rather than grows.
+  arrow(3, "ArrowUp", { shiftKey: true })
+  assert.equal(selection().length, 2)
+})
+
+/*
+ * A plain arrow moves FOCUS and leaves the selection alone, which is the model
+ * this tree has always had and the one APG describes for a multi-select tree:
+ * focus and selection are separate, Shift+Arrow moves both, Enter commits.
+ *
+ * Worth a case of its own because it is the half that makes Shift+Arrow
+ * meaningful — if a plain arrow also selected, there would be no way to travel
+ * to the far end of a range without dragging the selection along behind you.
+ */
+check("a plain arrow travels without disturbing what is selected", () => {
+  click(1)
+  arrow(1, "ArrowDown", { shiftKey: true })
+  assert.equal(selection().length, 2)
+  arrow(2, "ArrowDown")
+  assert.equal(selection().length, 2, "a plain move changed the selection instead of just focus")
+  // And Enter is what commits the row focus has travelled to.
+  arrow(3, "Enter")
+  assert.equal(selection().length, 1, "Enter did not replace the range with the focused row")
+})
+
+check("the platform's modifier adds one row without taking the rest", () => {
+  click(1)
+  const first = selection()[0]
+  arrow(3, "Enter", { metaKey: true })
+  const after = selection()
+  assert.equal(after.length, 2, "cmd+Enter did not add the focused row to the selection")
+  assert.ok(after.includes(first), "adding a row dropped the one already selected")
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

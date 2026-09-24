@@ -9,7 +9,7 @@
 
 import { config } from "../core/config"
 import { shellCss } from "../core/css"
-import { AGENTATION_ROOT_ATTR, CHROME_ATTR, el } from "../core/dom"
+import { CHROME_ATTR, el } from "../core/dom"
 import { focusControl, installFocusModality } from "../core/focus"
 import type { EditorSlots } from "../core/context"
 import { editorOwnsInput, getState, setState, subscribe } from "../core/store"
@@ -21,6 +21,8 @@ const STYLE_ID = "designlayer-shell-style"
 export interface Shell {
   slots: EditorSlots
   root: HTMLElement
+  /** The polite live region. See its note where it is built. */
+  announcer: HTMLElement
   destroy(): void
 }
 
@@ -51,23 +53,7 @@ function restoreChromeFocus(): () => void {
    */
   const declaw = (event: Event) => {
     const target = event.target
-    /*
-     * The annotation toolbar counts as ours, and has to.
-     *
-     * It is not `[data-designlayer]` — it is a third-party component with its
-     * own portal — but it is a surface this package mounted and expects the
-     * designer to operate. Left out of this test it was simply dead: the vendor
-     * guard swallowed every click on it, so the picker could not be armed at
-     * all. Measured that way on a live page before this line existed.
-     *
-     * Narrower than `isChrome()` on purpose. That selector also covers the
-     * host's own dev GUI through `chrome.trustedSelectors`, and widening the
-     * declaw to a panel this package neither mounted nor understands is a
-     * different decision from this one.
-     */
-    const ours =
-      target instanceof Element &&
-      target.closest(`[${CHROME_ATTR}],[${AGENTATION_ROOT_ATTR}]`) !== null
+    const ours = target instanceof Element && target.closest(`[${CHROME_ATTR}]`) !== null
     /*
      * Interactive mode has to be honoured by the VENDOR too, not just by us.
      *
@@ -108,6 +94,48 @@ function restoreChromeFocus(): () => void {
 }
 
 /**
+ * Words typed into one of our fields stay in it.
+ *
+ * Selected text in an `input` or a `textarea` is draggable by default, and the
+ * default is written for a document editor rather than for a tool floating over
+ * somebody else's page. Two things follow from it here, both bad. A same-window
+ * text drag is a MOVE, so dragging the words out of a half-written note DELETES
+ * them from the field — the note is gone and the only copy of it is whatever
+ * the drop landed on. And the drop lands on the APP: a prototype with a
+ * `contenteditable` in it accepts the text as an edit nobody made, on the page
+ * the note was about.
+ *
+ * Cancelling `dragstart` is the whole fix, and it has to be `dragstart` rather
+ * than `user-select` or `draggable`: the selection is the point — a note is
+ * edited by selecting words in it — and `draggable="false"` governs dragging
+ * the ELEMENT, which a text selection inside it is not. Cancelling the gesture
+ * at its first event leaves selecting, copying and pasting untouched, and
+ * leaves a drop INTO the field working, which is the direction that cannot lose
+ * anything.
+ *
+ * Fields only, and that is deliberate: the Layers panel reorders by dragging
+ * whole rows, and a guard that cancelled every `dragstart` in the chrome would
+ * take that with it. A row's gesture starts on the row, never inside a field.
+ *
+ * `dragstart` is NOT in `declaw`'s list above, so the `preventDefault` here is
+ * still the real one when this runs.
+ */
+function holdTextInFields(): () => void {
+  const onDragStart = (event: DragEvent): void => {
+    // `composedPath()[0]` rather than `target`: a companion may mount its own
+    // fields in a shadow root, where `target` is retargeted to the host and
+    // every field inside it would read as one element that is not a field.
+    const source = event.composedPath()[0]
+    if (!(source instanceof Element)) return
+    if (source.closest(`[${CHROME_ATTR}]`) === null) return
+    if (source.closest("input, textarea") === null) return
+    event.preventDefault()
+  }
+  window.addEventListener("dragstart", onDragStart, true)
+  return () => window.removeEventListener("dragstart", onDragStart, true)
+}
+
+/**
  * Who wants to know when the app area changes width.
  *
  * The two panel flags are store state and anything can subscribe to them, but
@@ -128,6 +156,36 @@ export function onInsetsChange(fn: () => void): () => void {
   return () => insetListeners.delete(fn)
 }
 
+/**
+ * What the panels are holding right now, in the app's own pixels.
+ *
+ * Read off the inline properties `syncInsets` writes rather than through
+ * `getComputedStyle`, for the reason the launcher reads them the same way: a
+ * caller woken by `onInsetsChange` is running immediately after those writes,
+ * so the inline values are this frame's by construction. A caller that is not
+ * gets the last settled pair, which is the same number every surface is
+ * currently drawn against.
+ */
+export function appInsets(): { left: number; right: number } {
+  const style = document.documentElement.style
+  const read = (name: string) => Number.parseFloat(style.getPropertyValue(name)) || 0
+  return { left: read("--de-left"), right: read("--de-right") }
+}
+
+/**
+ * How wide the app believes it is: the window, less both panels.
+ *
+ * This is the width the app's own stylesheet is answering to — `shell/
+ * app-viewport.ts` points its `vw` and its breakpoints at exactly this strip —
+ * so anything in the chrome that reports "the width the app is laid out at"
+ * has to ask this rather than `window.innerWidth`, or it describes a viewport
+ * the app stopped using.
+ */
+export function canvasWidth(): number {
+  const { left, right } = appInsets()
+  return Math.max(0, window.innerWidth - left - right)
+}
+
 export function mountShell(): Shell {
   if (!document.getElementById(STYLE_ID)) {
     const style = el("style", { id: STYLE_ID })
@@ -136,6 +194,32 @@ export function mountShell(): Shell {
   }
 
   const overlay = el("div", { class: "de-overlay-layer" })
+  /*
+   * WHAT IS SELECTED, SAID OUT LOUD — the chrome had no live region at all.
+   *
+   * Selecting an element is the most common thing anyone does in this editor
+   * and it was completely silent: the outline moves, the inspector repaints
+   * with twelve sections of that element's properties, and a screen-reader user
+   * got no indication that anything had happened. Arrow-nudging through
+   * siblings was the same, only faster.
+   *
+   * `polite`, not `assertive`. A selection can change several times a second
+   * while somebody walks the tree with Tab, and an assertive region interrupts
+   * itself on every one of them — which is how a live region becomes the thing
+   * a user turns off. Polite queues and coalesces, which is what this wants.
+   *
+   * `atomic` because the sentence is rewritten whole rather than appended to,
+   * and visually hidden rather than `display: none` — a region that is not
+   * rendered is not announced, which is the failure mode this pattern exists to
+   * avoid. It is clipped to a 1px box rather than sized to zero for the same
+   * reason: some engines skip a zero-area node.
+   */
+  const announcer = el("div", {
+    class: "de-announcer",
+    role: "status",
+    "aria-live": "polite",
+    "aria-atomic": "true",
+  })
   const toolbar = el("div", { class: "de-toolbar", role: "toolbar", "aria-label": "DesignLayer" })
 
   const left = el("div", { class: "de-panel-body" })
@@ -177,19 +261,90 @@ export function mountShell(): Shell {
       setState(side === "left" ? { layersOpen: false } : { inspectorOpen: false }),
   })
 
+  /*
+   * THE WAY OUT, and it is the pair to ⇧⌘1 rather than a skip link.
+   *
+   * A skip link is the wrong shape here, and the reason is worth writing down
+   * because the instinct is so strong. A skip link exists when a large block of
+   * chrome stands BETWEEN the top of a document and its content. This chrome is
+   * appended to `<body>`, so it is last in the order: there is nothing behind
+   * it to skip to.
+   *
+   * The real gap is the mirror image. A keyboard user who has arrived in the
+   * editor — by ⇧⌘1, or by tabbing to the end of the app — faces roughly forty
+   * stops across a toolbar, two panels and whatever the inspector is showing,
+   * with no way back to the page short of tabbing through all of them. The
+   * editor already owns the right verb for that: collapse to the disc, and the
+   * page has its keyboard back.
+   *
+   * So this is ONE stop, first in the chrome's order, doing exactly that. A
+   * real `<button>` rather than an anchor, because it performs an action rather
+   * than going to a fragment.
+   *
+   * VISUALLY HIDDEN UNTIL FOCUSED, which is the whole convention: a pointer
+   * user has the launcher disc and the ⌘. accelerator and does not need a
+   * forty-first control in the bar, while a keyboard user meets this one before
+   * any of the forty. `.de-escape` in `css/base.ts` is the clipped-until-
+   * focused half.
+   *
+   * It does NOT move focus itself. Collapsing takes the chrome to
+   * `visibility: hidden`, so the browser drops focus to `<body>` of its own
+   * accord and the next Tab resumes at the top of the page — which is where
+   * someone leaving the editor is trying to get to. Forcing focus onto a
+   * particular element of an app this editor did not write would be a guess.
+   */
+  const escape = el(
+    "button",
+    {
+      class: "de-escape",
+      type: "button",
+      onclick: () => setState({ chromeHidden: true }),
+    },
+    ["Hide the editor and return to the page"]
+  )
+
   const root = el("div", { class: "de-root" }, [
+    escape,
+    announcer,
     overlay,
     toolbar,
     resize.rail,
     launcher.element,
   ])
+  /*
+   * THE EDITOR ARRIVES RATHER THAN SIMPLY EXISTING.
+   *
+   * Five popovers in this chrome were given entrances, and `css/base.ts` argues
+   * the case in as many words — a surface that materialises at its final
+   * appearance reads as a paste. The three LARGEST surfaces never got one: the
+   * bar and both panels appeared between two frames, over an app the reader was
+   * already looking at, which is the moment the argument applies hardest.
+   *
+   * It is spelled as the chrome-hidden state plus a removal rather than as an
+   * entrance animation of its own, and that is the whole trick: the editor
+   * mounts at the END of its own exit — panels off their edges, bar
+   * transparent — and then plays that exit backwards. So arriving and leaving
+   * cannot drift apart, there is no second set of keyframes to keep in
+   * agreement, and reduced motion is already handled because `css/base.ts`
+   * governs those same rules.
+   *
+   * Two frames, not one. The class has to be on the element for a frame before
+   * it is taken off, or the browser coalesces both styles into the same
+   * recalculation and there is no starting value to animate from — the surfaces
+   * would arrive instantly, which is the bug this replaces.
+   */
+  root.classList.add("de-root--arriving")
   document.body.append(root)
   document.documentElement.classList.add("designlayer-active")
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => root.classList.remove("de-root--arriving"))
+  })
   // Before the focus guard, not after: the guard forces focus from its own
   // window-capture listener, and it has to read a modality that is already this
   // gesture's rather than the last one's.
   const releaseFocusModality = installFocusModality()
   const releaseChromeFocus = restoreChromeFocus()
+  const releaseFieldText = holdTextInFields()
 
   /**
    * Which panels exist right now. Separate from the insets below, because a
@@ -332,10 +487,12 @@ export function mountShell(): Shell {
 
   return {
     slots: { overlay, toolbar, left, right },
+    announcer,
     root,
     destroy() {
       unsubscribe()
       releaseChromeFocus()
+      releaseFieldText()
       releaseFocusModality()
       resize.destroy()
       launcher.destroy()

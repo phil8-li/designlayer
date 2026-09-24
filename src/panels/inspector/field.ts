@@ -7,6 +7,7 @@
 
 import { el, round } from "../../core/dom"
 import { icon } from "../../core/icons"
+import { installIconSegmentThumb, installSegmentThumb } from "../../core/travelling-surface"
 import { tokens } from "../../core/tokens"
 
 /**
@@ -24,6 +25,26 @@ export function isExpanded(key: string): boolean {
 
 export function setExpanded(key: string, value: boolean): void {
   expanders.set(key, value)
+  justExpanded = key
+}
+
+/**
+ * Which disclosure the user just flipped, for the ONE render that follows.
+ *
+ * The Design tab rebuilds every section on every commit, so a group cannot tell
+ * from its own existence whether it has just been revealed or has been open all
+ * along. Without that distinction the reveal animation would play on every
+ * scrub commit and every keystroke in a field — punctuation for edits that have
+ * nothing to do with the disclosure.
+ *
+ * Read once and cleared, so it describes an interaction rather than a state.
+ */
+let justExpanded: string | null = null
+
+export function takeJustExpanded(key: string): boolean {
+  if (justExpanded !== key) return false
+  justExpanded = null
+  return true
 }
 
 /* ---------- numeric expressions ---------- */
@@ -242,6 +263,14 @@ export function numberField(options: NumberFieldOptions): HTMLElement {
     let latest = startValue
     let frame = 0
 
+    // Say that the gesture is what is driving the number. The lit label is the
+    // pressed-control appearance from `css/panels.ts`; the field's own accent
+    // border is the one it already wears for focus, which is the other way this
+    // control gets driven. Both are cleared in `onUp`, including the
+    // `pointercancel` path, so a drag that ends off the label cannot strand it.
+    label.classList.add("de-field-label--scrubbing")
+    label.closest(".de-field")?.classList.add("de-field--scrubbing")
+
     const onMove = (move: PointerEvent) => {
       latest = clampValue(startValue + (move.clientX - startX) * (options.step ?? 1) * modifierScale(move))
       input.value = String(round(latest))
@@ -254,6 +283,8 @@ export function numberField(options: NumberFieldOptions): HTMLElement {
     }
     const onUp = () => {
       if (frame) cancelAnimationFrame(frame)
+      label.classList.remove("de-field-label--scrubbing")
+      label.closest(".de-field")?.classList.remove("de-field--scrubbing")
       // `pointercancel` has already dropped the capture; releasing twice throws.
       if (label.hasPointerCapture(event.pointerId)) label.releasePointerCapture(event.pointerId)
       label.removeEventListener("pointermove", onMove)
@@ -312,20 +343,51 @@ export function iconSegmented(options: {
   options: IconChoice[]
   onCommit(value: string): void
 }): HTMLElement {
-  return el(
-    "div",
-    { class: "de-iseg", role: "group", "aria-label": options.label },
-    options.options.map((choice) => {
-      const button = iconButton({
-        label: choice.label,
-        glyph: choice.glyph,
-        pressed: choice.value === options.value,
-        onClick: () => options.onCommit(choice.value),
-      })
-      if (choice.disabled) (button as HTMLButtonElement).disabled = true
-      return button
+  const buttons = options.options.map((choice) => {
+    const button = iconButton({
+      label: choice.label,
+      glyph: choice.glyph,
+      pressed: choice.value === options.value,
+      onClick: () => {
+        justSegmented = options.label
+        options.onCommit(choice.value)
+      },
     })
-  )
+    if (choice.disabled) (button as HTMLButtonElement).disabled = true
+    return button
+  })
+  const node = el("div", { class: "de-iseg", role: "group", "aria-label": options.label }, buttons)
+
+  /*
+   * The same travelling chip the word version gets, for the reason its own
+   * comment gives: this is called the icon twin of `segmented`, and a twin that
+   * teleports beside one that slides is two answers to one gesture.
+   *
+   * The park-then-release below is the same trick too, and it is needed for the
+   * same reason: this panel rebuilds all thirteen sections on every commit, so
+   * the control the user pressed no longer exists by the time anything could
+   * animate. Placing the chip where the PREVIOUS build had it and releasing it
+   * a frame later makes the replacement perform the move its predecessor never
+   * got to. `justSegmented` keeps that honest — without it, selecting a second
+   * element whose value differs would slide the chip as though somebody had
+   * pressed it.
+   */
+  const thumb = installIconSegmentThumb(node)
+  const was = segmentedWas.get(options.label)
+  segmentedWas.set(options.label, options.value)
+  const pressed = justSegmented === options.label
+  if (pressed) justSegmented = null
+
+  const at = (value: string): HTMLElement | null => {
+    const index = options.options.findIndex((choice) => choice.value === value)
+    return index < 0 ? null : buttons[index]
+  }
+  requestAnimationFrame(() => {
+    const travels = pressed && was !== undefined && was !== options.value
+    thumb.track(at(travels ? was : options.value))
+    if (travels) requestAnimationFrame(() => thumb.track(at(options.value)))
+  })
+  return node
 }
 
 export interface ActionChoice {
@@ -389,7 +451,17 @@ export function alignPad(options: {
           "aria-pressed": String(cell.pressed),
           onclick: cell.onClick,
         },
-        [cell.pressed ? cell.glyph : null]
+        /*
+         * The mark is mounted on every cell, not only the pressed one.
+         *
+         * Appending it on press gave the browser nothing to interpolate: a node
+         * that did not exist a frame ago has no previous state, so the dot-to-
+         * mark swap could only ever be a substitution. Both are present now and
+         * `css/panels.ts` crossfades between them off `aria-pressed`. The cost
+         * is eight hidden 12px glyphs per pad, which is the same trade
+         * `core/swap-mark.ts` makes everywhere else in the chrome.
+         */
+        [cell.glyph]
       )
     )
   )
@@ -489,25 +561,71 @@ export interface SegmentedOptions {
   onCommit(value: string): void
 }
 
+/**
+ * Where each segmented control last was, and which one the user just pressed.
+ *
+ * The chip travels, which is what a segmented control is for — but this panel
+ * rebuilds all thirteen sections on every commit, so the control the user
+ * pressed is gone before anything could animate and its replacement arrives
+ * already correct.
+ *
+ * So the chip is placed at the value the control had LAST time it was built and
+ * moved to the current one a frame later. The rebuild stops mattering: the new
+ * control performs the transition the old one would have.
+ *
+ * Keyed by label, which is unique within a panel. `justSegmented` is what keeps
+ * this honest — without it, selecting a second element whose value differs
+ * would slide the chip as if somebody had pressed it, and a panel that animates
+ * on selection change is a panel that animates constantly.
+ */
+const segmentedWas = new Map<string, string>()
+let justSegmented: string | null = null
+
 /** Two or three mutually exclusive words — Figma's `Packed | Space between`. */
 export function segmented(options: SegmentedOptions): HTMLElement {
-  return el(
-    "div",
-    { class: "de-segmented", role: "group", "aria-label": options.label },
-    options.options.map((option) =>
-      el(
-        "button",
-        {
-          class: "de-segment",
-          type: "button",
-          title: option.title ?? option.label,
-          "aria-pressed": String(option.value === options.value),
-          onclick: () => options.onCommit(option.value),
+  const buttons = options.options.map((option) =>
+    el(
+      "button",
+      {
+        class: "de-segment",
+        type: "button",
+        title: option.title ?? option.label,
+        "aria-pressed": String(option.value === options.value),
+        onclick: () => {
+          justSegmented = options.label
+          options.onCommit(option.value)
         },
-        [option.label]
-      )
+      },
+      [option.label]
     )
   )
+  const node = el(
+    "div",
+    { class: "de-segmented", role: "group", "aria-label": options.label },
+    buttons
+  )
+  // The same helper the tab strips use — measurement, the zero-refusal, the
+  // first-placement jump and the resize re-measure are one implementation now.
+  const thumb = installSegmentThumb(node)
+
+  const was = segmentedWas.get(options.label)
+  segmentedWas.set(options.label, options.value)
+  const pressed = justSegmented === options.label
+  if (pressed) justSegmented = null
+
+  const at = (value: string): HTMLElement | null => {
+    const index = options.options.findIndex((option) => option.value === value)
+    return index < 0 ? null : buttons[index]
+  }
+
+  requestAnimationFrame(() => {
+    const travels = pressed && was !== undefined && was !== options.value
+    // Park at where it was, then release to where it is — so the chip performs
+    // the move the replaced control never got to.
+    thumb.track(at(travels ? was : options.value))
+    if (travels) requestAnimationFrame(() => thumb.track(at(options.value)))
+  })
+  return node
 }
 
 export interface IconButtonOptions {
@@ -546,7 +664,11 @@ export function miniButton(options: {
   glyph: string | Node
   pressed?: boolean
   danger?: boolean
-  onClick(): void
+  /* The event is passed through so a handler can reach the row it is in — a
+     destructive one needs to close that row before the panel rebuilds without
+     it. Optional in the signature, so the many handlers that ignore it are
+     unchanged. */
+  onClick(event: Event): void
 }): HTMLElement {
   return el(
     "button",
@@ -591,6 +713,23 @@ export function section(
   const collapsed = collapsedSections.get(title) === true
   const wrapped = el("div", { class: "de-section-body" }, [body])
   wrapped.hidden = collapsed
+  /*
+   * The layer that CLIPS, so the body can be seen to open and shut.
+   *
+   * The fold used to be `hidden` and nothing else: the chevron turned over
+   * 120ms and the section it describes arrived between two frames. A mark that
+   * animates over a body that does not is the worst of both — it promises a
+   * movement and then denies it, which is what makes a press on one of these
+   * headers read as a flicker rather than as something opening.
+   *
+   * A wrapper, and not a height written onto the body, because the thing being
+   * animated is a grid row: see `.de-section-fold` in `css/panels.ts` for why
+   * the row goes on a box of its own and the padded body stays inside it. The
+   * body keeps its `hidden` — that attribute is still the fold's STATE, read by
+   * the CSS and by every test that asks whether a section is shut; the wrapper
+   * only draws it.
+   */
+  const fold = el("div", { class: "de-section-fold" }, [wrapped])
 
   /*
    * Title first, chevron last, and the fold button behind both.
@@ -651,5 +790,5 @@ export function section(
   })
   header.classList.toggle("de-section-header--collapsed", collapsed)
 
-  return el("div", { class: "de-section" }, [header, wrapped])
+  return el("div", { class: "de-section" }, [header, fold])
 }

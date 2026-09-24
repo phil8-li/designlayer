@@ -1,6 +1,7 @@
 /** Layers tree rows. */
 
 import { tokens as t, nest } from "../tokens"
+import { CONTROL_RADIUS } from "./panels"
 
 /**
  * One indent step, in px, shared with the panel that builds the rows.
@@ -15,9 +16,9 @@ export const LAYER_INDENT = 16
 /**
  * The context menu's corner and its rows' corner, from one inset.
  *
- * Deliberately the same declaration as `MENU` in `app-chooser.ts`, because the
+ * Deliberately the same declaration as `MENU\` in \`app-chooser.ts\`, because the
  * two ARE the same surface: a floating card of full-width rows over the
- * product, at `radius.lg` with a hairline. Two menus in one piece of chrome
+ * product, at \`radius.lg\` with a hairline. Two menus in one piece of chrome
  * whose rows round differently is how a shell stops looking designed.
  */
 const MENU = nest({ of: ".de-layer-menu", outer: t.radius.lg, inset: t.space.sm, hairline: 1 })
@@ -44,11 +45,15 @@ export const layersCss = `/* ---------- layers ---------- */
  * the light one 16.1:1 — and the focus border is 7.4:1 dark, 3.6:1 light.
  */
 .de-layer-filter {
-  width: 100%; height: 24px;
-  padding: ${t.space.md}px;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.md};
+  /* The row rung, named rather than a literal that happens to equal it. */
+  width: 100%; height: ${t.size.rowHeight}px;
+  /* Horizontal only. \`space.md\` on all four sides left a 24px border-box with
+     a 6px content box for an 18px line, so the text was clipped top and bottom
+     by its own padding; the box already centres the line. */
+  padding: 0 ${t.space.md}px;
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${CONTROL_RADIUS};
   background: ${t.color.bgSunken}; color: ${t.color.text};
-  font-family: inherit; font-size: ${t.type.body}; line-height: 1.45;
+  font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingBody};
   outline: none;
 }
 .de-layer-filter:focus { border-color: ${t.color.accent}; }
@@ -65,10 +70,23 @@ export const layersCss = `/* ---------- layers ---------- */
   padding-right: ${t.space.md}px;
   border-radius: ${t.radius.md};
   color: ${t.color.textMuted};
-  cursor: default;
+  cursor: pointer;
   white-space: nowrap;
-  transition: none;
-  animation: none;
+  /*
+   * This was \`transition: none; animation: none\` with no comment — the one
+   * suppression in the chrome that never said why, and the reason it did not is
+   * that it was borrowed from a surface it belongs to. Canvas chrome is instant
+   * because \`selection.ts\` rewrites its geometry every frame and a transition
+   * would make the outline trail the element (see \`css/canvas.ts\`). A row in a
+   * scrolling panel has no frame loop and no geometry to trail. The blanket was
+   * silencing four unrelated changes — hover, select, tree focus, hidden — on
+   * an argument that only ever applied somewhere else.
+   *
+   * \`snap\` is the rung the token set documents for precisely this: a tint on a
+   * high-frequency control, registered without being watched. \`animation: none\`
+   * goes with it; there was never an animation here to suppress.
+   */
+  transition: background-color ${t.duration.snap} ${t.ease}, color ${t.duration.snap} ${t.ease};
 }
 /*
  * Indent guides: one hairline per level the row sits under, drawn as a single
@@ -168,6 +186,10 @@ export const layersCss = `/* ---------- layers ---------- */
   display: inline-flex; align-items: center; justify-content: center;
   border: none; background: transparent; color: inherit; cursor: pointer;
 }
+/* The same quarter turn the inspector's chevron takes, and now at the same
+   duration. \`.de-lib-twisty\` and \`.de-opt-twisty\` already had it; this was the
+   third copy of one idea and the only one that snapped. */
+.de-layer-twisty { transition: transform ${t.duration.fast} ${t.ease}; }
 .de-layer-twisty[aria-expanded="true"] { transform: rotate(90deg); }
 /*
  * The type mark. Dim by default so a column of them reads as texture; only the
@@ -216,12 +238,57 @@ export const layersCss = `/* ---------- layers ---------- */
  * makes a row feel unclickable. It stays up on a row whose state is not the
  * default, because a lock nobody can see is a lock nobody can undo.
  */
+/*
+ * How many saved styles a row has, when it has any.
+ *
+ * The one cross-element view of saved styles there is, and it is the only thing
+ * this tree takes from the options subsystem. The floating browser used to
+ * carry that view; it went with the window, and this is where it came back —
+ * better placed, because a row here already IS the element, so pressing it
+ * selects the thing whose styles the right panel then offers to apply.
+ *
+ * \`:empty\` rather than a modifier class, so the row that has nothing to say
+ * costs one empty span and no attribute writes.
+ *
+ * It is NOT held in layout when empty, and that is the opposite of what the
+ * action strip below does. The strip is always laid out and only fades, because
+ * it appears on HOVER — reserving its width is what stops the name jumping
+ * under a pointer that is merely passing over. This badge appears when a style
+ * is saved, which is a deliberate action on this row and nowhere near the
+ * pointer, and it is absent on almost every row of a normal tree. Reserving
+ * 18px plus a gap on hundreds of rows to spare one row a shift it earned is the
+ * wrong trade in a 240px panel, so the badge takes the space only when it has
+ * something to say.
+ *
+ * Not the accent. The accent in this tree means SELECTED — it is the row fill,
+ * the outline on the canvas and the ink on the current app in the chooser — and
+ * a second accent-coloured thing on the same row would be two meanings on one
+ * colour. \`bgSunken\` under \`textMuted\` reads as a quiet tally, which is what it
+ * is: a fact about the row, not a state of it.
+ */
+.de-layer-saved {
+  flex: none;
+  min-width: ${t.size.miniSize}px;
+  padding: 0 ${t.space.xs}px;
+  border-radius: ${t.radius.sm};
+  background: ${t.color.bgSunken};
+  color: ${t.color.textMuted};
+  font-size: ${t.type.caption};
+  line-height: ${t.size.miniSize}px;
+  text-align: center;
+}
+.de-layer-saved:empty { display: none; }
 .de-layer-actions {
   /* \`space.md\`, not \`space.xs\`: the gap is what keeps the three 24px hit pads
      below from overlapping. See the pad's own note. */
   display: flex; flex: none; align-items: center; gap: ${t.space.md}px;
   margin-left: ${t.space.sm}px;
   opacity: 0;
+  /* The identical pattern in the annotation row's action strip
+     (\`css/annotations.ts\`) fades. Three buttons appearing under the pointer
+     with no transition read as the row changing shape rather than as controls
+     becoming available. */
+  transition: opacity ${t.duration.fast} ${t.ease};
 }
 .de-layer:hover .de-layer-actions,
 .de-layer:focus-within .de-layer-actions,
@@ -285,24 +352,92 @@ export const layersCss = `/* ---------- layers ---------- */
    coral at 2.31:1 — under the 3:1 a glyph owes, on the one action that most
    needs to be read before it fires.
 
-   \`bg\` is the only role in the palette whose pair runs the right way round:
-   \`#2c2c2c\` on the coral is 6.04:1, \`#ffffff\` on the rust is 5.94:1, which is
-   what the light theme already drew. Knocking the glyph out in the panel's own
-   ground is a plain reading of the treatment, not a borrowed token — but the
-   role this wants is an ink for a fill that is light in dark and dark in light,
-   and the palette has no name for it. This is not the only destructive fill in
-   the chrome wearing the old pairing, so the role is worth adding rather than
-   working around once per file. */
+   \`onSemantic\` is that ink, and it is the role this comment used to end by
+   asking for. It said the palette had no name for an ink that goes light on a
+   dark theme and dark on a light one, that \`bg\` was a plain reading of the
+   treatment rather than a borrowed token, and that the role was worth adding
+   because this is not the only destructive fill wearing the old pairing. All
+   three were right; the role was added in the same change, so the workaround
+   can go. 7.52:1 on the coral against \`bg\`'s 6.04:1, and the same 5.94:1 on
+   the rust, because in light the two roles resolve to the same white. */
 .de-layer-action--danger:hover,
-.de-layer-action--danger:focus-visible { background: ${t.color.danger}; color: ${t.color.bg}; }
-/* The drop line rides the boundary between two rows, so it is placed by the
-   panel and only coloured here. Accent, never the pink canvas guide: this is a
-   commit target in the tree, not a measurement on the page. */
+.de-layer-action--danger:focus-visible { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
+/*
+ * The row a drag has picked up, and it RECEDES rather than lifts.
+ *
+ * Nothing marked it at all before this, so a drag in progress and a pointer
+ * resting on a list drew the same picture: the line below said where the thing
+ * would land while nothing said which thing was going. The lifted copy already
+ * exists — the browser carries a snapshot of the row under the cursor — so what
+ * stays in the list is the hole that copy came out of, and a hole fades and
+ * shrinks. A row that grew here would be a second thing claiming to be the one
+ * in your hand.
+ *
+ * A modifier class, and deliberately not a state on \`.de-layer\`. Anything
+ * written on the row rule is written on every row of a tree that runs to
+ * hundreds, and \`opacity\` and \`transform\` there would hand the compositor a
+ * transition to be ready for on all of them. Exactly one row is ever dragged.
+ *
+ * The transition lives here too, which animates the entrance and snaps the
+ * exit: adding the class brings a \`transition\` in with it, removing the class
+ * takes the transition away in the same style change, so the row returns
+ * instantly. That asymmetry is accepted rather than fixed, because the only fix
+ * is moving the declaration up to \`.de-layer\` — the one place it must not go —
+ * and the exit is the moment of the drop, when the tree is rebuilt around the
+ * row anyway.
+ *
+ * 0.6 and 2%, measured, because the fade lands on a NAME and this file argues
+ * about names four rules above. The hidden row holds 4.5:1 there because hiding
+ * is a state a row sits in unattended and finding what you hid is the whole
+ * job. A drag lasts exactly as long as a button is held, by the hand holding
+ * it, and a full-strength copy of the same name is under the cursor the entire
+ * time — which is why \`layers.ts\` waits a frame before adding this class, so
+ * the snapshot is taken before the fade. What the row left behind costs, at
+ * 0.6: a plain name is 4.10:1 dark and 3.15:1 light, a component name 3.83:1
+ * and 2.99:1, and a hidden component row — the compound this file already calls
+ * its binding case — 3.18:1 and 2.48:1. The conventional drag-ghost 0.5 takes
+ * the plain name to 3.31:1 and 2.51:1, for a step the 2% shrink is already
+ * carrying half of.
+ */
+.de-layer--dragging {
+  opacity: 0.6;
+  transform: scale(0.98);
+  transition: opacity ${t.duration.snap} ${t.ease}, transform ${t.duration.snap} ${t.ease};
+}
+/*
+ * The drop line rides the boundary between two rows, so it is placed by the
+ * panel and only coloured here. Accent, never the pink canvas guide: this is a
+ * commit target in the tree, not a measurement on the page.
+ *
+ * It travels on \`transform\` and sits at \`top: 0\` for good, where the panel
+ * used to write an absolute \`top\` per gap. Two reasons, and the second is the
+ * one that decides it: \`top\` is a layout property, so every gap the pointer
+ * crossed re-laid out a box inside a list that can be hundreds of rows deep;
+ * and a property that lays out cannot be followed with a transition without
+ * paying that cost every frame of it, so the line could only ever teleport
+ * between candidate gaps. A composited move can be followed, and \`snap\` is what
+ * follows it — the next gap is one row away, so the eye needs to be told which
+ * way the line went, not shown a journey.
+ *
+ * The APPEARANCE stays instant, and it stays instant for free: the panel hides
+ * the line with \`display: none\`, and an element that was not being rendered has
+ * no before-change style to transition from, so the first placement of a drag
+ * lands where it was put instead of sliding in from wherever the last drag
+ * finished. The same rule is why a line that blanks over an invalid gap and
+ * returns three rows away arrives rather than travels, which is the honest
+ * reading — that is a new answer, not the old one moving.
+ *
+ * Only the vertical is animated, and the horizontal does not need it: every gap
+ * a drag can offer belongs to the same parent as the row being dragged, so all
+ * of them are at one depth and the inset the panel writes never changes inside
+ * a drag.
+ */
 .de-layer-drop {
-  position: absolute; right: 4px; height: 2px;
+  position: absolute; top: 0; right: 4px; height: 2px;
   background: ${t.color.accent};
   border-radius: ${t.radius.sm};
   pointer-events: none;
+  transition: transform ${t.duration.snap} ${t.ease};
 }
 
 /*
@@ -352,7 +487,7 @@ export const layersCss = `/* ---------- layers ---------- */
   color: ${t.color.textMuted};
   font: inherit; text-align: left;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  cursor: default;
+  cursor: pointer;
 }
 /* \`selectionSurface\` is kept here for a reason worth writing down, because the
    obvious move after the palette retune is to reach for \`accentSoft\` — the one

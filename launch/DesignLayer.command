@@ -15,9 +15,8 @@
 # ---------------------------------------------------------------------------
 # Settings, and why none of them is written into this file.
 #
-# This script used to hardcode one person's dev host, the jump-host helper their
-# employer ships, and the path their checkout happens to live at. That makes it
-# a script exactly one machine can run, and it puts an internal hostname in a
+# A hardcoded host, checkout path or ProxyCommand would make this a script
+# exactly one machine can run, and would put somebody's private hostname in a
 # public repository — so the three facts that differ per person are read from
 # the environment instead, and the only one with no sensible default is refused
 # rather than guessed.

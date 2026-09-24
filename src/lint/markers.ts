@@ -601,6 +601,12 @@ export function installLintMarkers(context: EditorContext): void {
      * than about the stylesheet behind it. `Info` says "there is something to
      * read here", which is what a badge over someone else's page can honestly
      * claim. See the report for the request to add a real alert glyph.
+     *
+     * `Info` and NOT the ringless `InfoMark` the two help dots moved to. That
+     * one exists because a 14px disc was already drawing the circle for it;
+     * this plate is a rounded SQUARE keyed by severity, so the ring is the only
+     * circle in the mark, and dropping it would leave a bare `i` on a red
+     * square — a letter to decode rather than a notice.
      */
     badge.append(icon("Info", tokens.icon.row))
 

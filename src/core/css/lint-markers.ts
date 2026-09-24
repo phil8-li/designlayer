@@ -98,9 +98,16 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
  * severity: the plate sits on product pixels of an unknown colour, and a band
  * of the chrome's own ground is what separates it from them whatever they are.
  *
- * The glyph is \`onAccent\`, the role for ink on a filled chrome surface, in both
- * themes — the plate's fill is a severity and does not flip with the theme, so
- * neither may its ink.
+ * The glyph is \`onSemantic\`, the ink for a fill that carries a MEANING rather
+ * than the accent. It flips with the theme, and so must it: the severity hues
+ * are pale in dark and deep in light, precisely so each reads as ink on its own
+ * ground, so an ink that stayed put would be wrong on one of the two.
+ *
+ * This said \`onAccent\` and argued the opposite — "the plate's fill is a
+ * severity and does not flip with the theme, so neither may its ink." The
+ * premise was already false when it was written, and the conclusion put a white
+ * glyph on an amber plate at 1.78:1. \`onSemantic\` is 9.75:1 there. See the
+ * role's note in \`tokens.ts\` for the table.
  */
 .de-lint-marker {
   position: absolute;
@@ -108,7 +115,7 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0;
   border: 1px solid ${t.color.bg};
-  color: ${t.color.onAccent};
+  color: ${t.color.onSemantic};
   box-shadow: ${t.shadow.marker};
   cursor: pointer;
   user-select: none;
@@ -116,7 +123,12 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
   /* Split for the reason the pin's is split: colour eases slower than
      geometry, so a plate that is both recolouring and growing finishes its
      move before its hue and never looks like it is lagging the pointer. */
-  transition: background-color 150ms ${t.ease}, transform 100ms ${t.ease},
+  /* On the ramp, where two of these three were literals. 150 and 100 were
+     agentation's numbers, copied in when the plates were built to match its
+     toolbar; \`base\` and \`snap\` are the rungs either side of them and land the
+     pair back in the chrome's own vocabulary. The SPLIT survives — colour still
+     eases slower than geometry, for the reason above. */
+  transition: background-color ${t.duration.base} ${t.ease}, transform ${t.duration.snap} ${t.ease},
     box-shadow ${t.duration.fast} ${t.ease};
 }
 .de-lint-marker svg { width: ${GLYPH}px; height: ${GLYPH}px; }
@@ -169,7 +181,13 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
   opacity: 0.55;
 }
 
-.de-lint-marker:hover { transform: scale(1.1); }
+/* Behind \`hover: hover\` for the reason its twin in \`css/annotations.ts\` sets
+   out at length: this badge is painted over the app being reviewed, and a badge
+   stuck at 110% after a tap reads as a fault in that app rather than in the
+   editor. The tint rules around it are deliberately not wrapped. */
+@media (hover: hover) {
+  .de-lint-marker:hover { transform: scale(1.1); }
+}
 /*
  * The two-tone ring, copied deliberately from \`.de-ann-marker:focus-visible\`.
  *

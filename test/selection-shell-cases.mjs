@@ -81,7 +81,7 @@ const bundled = await build({
       export { installSelectionFrame } from "./src/canvas/selection"
       export { installToolbar } from "./src/shell/toolbar"
       export { installShortcuts } from "./src/shell/shortcuts"
-      export { controlRow, installOptionsBrowser, openOptionsBrowser } from "./src/options/inventory-panel"
+      export { controlRow } from "./src/panels/controls"
       export { shellCss } from "./src/core/css"
       export { mountShell } from "./src/shell/shell"
       export { editorOwnsInput, setState } from "./src/core/store"
@@ -194,17 +194,53 @@ await check("the shell keeps its quiet, motionless chrome", () => {
   assert.match(editorModule.shellCss, /bottom:/)
   assert.doesNotMatch(editorModule.shellCss, /transition: padding/)
   assert.doesNotMatch(editorModule.shellCss, /de-outline--scope/)
-  assert.match(
-    editorModule.shellCss,
-    /\.de-outline\s*\{[^}]*transition: none;[^}]*animation: none;/s
+  /*
+   * MOTIONLESS means the outline never animates its GEOMETRY, not that it
+   * never transitions at all. The frame loop writes `transform` on this node
+   * every frame to track the target; a transition on any box property would
+   * make the outline chase the element a frame behind it, which is the bug
+   * this case was written to catch. A fade on `opacity` is the one transition
+   * that cannot cause it, and `css/canvas.ts` deliberately has one so a
+   * selection does not blink in and out. So assert the ban, not the absence.
+   */
+  const outlineRule = /\.de-outline\s*\{([^}]*)\}/s.exec(editorModule.shellCss)
+  assert.ok(outlineRule, ".de-outline rule is missing from the shell stylesheet")
+  assert.match(outlineRule[1], /animation: none;/)
+  const outlineTransition = /transition:([^;]*);/s.exec(outlineRule[1])
+  assert.ok(outlineTransition, ".de-outline must declare a transition, even if it is none")
+  assert.doesNotMatch(
+    outlineTransition[1],
+    /\b(all|transform|translate|scale|width|height|top|left|right|bottom|inset|margin|padding|border-width)\b/
   )
   assert.match(editorModule.shellCss, /\.de-outline--hover\s*\{[^}]*opacity: 1;/s)
   assert.doesNotMatch(editorModule.shellCss, /\.de-outline--hover\s*\{[^}]*opacity: 0\.48;/s)
-  assert.match(
-    editorModule.shellCss,
-    /\.de-handle\s*\{[^}]*border-radius: 0;[^}]*transition: none;[^}]*animation: none;/s
+  /*
+   * The handle is the other half of the same rule, with one property moved
+   * across the line. The frame loop places the 13px HIT BOX, not this node, so
+   * `transform` here is the handle's own and safe to transition — it is how the
+   * hover grows the mark. Its box properties are still the painter's.
+   */
+  const handleRule = /\.de-handle\s*\{([^}]*)\}/s.exec(editorModule.shellCss)
+  assert.ok(handleRule, ".de-handle rule is missing from the shell stylesheet")
+  assert.match(handleRule[1], /border-radius: 0;/)
+  assert.match(handleRule[1], /animation: none;/)
+  const handleTransition = /transition:([^;]*);/s.exec(handleRule[1])
+  assert.ok(handleTransition, ".de-handle must declare a transition, even if it is none")
+  assert.doesNotMatch(
+    handleTransition[1],
+    /\b(all|width|height|top|left|right|bottom|inset|margin|padding)\b/
   )
-  assert.match(editorModule.shellCss, /\.de-layer\s*\{[^}]*transition: none;[^}]*animation: none;/s)
+  /*
+   * `.de-layer` is a panel row, not canvas chrome. No frame loop writes it, so
+   * the geometry ban does not apply and it fades its tint like every other
+   * high-frequency control — see the note on the rule in `css/layers.ts`. What
+   * it still may not do is animate its own box inside a scrolling list.
+   */
+  const layerRule = /\.de-layer\s*\{([^}]*)\}/s.exec(editorModule.shellCss)
+  assert.ok(layerRule, ".de-layer rule is missing from the shell stylesheet")
+  const layerTransition = /transition:([^;]*);/s.exec(layerRule[1])
+  assert.ok(layerTransition, ".de-layer must declare a transition, even if it is none")
+  assert.doesNotMatch(layerTransition[1], /\b(all|width|height|margin|padding)\b/)
 })
 
 editorModule.installSelectionFrame(context)
@@ -242,6 +278,62 @@ await check("a selection takes the outline over and brings the handles", async (
   assert.ok(selectionHandles.every((handle) => handle.style.display === "block"))
 })
 
+/*
+ * TWO HIT BOXES MAY NOT SHARE A PIXEL, and an axis shorter than one box is
+ * where that stops being automatic.
+ *
+ * The handles read as 7px and grab at 13, centred on the edges — so on an
+ * element narrower than 13 the left and right corners overlap, and both are
+ * live. That is the one clause of the hit-area rule with no user workaround: a
+ * target that is too small can be zoomed into or aimed at twice, and two
+ * targets on the same pixel can only be resolved by whichever the hit test
+ * happens to reach first.
+ *
+ * Asserted as a GEOMETRY test rather than by counting hidden nodes, because the
+ * count is the remedy and the overlap is the defect — a later change that keeps
+ * eight handles and separates them another way should pass this.
+ */
+const HIT = 13
+const boxesOf = () =>
+  selectionHandles
+    .filter((handle) => handle.style.display !== "none")
+    .map((handle) => {
+      const [x, y] = handle.style.transform.match(/-?[\d.]+/g).map(Number)
+      return { id: handle.dataset.handle, left: x - HIT / 2, top: y - HIT / 2 }
+    })
+const overlaps = (a, b) =>
+  Math.abs(a.left - b.left) < HIT && Math.abs(a.top - b.top) < HIT
+
+await check("no two resize handles ever share a pixel, however thin the element", async () => {
+  for (const [w, h] of [
+    [100, 60],
+    [10, 60],
+    [100, 9],
+    [8, 8],
+    [23, 23],
+    [13, 13],
+  ]) {
+    selectedTarget.getBoundingClientRect = () => new window.DOMRect(20, 30, w, h)
+    context.select(null)
+    await nextPaint()
+    context.select(selectedTarget)
+    await nextPaint()
+    const boxes = boxesOf()
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        assert.ok(
+          !overlaps(boxes[i], boxes[j]),
+          `at ${w}x${h} the ${boxes[i].id} and ${boxes[j].id} hit boxes overlap`
+        )
+      }
+    }
+    // And the sliver is still resizable — suppressing the crowd must not
+    // suppress the whole set, which would make a thin element un-resizable.
+    assert.ok(boxes.length > 0, `at ${w}x${h} every handle was suppressed`)
+  }
+})
+
+selectedTarget.getBoundingClientRect = () => new window.DOMRect(20, 30, 100, 60)
 context.select(null)
 context.setState({ hovered: null })
 selectedTarget.remove()
@@ -295,23 +387,23 @@ await check("a disabled control disables every input it draws", () => {
   assert.equal(disabledNumber.querySelector(".de-opt-input").disabled, true)
 })
 
-// Called directly rather than announced on `window`. The event wire is gone:
-// its listener only existed once the browser had been mounted, and the browser
-// mounts lazily, so on a cold load the announcement went nowhere.
-await check("opening the options browser focuses its filter and returns focus on close", () => {
-  const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
-  const returnTarget = window.document.createElement("button")
-  window.document.body.append(returnTarget)
-  returnTarget.focus()
-  editorModule.openOptionsBrowser(context)
-  const optionsPanel = window.document.querySelector(".de-opt-window")
-  assert.equal(optionsPanel.hidden, false)
-  assert.equal(window.document.activeElement?.className, "de-opt-filter")
-  window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
-  assert.equal(optionsPanel.hidden, true)
-  assert.equal(window.document.activeElement, returnTarget)
-  globalThis.fetch = originalFetch
+/*
+ * This used to open a floating options window, assert it took focus, and assert
+ * Escape gave the focus back. There is no window: the controls it held are a
+ * docked pane in the left panel now, reached by a tab, and a pane in a tab
+ * strip has no dismissal to return focus from.
+ *
+ * What survives as a claim about the SHELL is the deletion itself. The window
+ * was a `document.body` root with a window-capture Escape listener on it, which
+ * is the one thing a surface outside the panels can do to every other surface
+ * in the chrome: absorb a key press before the shortcut layer ever sees it. The
+ * focus behaviour of the pane belongs to the pane, and `options-cases.mjs`
+ * drives it there.
+ */
+await check("the chrome mounts no options surface over the app to swallow keys", () => {
+  assert.equal(window.document.querySelector(".de-opt-window"), null)
+  assert.equal(window.document.querySelector(".de-options-root"), null)
+  assert.equal(window.document.querySelector('[data-designlayer] [role="dialog"]'), null)
 })
 
 /*
@@ -360,6 +452,49 @@ await check("interactive mode hands the gesture to the app, and only then", () =
   editorModule.setState({ interactive: false })
   press()
   assert.equal(reached, 1, "the app stayed reachable after the mode was switched back off")
+})
+
+/*
+ * Text typed into the chrome cannot be dragged out of it.
+ *
+ * The browser makes a selection inside an `input` or a `textarea` draggable,
+ * and in a tool floating over somebody else's page that default does two bad
+ * things at once. A same-window text drag is a MOVE, so dragging the words out
+ * of a half-written note deletes them from the field; and the drop lands on the
+ * APP, which for a prototype with a `contenteditable` in it is an edit nobody
+ * made, on the page the note was about.
+ *
+ * Reported against the note composer and fixed for every field in the chrome,
+ * since all of them drop onto the same app. The second and third assertions are
+ * the ones that keep the fix honest: the Layers panel reorders by dragging whole
+ * ROWS, and the app is allowed its own drag-and-drop.
+ */
+await check("a note cannot be dragged out of the field it was typed into", () => {
+  const field = window.document.createElement("textarea")
+  field.value = "the helper text loses its last word"
+  shell.root.append(field)
+
+  const row = window.document.createElement("div")
+  row.draggable = true
+  shell.root.append(row)
+
+  const appNode = window.document.createElement("div")
+  appNode.draggable = true
+  window.document.body.append(appNode)
+
+  const drag = (node) => {
+    const event = new window.Event("dragstart", { bubbles: true, cancelable: true })
+    node.dispatchEvent(event)
+    return event.defaultPrevented
+  }
+
+  assert.equal(drag(field), true, "a selection can still be dragged out of a field in the chrome")
+  assert.equal(drag(row), false, "the guard took the Layers panel's row drag with it")
+  assert.equal(drag(appNode), false, "the guard reached into the app's own drag-and-drop")
+
+  field.remove()
+  row.remove()
+  appNode.remove()
 })
 
 /*
@@ -521,9 +656,24 @@ await check("hidden chrome hands the pointer back, exactly as interactive mode d
  * PREFIX of the hollow `d` and the two share an outer boundary by construction
  * rather than by agreement. That is what is asserted below.
  */
+/*
+ * The mode switch keeps BOTH weights mounted and crossfades between them
+ * (`core/swap-mark.ts`), so `querySelector("svg")` on it always finds the
+ * resting outline whatever state it is in. What this case is about is the mark
+ * the user can see, so it asks for that one — the same reading the stylesheet
+ * makes, off the `de-swap--done` class.
+ */
+const shownIn = (button) => {
+  const swap = button.querySelector(".de-swap")
+  if (!swap) return button.querySelector("svg")
+  return swap.querySelector(
+    swap.classList.contains("de-swap--done") ? ".de-swap-done" : ".de-swap-rest"
+  )
+}
+
 await check("the launcher and the mode switch wear the same pointer", () => {
   editorModule.setState({ interactive: false, chromeHidden: false })
-  const modeGlyph = context.slots.toolbar.querySelector(".de-button--mode svg")
+  const modeGlyph = shownIn(context.slots.toolbar.querySelector(".de-button--mode"))
   const launcherGlyph = launcher().querySelector("svg")
   assert.ok(modeGlyph && launcherGlyph, "one of the two draws no glyph")
   const shapes = (svg) =>
@@ -540,7 +690,7 @@ await check("the launcher and the mode switch wear the same pointer", () => {
 
   // Handing the pointer back hollows the switch — same mark, no fill.
   editorModule.setState({ interactive: true })
-  const handedBack = context.slots.toolbar.querySelector(".de-button--mode svg")
+  const handedBack = shownIn(context.slots.toolbar.querySelector(".de-button--mode"))
   assert.equal(
     handedBack.getAttribute("fill"),
     "none",
@@ -760,7 +910,8 @@ await check("a launcher dragged past the edge stops dead at it, under the hand",
   // The disc used to clamp against `--de-left`/`--de-right` like the bar does,
   // which put its right-hand bound on the inspector's inner edge — see the case
   // below, where that cost a saved corner 282px.
-  const corner = { x: window.innerWidth - 44 - 32, y: window.innerHeight - 44 - 32 }
+  // 40 is the disc's size, which is the toolbar's height — see `css/launcher.ts`.
+  const corner = { x: window.innerWidth - 40 - 32, y: window.innerHeight - 40 - 32 }
   point("pointerdown", 0, 0)
   point("pointermove", 9000, 9000)
   // The paint is batched into an animation frame, so the drag is read one
@@ -1045,7 +1196,7 @@ await check("the disc is parked against the viewport, whatever the panels are do
   const html = window.document.documentElement
   const fab = launcher()
   const EDGE = 32
-  const SIZE = 44
+  const SIZE = 40
 
   // Park it in the far corner, past the edge so the clamp is what puts it there.
   const point = (type, x, y) =>

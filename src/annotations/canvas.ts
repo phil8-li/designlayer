@@ -19,6 +19,7 @@
 import { clamp, el, isCanvasElement, isChrome } from "../core/dom"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
+import { arriveFrom, prefersReducedMotion } from "../core/motion"
 import { editorOwnsInput } from "../core/store"
 import type { EditorContext } from "../core/context"
 import {
@@ -86,6 +87,19 @@ const EDIT_EVENT = "designlayer:annotation-edit"
 
 /** The pin the panel is pointing at. The look belongs to `css/annotations`. */
 const MARKER_ACTIVE = "de-ann-marker--active"
+/**
+ * A pin that has just been placed, for the length of its arrival.
+ *
+ * Saving a note used to reveal a pooled node with `display: block`, which is
+ * not something the browser can animate and is the one moment in this layer
+ * that is genuinely an OBJECT landing on a surface rather than a value
+ * changing. The class is added for the note's first paint and taken off once
+ * the animation has run; `css/annotations.ts` owns the rest.
+ */
+const MARKER_ARRIVING = "de-ann-marker--arriving"
+/** Read off the ramp rather than restated, so the class and the timer agree. */
+const ARRIVE_MS = (): number =>
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
 
 /** A viewport-space box: what a gesture produced and what the composer anchors to. */
 interface Box {
@@ -128,6 +142,24 @@ export function installAnnotations(context: EditorContext): void {
   let hovered: Element | null = null
 
   /**
+   * Whether the mode's transient surfaces are currently on screen.
+   *
+   * Not the same question as "is the mode on", and the gap is the bug it was
+   * added for. The mode is a switch the designer threw; this is whether the
+   * editor is in a position to honour it. Collapsing the editor answers the
+   * second one NO while leaving the first one YES, and before this existed the
+   * hover outline stayed painted over the app — an accent frame around whatever
+   * the pointer happened to be over when the chrome went down, with no editor on
+   * screen to explain it and no gesture left that could clear it.
+   *
+   * Held as a flag rather than recomputed, because `enter` and `leave` are not
+   * idempotent — `enter` would append a second hint bar and `leave` would
+   * discard a composer that is already gone — so the transition has to be
+   * detected, not the state.
+   */
+  let showing = false
+
+  /**
    * The note the PANEL says its pointer is on, held as an id rather than as a
    * node.
    *
@@ -138,6 +170,8 @@ export function installAnnotations(context: EditorContext): void {
    * note, which is the only thing the panel named.
    */
   let activeNote: string | null = null
+  /** Which notes have already had their pin arrive — see `MARKER_ARRIVING`. */
+  const announced = new Set<string>()
 
   /**
    * The note whose pin we last told the panel about, so the mirror is only
@@ -160,18 +194,39 @@ export function installAnnotations(context: EditorContext): void {
   const annotating = (): boolean => context.getState().annotating
 
   /**
-   * The topmost element of the APP under a point.
+   * Whether a node may be the subject of a note, under the scope now active.
+   *
+   * One question asked in five places, because the alternative — `isChrome`
+   * spelled out at each gesture — is what made "annotate the editor itself"
+   * look like a five-way change rather than a one-way one. Every caller wants
+   * the same answer and none of them wants to know how the scope is stored.
+   *
+   * `layer.contains` is the guard against infinite regress, and it is the part
+   * that CANNOT be dropped. In app scope `isCanvasElement` already rejected
+   * everything this module draws, because `el()` marks it `data-designlayer`;
+   * in editor scope that rejection is precisely what is being turned off, so
+   * the lane's own pins, composer and drag rect would become annotatable and
+   * the first note filed would be a note about a note. Excluding this one
+   * container is narrower, and it survives the flip.
+   */
+  const targetable = (node: EventTarget | null): node is Element => {
+    if (!(node instanceof Element)) return false
+    if (layer.contains(node)) return false
+    return annotationSettings().scope === "editor" ? isChrome(node) : isCanvasElement(node)
+  }
+
+  /**
+   * The topmost targetable element under a point.
    *
    * `elementsFromPoint` rather than `elementFromPoint` because our own pins,
    * the composer and the live drag rect all sit over the page: the first hit is
-   * regularly chrome, and `isCanvasElement` rejects it along with `html` and
-   * `body`. That rejection is also the guard against the infinite regress —
-   * every node this module creates goes through `el()`, which marks it
-   * `data-designlayer`, so a pin can never become the target of a note.
+   * regularly one of ours, and `targetable` walks past it to whatever is really
+   * being pointed at — the app in app scope, the editor's chrome in editor
+   * scope.
    */
   const elementAt = (x: number, y: number): Element | null => {
     for (const node of document.elementsFromPoint(x, y)) {
-      if (isCanvasElement(node)) return node
+      if (targetable(node)) return node
     }
     return null
   }
@@ -216,8 +271,11 @@ export function installAnnotations(context: EditorContext): void {
    */
   const swallow = (event: Event): void => {
     if (!annotating() || !editorOwnsInput()) return
-    if (isChrome(event.target)) return
-    if (!annotationSettings().blockPageInteractions) return
+    if (!targetable(event.target)) return
+    // Editor scope always swallows. The whole gesture is aimed at the editor's
+    // own controls, so letting the click through would switch the tab you were
+    // trying to annotate, and leave a note about the tab you landed on.
+    if (annotationSettings().scope === "app" && !annotationSettings().blockPageInteractions) return
     event.preventDefault()
     event.stopPropagation()
   }
@@ -259,10 +317,32 @@ export function installAnnotations(context: EditorContext): void {
     const max = Math.max(min, edges.right - box.width - EDGE)
     node.style.left = `${clamp(anchor.left, min, max)}px`
     const below = anchor.top + anchor.height + GAP
-    node.style.top =
-      below + box.height + EDGE <= window.innerHeight
-        ? `${below}px`
-        : `${Math.max(EDGE, anchor.top - GAP - box.height)}px`
+    const fits = below + box.height + EDGE <= window.innerHeight
+    node.style.top = fits ? `${below}px` : `${Math.max(EDGE, anchor.top - GAP - box.height)}px`
+    // Aim the entrance at the pin. A composer pushed above its anchor — which
+    // is every note taken on the lower half of a page — used to grow out of its
+    // top edge and drift downward, away from the thing it is attached to.
+    arriveFrom(node, fits ? "below" : "above")
+  }
+
+  /**
+   * Hold an already-placed card inside the window after it has changed height.
+   *
+   * `place` runs once, on open, and the card it measured is not the card that
+   * exists ten words later: the field grows with the note. Without this, a note
+   * started near the foot of the page pushes its own Save button under the edge
+   * of the window as it is typed — which is what the textarea's resize grip
+   * used to do in one drag, and the reason the grip is gone.
+   *
+   * Only the top moves. The left edge was clamped against the docked panels,
+   * and sliding it sideways mid-sentence would be the card wandering away from
+   * the pin it names.
+   */
+  const settle = (node: HTMLElement): void => {
+    const box = node.getBoundingClientRect()
+    const top = clamp(box.top, EDGE, Math.max(EDGE, window.innerHeight - EDGE - box.height))
+    if (Math.abs(top - box.top) < 0.5) return
+    node.style.top = `${top}px`
   }
 
   const openComposer = (anchor: Box, initial: string, commit: (comment: string) => void): void => {
@@ -277,6 +357,29 @@ export function installAnnotations(context: EditorContext): void {
       rows: 3,
     })
     text.value = initial
+
+    /**
+     * The field follows the note, instead of being dragged to fit it.
+     *
+     * `css/annotations.ts` sets `resize: none` and a `max-height`; this is the
+     * other half of that decision. Height is measured from the content — the
+     * box is collapsed to `auto` first, because a field that has already grown
+     * reports its own height as `scrollHeight` and would never come back down
+     * when the note is cut back to one line. Past the ceiling the stylesheet
+     * caps the box and the field scrolls, so this can never place the actions
+     * out of reach the way the grip could.
+     *
+     * A field that reports no layout at all — jsdom, or a card mounted while
+     * hidden — is left at its stylesheet height rather than pinned to 0px.
+     */
+    const grow = (): void => {
+      text.style.height = "auto"
+      const content = text.scrollHeight
+      if (!content) return
+      // `box-sizing: border-box` in the chrome's reset, so the height we set
+      // has to carry the borders that `scrollHeight` leaves out.
+      text.style.height = `${content + text.offsetHeight - text.clientHeight}px`
+    }
 
     const close = (): void => {
       window.removeEventListener("keydown", onKey, true)
@@ -317,7 +420,12 @@ export function installAnnotations(context: EditorContext): void {
       save()
     })
 
-    composer = el(
+    text.addEventListener("input", () => {
+      grow()
+      if (card) settle(card)
+    })
+
+    const card = el(
       "div",
       {
         class: "de-ann-composer",
@@ -339,8 +447,12 @@ export function installAnnotations(context: EditorContext): void {
       ]
     )
 
-    layer.append(composer)
-    place(composer, anchor)
+    composer = card
+    layer.append(card)
+    // Sized before it is placed, so a note being re-opened for editing is
+    // measured at the height its text needs rather than at the empty one.
+    grow()
+    place(card, anchor)
     window.addEventListener("keydown", onKey, true)
     dismiss = close
     text.focus()
@@ -491,9 +603,18 @@ export function installAnnotations(context: EditorContext): void {
       // A selector the page can no longer parse is a miss, not a crash.
       found = null
     }
-    // Never re-attach to the editor's own chrome: a marker that anchored itself
-    // to a panel would follow the panel around and annotate the annotator.
-    note.element = found && isCanvasElement(found) ? found : null
+    // Re-attach only to something the CURRENT scope would let you annotate.
+    //
+    // The rule used to be "never the editor's own chrome", on the grounds that
+    // a marker anchored to a panel would follow the panel around and annotate
+    // the annotator. That is still exactly right in app scope, and `targetable`
+    // still says so — it also keeps rejecting this lane's own layer, which is
+    // the half of that reasoning that must never lapse.
+    //
+    // In editor scope a panel is the legitimate subject, so a note about one
+    // re-finds it after a reload instead of falling back to its captured box
+    // and drifting the moment the panel is resized.
+    note.element = targetable(found) ? found : null
     return note.element
   }
 
@@ -527,8 +648,10 @@ export function installAnnotations(context: EditorContext): void {
     const shown = notePinsVisible() && editorOwnsInput()
 
     const points = shown ? notes.map(markerPoint) : []
-    const hoverRect =
-      annotating() && hovered?.isConnected ? hovered.getBoundingClientRect() : null
+    // `showing` and not `annotating()`, for the same reason `shown` above is not
+    // just the hide setting: a mode whose surfaces have stood down must not have
+    // one of them painted back in by the next frame of a scroll.
+    const hoverRect = showing && hovered?.isConnected ? hovered.getBoundingClientRect() : null
 
     /*
      * On the DOCUMENT, not on the layer.
@@ -572,6 +695,22 @@ export function installAnnotations(context: EditorContext): void {
       const note = notes[index]
       const label = String(index + 1)
       onScreen.add(note.id)
+      /*
+       * The pop fires once per NOTE, not once per reveal.
+       *
+       * The obvious trigger — this pooled node going from hidden to shown — is
+       * wrong twice over: the pool reassigns nodes between notes as the list
+       * changes, and a pin scrolled off the bottom and back re-enters through
+       * exactly the same path. Either would pop a pin that has been there all
+       * along. Keying off the note id instead means the arrival belongs to the
+       * note, which is the thing that actually arrived.
+       */
+      if (!announced.has(note.id)) {
+        announced.add(note.id)
+        marker.classList.add(MARKER_ARRIVING)
+        const arriving = marker
+        setTimeout(() => arriving.classList.remove(MARKER_ARRIVING), ARRIVE_MS())
+      }
       marker.style.display = "block"
       marker.style.left = `${point.left}px`
       marker.style.top = `${point.top}px`
@@ -601,6 +740,15 @@ export function installAnnotations(context: EditorContext): void {
     // the pointer is still on must light up again when it scrolls back, so the
     // id survives; what it must never survive is the note itself going away.
     if (activeNote && !annotations().some((note) => note.id === activeNote)) activeNote = null
+    /*
+     * Forget notes that no longer exist, so a deleted-then-undone note arrives
+     * again rather than reappearing fully formed. Pruned against the live list
+     * rather than against `onScreen`, which is only what is in the viewport.
+     */
+    if (announced.size > 0) {
+      const live = new Set(annotations().map((note) => note.id))
+      for (const id of announced) if (!live.has(id)) announced.delete(id)
+    }
     // The mirror is the opposite case and answers to the pointer: a pin that
     // is no longer painted is a pin the pointer is no longer on, whatever the
     // browser did or did not send us on the way out.
@@ -658,6 +806,7 @@ export function installAnnotations(context: EditorContext): void {
   // ---------- mode surfaces ----------
 
   const enter = (): void => {
+    showing = true
     if (!hint) {
       hint = el("div", { class: "de-ann-hint", role: "status" }, [
         icon("MessageSquare", tokens.icon.control),
@@ -682,8 +831,14 @@ export function installAnnotations(context: EditorContext): void {
    * with the mode off, while the hint bar, the hover outline and a half-typed
    * composer are all statements that the next click will annotate something —
    * and once it will not, each of them is a lie on the screen.
+   *
+   * The hovered element is cleared with them, and it has to be: it is the state
+   * the outline is drawn FROM, so a stand-down that dropped the node and kept
+   * the element would repaint the frame the moment the editor came back, around
+   * whatever the pointer had been over a minute ago rather than where it is now.
    */
   const leave = (): void => {
+    showing = false
     dismiss()
     hint?.remove()
     hint = null
@@ -697,12 +852,30 @@ export function installAnnotations(context: EditorContext): void {
     started = null
   }
 
+  /**
+   * Put the mode's surfaces where the CURRENT state says they belong.
+   *
+   * The two inputs are the mode and whether the editor is standing over the page
+   * at all, and they are separate facts: `editorOwnsInput()` goes false when the
+   * chrome is collapsed or handed to the app, while `annotating` stays exactly
+   * as the designer left it. Reconciling both here — rather than off the
+   * `annotating` flip alone, which is all this used to watch — is what makes
+   * collapsing the editor take the hover outline and the hint bar with it, and
+   * what puts them back, still in the mode, when it is opened again.
+   */
+  const syncSurfaces = (): void => {
+    const wanted = annotating() && editorOwnsInput()
+    if (wanted === showing) return
+    if (wanted) enter()
+    else leave()
+  }
+
   // ---------- gestures ----------
 
   const onPointerDown = (event: PointerEvent): void => {
     if (!annotating() || !editorOwnsInput()) return
     if (event.button !== 0) return
-    if (isChrome(event.target)) return
+    if (!targetable(event.target)) return
 
     originX = event.clientX
     originY = event.clientY
@@ -742,7 +915,7 @@ export function installAnnotations(context: EditorContext): void {
       return
     }
 
-    const next = isChrome(event.target) ? null : elementAt(event.clientX, event.clientY)
+    const next = targetable(event.target) ? elementAt(event.clientX, event.clientY) : null
     if (next === hovered) return
     hovered = next
     schedule()
@@ -810,14 +983,14 @@ export function installAnnotations(context: EditorContext): void {
     const element = node instanceof Element ? node : node.parentElement
     // A selection inside our own panels is someone copying a class name out of
     // the inspector, not a note about the page.
-    if (!element || isChrome(element)) return null
+    if (!element || !targetable(element)) return null
 
     const rect = range.getBoundingClientRect()
     if (rect.width <= 0 && rect.height <= 0) return null
     return {
       kind: "text",
       box: boxOf(rect),
-      element: isCanvasElement(element) ? element : null,
+      element: targetable(element) ? element : null,
       selectedText,
     }
   }
@@ -885,34 +1058,38 @@ export function installAnnotations(context: EditorContext): void {
   const stopSettings = onSettingsChange(schedule)
   const stopLayer = onMarkerLayerChange(schedule)
   const unsubscribe = context.subscribe((next, previous) => {
-    if (next.annotating !== previous.annotating) {
-      if (next.annotating) {
-        /*
-         * Entering the mode claims the marker layer back for the notes.
-         *
-         * Not tidiness — it is the only thing that makes the mode honest while
-         * an audit is on screen. The gesture that follows pins a note, the note
-         * is drawn as a pin, and the pin is on the layer the audit badges are
-         * currently occupying: without this the user clicks, types, saves, and
-         * nothing appears on the page. They have written a note they cannot
-         * see, and every reasonable reading of that is "the editor lost it".
-         *
-         * Done here rather than in `addAnnotation` because the decision belongs
-         * to the MODE, not to the record: the hint bar and the hover outline
-         * already promise that the next click will leave a mark, and the promise
-         * is made on entry, not on save.
-         */
-        setMarkerLayer("notes")
-        enter()
-      } else leave()
-    }
     if (
-      next.annotating !== previous.annotating ||
-      next.interactive !== previous.interactive ||
-      next.chromeHidden !== previous.chromeHidden
+      next.annotating === previous.annotating &&
+      next.interactive === previous.interactive &&
+      next.chromeHidden === previous.chromeHidden
     ) {
-      schedule()
+      return
     }
+    if (next.annotating && !previous.annotating) {
+      /*
+       * Entering the mode claims the marker layer back for the notes.
+       *
+       * Not tidiness — it is the only thing that makes the mode honest while
+       * an audit is on screen. The gesture that follows pins a note, the note
+       * is drawn as a pin, and the pin is on the layer the audit badges are
+       * currently occupying: without this the user clicks, types, saves, and
+       * nothing appears on the page. They have written a note they cannot
+       * see, and every reasonable reading of that is "the editor lost it".
+       *
+       * Done here rather than in `addAnnotation` because the decision belongs
+       * to the MODE, not to the record: the hint bar and the hover outline
+       * already promise that the next click will leave a mark, and the promise
+       * is made on entry, not on save.
+       *
+       * Keyed to the MODE being switched on and not to `syncSurfaces` below,
+       * which also runs when the editor is merely opened again: coming back
+       * from a collapse is not a moment to take the layer off an audit that
+       * claimed it in the meantime.
+       */
+      setMarkerLayer("notes")
+    }
+    syncSurfaces()
+    schedule()
   })
 
   function teardown(): void {

@@ -15,6 +15,10 @@ import { icon, type IconName } from "../core/icons"
 import { isDeepSelect } from "../core/keymap"
 import { getResolver } from "../core/resolve"
 import { elementKey } from "../core/store"
+// The tree shows a count of saved styles per row — see `savedKeys`. This is the
+// only thing the layers panel takes from the options subsystem, and it takes a
+// reader rather than a verb: acting on a saved style is the right panel's job.
+import { visibleOptions } from "../options/store"
 import { createWriter } from "../core/writer"
 import type { EditorContext } from "../core/context"
 import type { LayerElement, Selection } from "../core/types"
@@ -76,8 +80,77 @@ export function installLayersPanel(context: EditorContext): void {
   const tree = el("div", { class: "de-layers-tree", role: "tree", "aria-label": "Layers" })
   const indicator = el("div", { class: "de-layer-drop", "aria-hidden": "true", style: "display:none" })
   const header = el("div", { class: "de-section-header" }, ["Layers"])
+
+  /**
+   * The way out of a filter that matched nothing, offered where the miss is.
+   *
+   * The sentence used to name no control at all, which on the one screen where
+   * the panel is empty left the reader to find the box they had just typed into
+   * and delete what they typed. `type="search"` does draw a native clear glyph
+   * in WebKit and Blink, but it is mouse-only and Firefox does not draw it, so
+   * it cannot be the thing a sentence points at. Focus is pushed back onto the
+   * filter afterwards because pressing this button is what removes it from the
+   * document — a keyboard user who activated it would otherwise be left on the
+   * body with the tree they just restored nowhere near them.
+   */
+  const clearFilter = el(
+    "button",
+    {
+      class: "de-button",
+      type: "button",
+      onclick: () => {
+        search.value = ""
+        render()
+        focusControl(search)
+      },
+    },
+    ["Clear filter"]
+  )
+
+  /**
+   * What the panel says when it has no rows, as a live region OUTSIDE the tree.
+   *
+   * Two things are wrong with appending a sentence into the tree on each paint,
+   * which is what this used to do. A `role="tree"` may own treeitems and groups
+   * and nothing else, so a bare div in there is a child a screen reader has no
+   * rule for; and a node rebuilt on every render can never be a live region,
+   * because every repaint would re-announce a sentence that has not changed.
+   *
+   * So it is a sibling, built once, and `role="status"` — the same announcement
+   * the libraries sign-in problem line makes for the same reason. Typing into
+   * the filter until nothing matches moves no focus and swaps no control; a
+   * sighted user watches the rows go and a blind user gets silence unless the
+   * sentence announces itself. Polite rather than assertive: it is the result of
+   * the reader's own keystroke, not an interruption.
+   */
+  const emptyNote = el("div", { class: "de-empty", role: "status", hidden: true })
+  /** The sentence currently announced, so an unchanged repaint stays silent. */
+  let emptyShowing = ""
+
   tree.append(indicator)
-  context.slots.left.append(header, el("div", { style: "padding:0 8px 8px" }, [search]), tree)
+  context.slots.left.append(
+    header,
+    /*
+     * The filter's band, on the scale and symmetric, where it was a raw literal
+     * with no top padding at all.
+     *
+     * "0 8px 8px" put the field flush against the tab strip's bottom hairline
+     * while the Controls pane's filter — the other half of the same strip —
+     * carried 8px of air on every side. Two panes of one tab strip inset
+     * differently is the kind of thing nobody reports and everybody feels when
+     * they switch between them.
+     *
+     * The inline side is `space.sm` rather than `md`, so the field's edge lands
+     * on the same 4px column the tree rows below it already indent from.
+     */
+    el(
+      "div",
+      { style: `padding:${tokens.space.md}px ${tokens.space.sm}px ${tokens.space.md}px` },
+      [search]
+    ),
+    tree,
+    emptyNote
+  )
 
   /** User expand/collapse only. A filter reveals rows without touching it. */
   const overrides = new Map<LayerElement, boolean>()
@@ -88,6 +161,15 @@ export function installLayersPanel(context: EditorContext): void {
   const restoreDisplay = new WeakMap<LayerElement, string>()
   let filter: { query: string; reveal: Set<LayerElement>; matched: Set<LayerElement> } | null = null
   let visible: Row[] = [], focused: LayerElement | null = null, anchor: LayerElement | null = null
+  /**
+   * Element key -> how many saved styles it has, rebuilt at the top of every
+   * render and empty whenever nothing is saved anywhere.
+   *
+   * Keyed rather than a `Set` so the row can print the count; built once rather
+   * than read per row so `buildRow` can skip `describe()` — a bridge call —
+   * entirely in the common case. See the note at its use.
+   */
+  let savedKeys = new Map<string, number>()
 
   /**
    * The tree and the canvas must agree on what a layer is, so the instance-root
@@ -149,6 +231,27 @@ export function installLayersPanel(context: EditorContext): void {
         el("span", { class: "de-layer-twisty", "aria-hidden": "true" }),
         el("span", { class: "de-layer-icon", "aria-hidden": "true" }),
         el("span", { class: "de-layer-name" }),
+        /*
+         * How many saved styles this element has, if any.
+         *
+         * This restores the one capability the design-options split dropped.
+         * The floating browser carried a "Saved variants" tab listing every
+         * element in the app with a saved style — the only cross-element view
+         * of them there has ever been — and it went with the window.
+         *
+         * It is better here than it was there. That tab could not act on a row
+         * without `findElement()`, forty lines that re-derived a selection by
+         * tag-scanning the document and failed outright for any element not on
+         * the current screen. This tree already HAS the element, so pressing a
+         * row selects it and its saved styles appear in the right panel, where
+         * every verb that acts on them already lives.
+         *
+         * A count rather than a dot, because "this one has styles saved against
+         * it" and "this one has four" are different facts and the second is the
+         * one that makes a reader open it. Empty unless there is something to
+         * say, so the overwhelmingly common row costs one empty span.
+         */
+        el("span", { class: "de-layer-saved" }),
         el("span", { class: "de-layer-actions" }, [
           el("button", { class: "de-layer-action", type: "button", "data-action": "lock" }),
           el("button", { class: "de-layer-action", type: "button", "data-action": "eye" }),
@@ -174,7 +277,7 @@ export function installLayersPanel(context: EditorContext): void {
       rowByElement.set(row.element, node)
     }
     rowInfo.set(node, row)
-    const [twisty, glyph, label, strip] = Array.from(node.children) as HTMLElement[]
+    const [twisty, glyph, label, saved, strip] = Array.from(node.children) as HTMLElement[]
     const [lock, eye, remove] = Array.from(strip.children) as HTMLElement[]
     const openState = row.hasChildren ? String(row.open) : null
     // Rows are recycled across renders, so the twisty is toggled by presence
@@ -188,7 +291,55 @@ export function installLayersPanel(context: EditorContext): void {
       glyph.dataset.glyph = mark
       glyph.replaceChildren(icon(mark, tokens.icon.row))
     }
+    /*
+     * The name, and a way to read the half of it the panel cut off.
+     *
+     * A row is 240px wide less an indent that grows with depth, a twisty, a
+     * type glyph and an action strip, so `.de-layer-name` ellipsises early and
+     * does it on the TAIL — which for the names this tree prints is the
+     * identifying part. `ProjectCardGrid`, `ProjectCardGridItem` and
+     * `ProjectCardGridItemMedia` are one string at this width, and three levels
+     * deep they are one string with room to spare. Truncation with no way to
+     * the full value is the escalation this fixes; the app chooser's trigger is
+     * the precedent.
+     *
+     * `title` rather than the chrome's `tip()`, and the loop forces the choice:
+     * rows are RECYCLED across renders, so a `tip()` bound to a node would have
+     * to be rebound every time that node is handed to a different element.
+     * `tip` writes an attribute anyway and the tooltip reads `title` and
+     * borrows it (`core/tooltip.ts`), so the plain attribute gets the same card
+     * with nothing to keep in sync.
+     *
+     * Guarded like the text above it, because this runs once per visible row
+     * per repaint and an attribute write that changes nothing still dirties
+     * style.
+     */
     if (label.textContent !== row.meta.name) label.textContent = row.meta.name
+    if (label.title !== row.meta.name) label.title = row.meta.name
+    /*
+     * Read off the store rather than remembered, for the same reason the hidden
+     * state below is: this changes from a surface that is not this tree —
+     * saving a style happens in the right panel — so a row that cached it would
+     * go stale the moment it did.
+     *
+     * `savedKeys` is built once per render and is EMPTY for any session that
+     * has never saved a style, which is almost all of them. That is what keeps
+     * this free: `describe()` costs a bridge call per row, and asking for one
+     * on every row of every repaint to answer a question whose answer is
+     * usually "none" would be the expensive way to draw nothing. When the set
+     * is empty no row is described at all.
+     */
+    const savedCount = savedKeys.size === 0 ? 0 : savedKeys.get(describe(row.element).key) ?? 0
+    const savedText = savedCount > 0 ? String(savedCount) : ""
+    if (saved.textContent !== savedText) saved.textContent = savedText
+    setAttr(
+      saved,
+      "aria-label",
+      savedCount > 0
+        ? `${savedCount} saved style${savedCount === 1 ? "" : "s"} on ${row.meta.name}`
+        : null
+    )
+    setAttr(saved, "title", savedCount > 0 ? "Saved styles. Select this layer to use them." : null)
     // The stylesheet rotates the twisty off its own aria-expanded; the row
     // carries the state a screen reader actually reads.
     setAttr(twisty, "aria-expanded", openState)
@@ -207,8 +358,15 @@ export function installLayersPanel(context: EditorContext): void {
     }
     setAttr(remove, "aria-label", `Delete ${row.meta.name}`)
     setAttr(remove, "title", `Delete ${row.meta.name}`)
+    // The drag state is restated here rather than left where `dragstart` put
+    // it, because this line rewrites the whole attribute and a render can
+    // happen mid-drag for reasons that have nothing to do with the drag — the
+    // saved-style counts repaint the tree whenever the right panel writes one.
+    // A lift held only on the node would come off under the next repaint and
+    // never come back.
     setAttr(node, "class", `de-layer${row.meta.promoted ? " de-layer--component" : ""}` +
-      `${isLocked ? " de-layer--locked" : ""}${isHidden ? " de-layer--hidden" : ""}`)
+      `${isLocked ? " de-layer--locked" : ""}${isHidden ? " de-layer--hidden" : ""}` +
+      `${drag?.element === row.element ? " de-layer--dragging" : ""}`)
     setAttr(node, "style", `padding-left:${8 + row.depth * INDENT}px;--de-indent:${row.depth * INDENT}px`)
     setAttr(node, "aria-expanded", openState)
     setAttr(node, "aria-selected", String(selected.has(row.element)))
@@ -222,7 +380,22 @@ export function installLayersPanel(context: EditorContext): void {
 
   function render(): void {
     visible = flatten()
-    const selected = new Set(context.getState().selection.map((entry) => entry.element))
+    const state = context.getState()
+    /*
+     * One pass over the saved sets, not one lookup per row.
+     *
+     * Built from the store rather than from the rows because the store is the
+     * smaller side by orders of magnitude: a tree is hundreds of rows and the
+     * sets are however many elements somebody has actually saved a style on,
+     * which is usually none. An empty map here is what lets `buildRow` skip its
+     * bridge call entirely.
+     */
+    savedKeys = new Map()
+    for (const [key, set] of Object.entries(state.optionSets)) {
+      const count = visibleOptions(set).length
+      if (count > 0) savedKeys.set(key, count)
+    }
+    const selected = new Set(state.selection.map((entry) => entry.element))
     const focusTarget = visible.some((r) => r.element === focused) ? focused : visible[0]?.element ?? null
     let cursor = indicator.nextSibling
     for (const row of visible) {
@@ -237,8 +410,35 @@ export function installLayersPanel(context: EditorContext): void {
       tree.removeChild(cursor)
       cursor = next
     }
-    const hint = search.value.trim() ? "Nothing matches that filter." : "Waiting for the app."
-    if (!visible.length) tree.append(el("div", { class: "de-empty" }, [hint]))
+    paintEmpty()
+  }
+
+  /**
+   * The two empty states, and neither of them is "wait".
+   *
+   * The no-filter branch used to read `Waiting for the app.`, which is a promise
+   * the panel cannot keep: a route that renders nothing the layer resolver
+   * accepts leaves that sentence on screen forever, and a left rail claiming to
+   * be waiting is indistinguishable from a left rail that is broken. It is also
+   * the panel's only chance to say what a layer IS, and it spent it on a verb.
+   *
+   * The filter branch names the query rather than "that filter", because the
+   * reader has typed several by now, and hands over the control that undoes it.
+   */
+  function paintEmpty(): void {
+    const query = search.value.trim()
+    const sentence = visible.length
+      ? ""
+      : query
+        ? `Nothing matches “${query}”.`
+        : "No layers here yet. The editor lists elements the app has rendered — " +
+          "interact with the page, or pick an element on the canvas."
+    if (sentence === emptyShowing) return
+    emptyShowing = sentence
+    emptyNote.hidden = !sentence
+    if (!sentence) emptyNote.replaceChildren()
+    else if (query) emptyNote.replaceChildren(`${sentence} `, clearFilter)
+    else emptyNote.replaceChildren(sentence)
   }
 
   /**
@@ -388,13 +588,25 @@ export function installLayersPanel(context: EditorContext): void {
   // Drop lines come from the vendor's `getSiblings`, the only thing that knows
   // the real JSX sibling list. `reorder` always inserts *before* `toLine`, so
   // dropping below a row targets the next sibling instead.
-  let drag: { ref: DragRef; parent: LayerElement | null; lines: Set<number>; to: number } | null = null
+  // The dragged ELEMENT is carried alongside the reference the server needs,
+  // because the lift is drawn on the row and a row is found by its element.
+  // Keeping it on `drag` rather than in a second variable is what makes "a drag
+  // is running" and "this is the row it is running on" one fact: `buildRow`
+  // restates the class off it, so the two cannot disagree across a repaint.
+  let drag: { ref: DragRef; element: LayerElement; parent: LayerElement | null
+    lines: Set<number>; to: number } | null = null
   let stopSiblings: (() => void) | null = null
 
   function endDrag(): void {
     stopSiblings?.()
     stopSiblings = null
+    // Read before `drag` is dropped, and taken off the node directly: the row
+    // may not be rebuilt after this — a drag abandoned outside the tree ends
+    // here and nowhere else — so waiting for the next render would leave the
+    // tree with a faded row and no drag.
+    const lifted = drag && rowByElement.get(drag.element)
     drag = null
+    lifted?.classList.remove("de-layer--dragging")
     indicator.style.display = "none"
   }
 
@@ -408,9 +620,20 @@ export function installLayersPanel(context: EditorContext): void {
     const target = above ? row : next?.parent === row.parent ? next : null
     const line = target?.meta.drag?.fromLine ?? 0
     if (!line || line === drag.ref.fromLine || !drag.lines.has(line)) return 0
-    // Drawn on the HOVERED row's own edge, not the target's top, so above and
-    // below read as two gestures — `reorder` is handed one line either way.
-    indicator.style.top = `${node.offsetTop + (above ? 0 : node.offsetHeight) - 1}px`
+    /*
+     * Drawn on the HOVERED row's own edge, not the target's top, so above and
+     * below read as two gestures — `reorder` is handed one line either way.
+     *
+     * Moved with a transform rather than the `top` this used to write, which is
+     * what lets the stylesheet follow it between gaps instead of teleporting
+     * it. `top` is a layout property and this runs on every dragover; the note
+     * on the rule in `css/layers.ts` has the rest of the reasoning.
+     *
+     * The horizontal inset stays a real offset because it never moves during a
+     * drag: every candidate gap is a sibling of the dragged row, so every one
+     * of them is at this depth.
+     */
+    indicator.style.transform = `translateY(${node.offsetTop + (above ? 0 : node.offsetHeight) - 1}px)`
     indicator.style.left = `${4 + row.depth * INDENT}px`
     return line
   }
@@ -433,6 +656,45 @@ export function installLayersPanel(context: EditorContext): void {
     const index = visible.indexOf(row)
     const step = (to: number) => activate(visible[to]?.element ?? null, false)
     const key = (event as KeyboardEvent).key
+    /*
+     * MULTI-SELECT FROM THE KEYBOARD, which did not exist.
+     *
+     * Every batch verb in this editor — align, distribute, delete, the multi
+     * edit — is gated behind a selection of more than one row, and the only way
+     * to assemble one was Shift-click or Cmd-click. So a keyboard user could
+     * reach every one of those controls and operate none of them: a whole
+     * capability behind a gesture with no key.
+     *
+     * The chords are the two the pointer already uses, which is the point —
+     * Shift extends a range from the anchor, the platform's modifier toggles
+     * one row into the set — so there is one model to learn rather than two.
+     * `isDeepSelect` is the same helper the click path calls, so Cmd and Ctrl
+     * stay whatever they are on this platform.
+     *
+     * Both branches mirror `selectRow` exactly, including the rule that only a
+     * PLAIN move re-points the scope: a multi-row selection has no single
+     * parent, and guessing one changes what the next canvas click resolves to.
+     */
+    const extend = (to: number) => {
+      const target = visible[to]
+      if (!target) return
+      const from = visible.findIndex((r) => r.element === anchor)
+      const span = visible.slice(Math.min(from === -1 ? to : from, to), Math.max(from === -1 ? to : from, to) + 1)
+      context.selectMany(span.map((r) => r.element))
+      activate(target.element, false)
+    }
+    if ((key === "ArrowDown" || key === "ArrowUp") && (event as KeyboardEvent).shiftKey) {
+      extend(index + (key === "ArrowDown" ? 1 : -1))
+      event.preventDefault()
+      return
+    }
+    if (key === "Enter" && isDeepSelect(event as unknown as MouseEvent)) {
+      anchor = row.element
+      context.select(row.element, { additive: true })
+      activate(row.element, false)
+      event.preventDefault()
+      return
+    }
     if (key === "ArrowDown") step(index + 1)
     else if (key === "ArrowUp") step(index - 1)
     else if (key === "Home") step(0)
@@ -454,7 +716,21 @@ export function installLayersPanel(context: EditorContext): void {
     const ref = row?.meta.drag
     if (!row || !ref) return event.preventDefault()
     ;(event as DragEvent).dataTransfer?.setData("text/plain", row.meta.name)
-    drag = { ref, parent: row.parent, lines: new Set(), to: 0 }
+    drag = { ref, element: row.element, parent: row.parent, lines: new Set(), to: 0 }
+    /*
+     * The lift goes on a frame late, and the delay is the point rather than a
+     * hedge. The browser snapshots this row for the drag image once the handler
+     * returns, so fading it here would fade the copy under the cursor too — and
+     * that copy is the only full-strength reading of the name while the drag
+     * runs, which is the whole argument the rule in `css/layers.ts` rests on.
+     *
+     * Re-checked inside the frame because a drag can be over before it: the
+     * class is applied only if this row is still the one being carried, so an
+     * abandoned drag cannot leave a faded row behind `endDrag`.
+     */
+    requestAnimationFrame(() => {
+      if (drag?.element === row.element) rowByElement.get(row.element)?.classList.add("de-layer--dragging")
+    })
     stopSiblings = context.bridge.subscribe((message) => {
       if (message.type !== "siblingsList") return
       stopSiblings?.()
@@ -485,6 +761,20 @@ export function installLayersPanel(context: EditorContext): void {
   search.addEventListener("input", render)
 
   context.subscribe((state, previous) => {
+    /*
+     * The saved-style counts are the second thing this tree reads out of the
+     * store, and they change from a surface that is not this one: saving,
+     * renaming or deleting a style all happen in the right panel. A repaint
+     * gated on the selection alone left every badge showing the count from
+     * whenever the selection last moved — right on the row you just saved
+     * against, because saving selects it, and stale on every other row until
+     * something unrelated happened to redraw the tree.
+     *
+     * Identity, not a deep compare: `optionSets` is replaced wholesale by the
+     * store on every write, so this is one pointer test per state change and it
+     * cannot miss one.
+     */
+    if (state.optionSets !== previous.optionSets) render()
     if (state.selection === previous.selection) return
     const element = state.selection[0]?.element ?? null
     for (let n = element && resolver.layerParent(element); n; n = resolver.layerParent(n)) {

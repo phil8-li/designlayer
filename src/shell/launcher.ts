@@ -12,10 +12,11 @@
  *
  * The disc's treatment is Agentation's (agentation.com), because it is the
  * pattern a designer arriving at this editor has most likely already used: a
- * 44px dark disc pinned 20px off the corner, slack before a press becomes a
+ * small dark disc pinned off the corner, slack before a press becomes a
  * drag, the press that turns into a drag never counting as a click, and the
- * position remembered for next time. The numbers below are that behaviour, not
- * invented ones.
+ * position remembered for next time. The BEHAVIOUR below is that pattern; two
+ * of the numbers are not. Their disc is 44px 20px off the edge, and ours is the
+ * toolbar's height 32px off it — see `css/launcher.ts` for both arguments.
  *
  * Three places this improves on it rather than copying it. It listens for
  * POINTER events with capture instead of mouse events on `document`, so a pen
@@ -37,6 +38,7 @@
  *
  */
 
+import { TOOLBAR_HEIGHT } from "../core/css/toolbar"
 import { clamp, el } from "../core/dom"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
@@ -71,8 +73,17 @@ const DRAG_SLACK = 10
  */
 const EDGE = 32
 
-/** Kept in agreement with `size.launcher` in the stylesheet. */
-const SIZE = 44
+/**
+ * The disc's box, which the clamp needs in numbers before the disc is laid out.
+ *
+ * Imported from the bar's geometry rather than restated, because that is where
+ * the disc's size now comes from — `css/launcher.ts` sizes it off the same
+ * constant so the collapsed editor is exactly as tall as the expanded one. A
+ * literal here would be the same number twice with nothing holding them
+ * together, and this one is only ever read mid-drag, where being wrong shows up
+ * as a disc that clamps to the wrong edge rather than as anything obvious.
+ */
+const SIZE = TOOLBAR_HEIGHT
 
 export interface Launcher {
   element: HTMLButtonElement
@@ -114,7 +125,7 @@ interface Size {
  * a 600px pill that reappears in the middle of a freshly loaded page reads as a
  * layout that has broken rather than as a preference being honoured, and there
  * is nothing on screen at that moment to explain it. The disc does persist: it
- * is 44px, it rests in a corner by design, and that memory is Agentation's
+ * is 40px, it rests in a corner by design, and that memory is Agentation's
  * contract with the user.
  */
 
@@ -274,7 +285,7 @@ export interface Drag {
 /**
  * The gesture, once, for both surfaces.
  *
- * Everything that differs between a 44px disc and a 600px pill is a callback:
+ * Everything that differs between a 40px disc and a 600px pill is a callback:
  * how big it is, how it is drawn, what counts as its ground, where it is
  * remembered. Everything that does not — capture, the threshold, one contact at
  * a time, the frame, the clamp, the click a drag must not become — is here,
@@ -628,9 +639,14 @@ export function createLauncher(onActivate: () => void): Launcher {
      * separate boundaries, something a stroked outline cannot do — and a native
      * glyph lands on whole device pixels only at a multiple of 8. Drawn at 20
      * it would be the one soft mark in the chrome, on the one surface where it
-     * is the only thing on screen. 24 in a 44px disc is also nearer the
-     * proportion a lone glyph on a disc wants; 20 was picked when this mark was
-     * Lucide's and every rung was equally soft.
+     * is the only thing on screen. 20 was picked when this mark was Lucide's and
+     * every rung was equally soft.
+     *
+     * It stayed at 24 when the disc came down to the toolbar's 40, and the
+     * proportion is better for it: 24 in 40 leaves 8 of ground on every side —
+     * the same `space.md` the chrome uses between controls everywhere else — and
+     * is the exact pairing Material gives a small FAB. 24 in 44 left 10, which
+     * is not a step on the scale at all.
      */
     [icon("Cursor", tokens.icon.display, "filled")]
   ) as HTMLButtonElement

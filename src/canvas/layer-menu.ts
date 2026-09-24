@@ -34,6 +34,15 @@ export function installLayerMenu(context: EditorContext): void {
   const close = (restoreFocus = false) => {
     if (!open) return
     open = false
+    /*
+     * IT ARRIVES BUT IT DOES NOT LINGER — the same call the shortcuts sheet
+     * makes, for the same reason. This card is `pointer-events: auto` and it is
+     * on the Escape stack, so a copy of it still in the document is a surface
+     * that can take a click and, worse, absorb the next dismissal. A menu has
+     * to be gone at the instant it is dismissed; the entrance is where its
+     * motion belongs.
+     */
+    menu.classList.remove("de-arrive")
     menu.style.display = "none"
     while (menu.firstChild) menu.removeChild(menu.firstChild)
     // Row hover writes `hovered`, and the pointer can leave via the menu
@@ -53,6 +62,15 @@ export function installLayerMenu(context: EditorContext): void {
         type: "button",
         role: "menuitem",
         tabindex: "-1",
+        /*
+         * The row ellipsises inside a 260px-capped card, and this menu exists
+         * for exactly the case where the tails are the answer: you right-click
+         * an overlapping stack to tell `ProjectCardGridItem` from
+         * `ProjectCardGridItemMedia`, and both cut to the same visible string.
+         * `panels/layers.ts` writes a `title` on its own rows for this reason
+         * and argues it there; the menu built from the same resolver did not.
+         */
+        title: meta.name,
       },
       [meta.name]
     )
@@ -110,6 +128,39 @@ export function installLayerMenu(context: EditorContext): void {
     const top = Math.min(event.clientY, window.innerHeight - rect.height - EDGE)
     menu.style.left = `${Math.max(canvasLeft + EDGE, left)}px`
     menu.style.top = `${Math.max(EDGE, top)}px`
+    /*
+     * THIS MENU PLAYS NO ENTRANCE, and it is the only popover in the chrome
+     * that does not.
+     *
+     * Five surfaces shared `.de-arrive`, and the argument for it in
+     * `css/base.ts` is sound: a card that materialises at its final appearance
+     * reads as a paste rather than as something that opened. The argument has a
+     * condition attached, and this one surface is the one that fails it.
+     *
+     * An entrance earns its 180ms by answering "where did this come from",
+     * which is a real question for a card that appears somewhere other than
+     * where you pressed. Every other popover here is anchored to a control
+     * across the panel from the pointer — the token picker opens off a field,
+     * the chooser's menu under a button in the bar. This one opens AT THE
+     * POINTER. It is already exactly where you just clicked, so the question
+     * was never asked, and what is left of the animation is 180ms of spring in
+     * front of a list you are about to arrow through.
+     *
+     * That is the cheat sheet's rule for a frequently-opened menu, and this is
+     * the most frequently-opened surface in the product: right-clicking to
+     * disambiguate an overlapping stack is most of what inspecting a page
+     * consists of. The fix is a deletion — one class not added — which is the
+     * cheapest rung on the ladder.
+     *
+     * The cards that DO travel keep their entrance, and keep the origin that
+     * aims it (`arriveFrom` in `core/motion.ts`). The two decisions compose:
+     * animate a card that arrives from somewhere and point it at where it came
+     * from; do neither for a card that is already there.
+     *
+     * The placement above is unchanged. It still paints at `0,0`, measures and
+     * moves — which was the reason an entrance had to be armed after the fact
+     * rather than declared on the element, and one more reason not to want one.
+     */
     open = true
     const first = menu.querySelector<HTMLButtonElement>(".de-layer-menu-row")
     if (first) {

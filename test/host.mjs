@@ -17,9 +17,9 @@
  * is there the suite prints why it is skipping and exits 0, so `npm test` still
  * passes in a bare clone and nobody reads a skip as a pass.
  *
- * The pinned numbers are the Workspaces app's, so pointing DESIGNLAYER_HOST at
- * a different app makes those four suites fail on the counts rather than on the
- * contract. That is the trade for having a real host in the net at all.
+ * The pinned numbers are one particular host app's, so pointing DESIGNLAYER_HOST
+ * at a different app makes those four suites fail on the counts rather than on
+ * the contract. That is the trade for having a real host in the net at all.
  */
 
 import fs from "node:fs"
@@ -29,8 +29,8 @@ import { fileURLToPath } from "node:url"
 
 export const PACKAGE_DIR = fileURLToPath(new URL("..", import.meta.url))
 
-/** The default host: a Workspaces checkout beside this one. */
-const SIBLING_HOST = path.join(path.dirname(PACKAGE_DIR), "Workspaces")
+/** The default host: a `host-app` checkout beside this one. */
+const SIBLING_HOST = path.join(path.dirname(PACKAGE_DIR), "host-app")
 
 export function hostRoot() {
   const configured = process.env.DESIGNLAYER_HOST

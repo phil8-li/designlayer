@@ -59,7 +59,8 @@
 import { el } from "../../core/dom"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
-import { isExpanded, miniButton, section, setExpanded } from "./field"
+import { isExpanded, miniButton, section, setExpanded, takeJustExpanded } from "./field"
+import { revealGroup } from "../../core/leave"
 import { laysOutChildren, SIDES, tokenControl, tokenRow } from "./token-row"
 import { sizeControls } from "./section-layout"
 import { autoLayoutControls, drawsSpacingControls } from "./section-autolayout"
@@ -124,19 +125,32 @@ function spacingBindings(context: SectionContext, housed: boolean): HTMLElement 
       ]
     : []
 
+  /*
+   * Only the ROWS open, not the header that discloses them.
+   *
+   * The toggle and its caption live in this block too and were on screen before
+   * the press, so opening the whole thing from zero would animate the control
+   * the user just clicked out of existence and back in. Wrapping the rows is
+   * what makes them addressable separately — they used to be spread straight
+   * into the group beside the header.
+   */
+  const precisionRows = el("div", { class: "de-layout-group" }, perSide)
+  const precision = el("div", { class: "de-layout-group" }, [
+    el("div", { class: "de-row" }, [
+      el("div", { class: "de-layout-group-title", style: "flex:1" }, ["Per side and axis"]),
+      toggle,
+    ]),
+    precisionRows,
+  ])
+  if (perSide.length > 0 && takeJustExpanded(PRECISION_EXPANDER)) revealGroup(precisionRows)
+
   return el("div", { class: "de-layout-group" }, [
     // The rows name their own axis — `Container gap`, `Uniform margin` — so the
     // block caption names the family they belong to, the way `Auto layout` names
     // the block above rather than any control in it.
     el("div", { class: "de-layout-group-title" }, ["Spacing"]),
     ...uniform,
-    el("div", { class: "de-layout-group" }, [
-      el("div", { class: "de-row" }, [
-        el("div", { class: "de-layout-group-title", style: "flex:1" }, ["Per side and axis"]),
-        toggle,
-      ]),
-      ...perSide,
-    ]),
+    precision,
   ])
 }
 

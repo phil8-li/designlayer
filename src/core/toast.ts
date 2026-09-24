@@ -53,19 +53,48 @@ import { tokens as t } from "./tokens"
 
 export type ToastKind = "info" | "error"
 
+/**
+ * One button on a toast, for the one thing a toast can offer that a sentence
+ * cannot: taking the action back.
+ *
+ * Deliberately a single optional action rather than a general options bag. A
+ * toast in this chrome is a statement about something that already happened,
+ * and the only interaction that belongs on one is undoing it — anything else a
+ * card wants a reader to DO belongs on the surface that owns the thing, which
+ * is the standing rule `css/lint.ts` records. Keeping the shape this narrow is
+ * what stops the toast layer growing into a second, worse dialog.
+ */
+export interface ToastAction {
+  label: string
+  onClick(): void
+}
+
 const HOST_ID = "designlayer-toaster"
 
 /**
- * Four seconds for news, six for a failure.
+ * Four seconds for news. A failure waits to be dismissed.
  *
- * The vendor used two for everything, which is too short for the longest thing
- * the editor says — "Applied 3 changes — width, height is preview only" is 48
- * characters past the point where two seconds is a glimpse. Errors get longer
- * still because they are the ones that name something the reader has to act on,
- * and `css/lint.ts` already documents the standing rule that anything needing
- * to OUTLIVE the glance belongs on a surface rather than in a toast.
+ * The vendor used two seconds for everything, which is too short for the
+ * longest thing the editor says — "Applied 3 changes — width, height is preview
+ * only" is 48 characters past the point where two seconds is a glimpse.
+ *
+ * THE ERROR RUNG IS NOT A DURATION ANY MORE, and that is the change. It was six
+ * seconds, on the argument that an error is the thing the reader has to act on
+ * and therefore needs longer. The argument was right and the conclusion was one
+ * step short: 52 of the product's 77 error states exist ONLY as a toast, every
+ * one of those sentences now ends in an instruction, and an instruction that
+ * removes itself after six seconds is an instruction for whoever happened to be
+ * looking at the corner of the screen. The rest are told that something went
+ * wrong by nothing at all — while the preview still shows the change that did
+ * not get written.
+ *
+ * So an error stays, and `closeButton` below turns on to give it a way out. The
+ * standing rule `css/lint.ts` documents — that anything needing to outlive the
+ * glance belongs on a surface rather than in a toast — is still the right rule,
+ * and the 52 states that break it are a backlog rather than a reason to keep
+ * discarding them silently in the meantime.
  */
-const DURATION: Record<ToastKind, number> = { info: 4000, error: 6000 }
+const DURATION: Record<ToastKind, number> = { info: 4000, error: Number.POSITIVE_INFINITY }
 
 /** Stacked beyond this and the newest is behind two cards nobody can read. */
 const VISIBLE_TOASTS = 3
@@ -79,13 +108,30 @@ interface Mounted {
 let mounted: Mounted | null = null
 let ready = false
 /** Raised before the Toaster's subscription exists. Drained once, in order. */
-const pending: Array<[string, ToastKind]> = []
+const pending: Array<[string, ToastKind, ToastAction | undefined]> = []
 
-function emit(message: string, kind: ToastKind): void {
+function emit(message: string, kind: ToastKind, action?: ToastAction): void {
+  /*
+   * An action on an INFO card lengthens it, and only that card.
+   *
+   * `DURATION.info` is four seconds, which is the right length for a sentence
+   * you read and forget. It is the wrong length for a button: four seconds is
+   * about as long as it takes to notice a row has gone, decide it should not
+   * have, and move the pointer — so an undo that expires on the reading rung
+   * would be an offer withdrawn just as it was being accepted.
+   *
+   * Eight, not `Infinity`. An undo is not an error: it has a natural end,
+   * because the moment passes and the reader moves on, and a card that sat
+   * there until dismissed would make every delete cost two clicks after all —
+   * which is exactly what keeping the row's single click was for.
+   */
+  const options = action
+    ? { duration: 8000, action: { label: action.label, onClick: action.onClick } }
+    : undefined
   // `sonner.error` rather than an option, because the type is what selects the
   // glyph and the rich colouring — see the `--error-*` block in `css/toast.ts`.
-  if (kind === "error") sonner.error(message, { duration: DURATION.error })
-  else sonner(message, { duration: DURATION.info })
+  if (kind === "error") sonner.error(message, { duration: DURATION.error, ...options })
+  else sonner(message, { duration: DURATION.info, ...options })
 }
 
 /**
@@ -113,7 +159,7 @@ function emit(message: string, kind: ToastKind): void {
 function ReadyGate(): null {
   useEffect(() => {
     ready = true
-    for (const [message, kind] of pending.splice(0)) emit(message, kind)
+    for (const [message, kind, action] of pending.splice(0)) emit(message, kind, action)
   }, [])
   return null
 }
@@ -165,9 +211,22 @@ export function installToaster(): () => void {
         offset: t.size.panelInset,
         gap: t.space.md,
         visibleToasts: VISIBLE_TOASTS,
-        // Off, deliberately. A toast this short is read in one glance and gone
-        // before a close button could be aimed at; swipe and click still dismiss.
-        closeButton: false,
+        /*
+         * On, and it was off for a reason that only held while every toast
+         * expired.
+         *
+         * The old note said a toast this short is read in one glance and gone
+         * before a close button could be aimed at. True of the four-second
+         * info rung, and no longer true of the error rung, which waits (see
+         * `DURATION`). A card that never leaves and offers no way out is worse
+         * than one that leaves too early: it parks over the bottom-left corner
+         * of the canvas until something else happens to dismiss it.
+         *
+         * Sonner puts the button on every toast rather than per type, so the
+         * info rung gains one it does not need. That is the cheaper of the two
+         * costs — an affordance nobody uses, against an error nobody can clear.
+         */
+        closeButton: true,
         // Typed toasts get their signal colour from the tokens rather than from
         // Sonner's built-in palettes. Untyped ones — every `kind: "info"` call —
         // are unaffected and stay the plain chrome card.
@@ -209,15 +268,24 @@ function destroy(): void {
 /**
  * Say something. The one entry point — see the header for who reaches it.
  */
-export function notify(message: string, kind: ToastKind = "info"): void {
+export function notify(message: string, kind: ToastKind = "info", action?: ToastAction): void {
   const text = message.trim()
   if (!text) return
   installToaster()
   if (ready) {
-    emit(text, kind)
+    emit(text, kind, action)
     return
   }
-  pending.push([text, kind])
+  /*
+   * An action survives the queue, and it has to.
+   *
+   * A toast raised before Sonner's subscription exists is held here and drained
+   * once it does. Dropping the action on the way through would be the worst
+   * possible failure mode: the card still appears, still says what happened,
+   * and silently is not offering the way back — which reads as an undo that was
+   * pressed and did nothing rather than as one that was never there.
+   */
+  pending.push([text, kind, action])
 }
 
 /*

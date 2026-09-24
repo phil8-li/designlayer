@@ -22,8 +22,8 @@ as much as fixtures: they are the answer to "what shape does a design system hav
 to be in for this editor to read it?".
 
 They are synthetic for a reason that is not the one above. This is a public MIT
-repository, and the libraries feature was verified against real, internal design
-systems that cannot ship here. So these files reproduce the SHAPES those systems
+repository, and the systems that shaped these rules are not ours to publish. So
+these files reproduce the SHAPES those systems
 turned out to have — a type word in the middle of a token name rather than at the
 front, an alias chain, a `var(--x, 12px)` fallback, a colour whose value is an
 unpaintable channel triple, a multi-value radius — with invented names and values.

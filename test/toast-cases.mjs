@@ -246,16 +246,38 @@ await check("plain news does not come out as an error", () => {
   assert.deepEqual(emitted().map((c) => c.fn), ["toast"])
 })
 
-await check("an error is given longer to be read than a success", () => {
+/*
+ * AN ERROR WAITS TO BE DISMISSED; NEWS DOES NOT.
+ *
+ * This used to assert only that an error was given LONGER than news, which the
+ * old 6000 against 4000 satisfied — and six seconds is still a deadline. 52 of
+ * this product's 77 error states exist only as a toast, and every one of those
+ * sentences now ends in an instruction, so the clause most likely never to be
+ * read was the one naming what to do. An unread instruction with the preview
+ * still showing an unwritten change is the failure; two extra seconds was not a
+ * fix for it.
+ *
+ * Both halves are asserted because either alone is a defect. An error that
+ * never leaves and offers no way out parks over the corner of the canvas
+ * forever, so the close button is not a nicety here — it is what makes the
+ * infinite duration safe.
+ */
+await check("an error waits to be dismissed, and news still goes away by itself", () => {
   calls.length = 0
   notify("Applied 3 changes")
   notify("That fix could not be written", "error")
   const [info, error] = emitted()
   assert.ok(
-    error.options.duration > info.options.duration,
-    `an error (${error.options.duration}ms) is not given longer than news (${info.options.duration}ms)`
+    Number.isFinite(info.options.duration),
+    `news sits at ${info.options.duration}ms — only a failure should wait for the reader`
+  )
+  assert.ok(
+    !Number.isFinite(error.options.duration),
+    `an error expires after ${error.options.duration}ms, taking its instruction with it`
   )
 })
+
+
 
 await check("an empty message says nothing at all", () => {
   calls.length = 0
@@ -287,6 +309,23 @@ await check("it is mounted bottom-left, clear of the launcher", () => {
 
 await check("it is inset by the same gutter the panels dock with", () => {
   assert.equal(toasterProps.offset, 12)
+})
+
+/*
+ * The other half of the infinite error duration, and the reason it is safe.
+ *
+ * This was `false`, on the note that a toast this short is read in one glance
+ * and gone before a close button could be aimed at. True while every toast
+ * expired; not true of an error that now waits. A card that never leaves and
+ * offers no way out parks over the bottom-left corner of the canvas until
+ * something else happens to dismiss it.
+ */
+await check("a toast that waits for the reader can still be got rid of", () => {
+  assert.equal(
+    toasterProps.closeButton,
+    true,
+    "an error waits indefinitely, so a card with no close control never leaves"
+  )
 })
 
 await check("it never stacks more cards than can be read", () => {

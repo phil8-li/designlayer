@@ -172,13 +172,27 @@ const MAP = {
   Code: "Code",
   Sparkles: "Sparkles",
   Play: "Play",
-  // The settings panel's inline explanations.
-  //
-  // A dot beside the label, not a paragraph under it: every one of those
-  // settings needed a sentence, and eight sentences turned a panel into an
-  // essay. `Info`, not a question mark — a `?` asks the reader whether they are
-  // confused, an `i` offers a fact.
+  /*
+   * `Info` twice, once with its ring and once without, because the ring is
+   * load-bearing on one of the three surfaces that draw it and redundant on the
+   * other two.
+   *
+   * `Info` is the circled notice, and it is the drawing for a mark standing on
+   * its own — the lint badge pinned over the app, a rounded square plate keyed
+   * by severity, where a bare `i` would read as a stray letter.
+   *
+   * `InfoMark` is the same mark with Lucide's circle dropped and the `i` scaled
+   * up to fill what took its place. It is for the two dots that ALREADY draw a
+   * circle: the settings help dot and the lint header's. They are 14px discs
+   * with a 12px glyph in them, so the ringed drawing put a second circle 1.4px
+   * inside the first and left the `i` nothing but a 2px stem to be read by. See
+   * `REDRAWN` for the geometry.
+   *
+   * Either way an `i` and not a question mark — a `?` asks the reader whether
+   * they are confused, an `i` offers a fact.
+   */
   Info: "Info",
+  InfoMark: "Info",
   // The theme switch wears the mode it will GIVE you, which is the convention
   // every OS switch uses: a moon offers night.
   Sun: "Sun",
@@ -210,6 +224,14 @@ const MAP = {
   EyeOff: "EyeOff",
   Lock: "Lock",
   LockOpen: "LockOpen",
+
+  // The one control in this chrome that LEAVES it: "Sign in with …" in the
+  // library sign-in dialog hands the person over to their identity provider, in
+  // a separate browser window. The dialog says so in words as well, and the
+  // glyph is what makes it survive a skim — a button that opens something
+  // somewhere else should not look like one that acts here, and an arrow out of
+  // a box is the mark everybody already reads that way.
+  ExternalLink: "ExternalLink",
 
   // What a layer IS.
   Square: "Square",
@@ -1386,9 +1408,9 @@ const lucide = await import("lucide")
 
 /* ── Redrawing a Lucide glyph in place ──────────────────────────────────────
  *
- * Two edits are allowed to a vendored path, and both are applied to the ONE
- * glyph that needs them: the note bubble. Everything else arrives exactly as
- * Lucide drew it.
+ * Three edits are allowed to a vendored path, and they reach two glyphs: the
+ * note bubble and the bare info mark. Everything else arrives exactly as Lucide
+ * drew it.
  *
  * MIRRORING, because Lucide hangs `MessageCircle`'s tail off the bottom LEFT
  * and this editor wants it on the right. Done to the path DATA rather than with
@@ -1407,6 +1429,22 @@ const lucide = await import("lucide")
  * together and lands the mark under weight. Scaling the path leaves
  * `stroke-width` alone, so the bubble gets smaller at exactly the weight
  * everything around it is drawn at — which is the whole point.
+ *
+ * DROPPING A SHAPE, because a glyph whose outer ring is redundant is worse than
+ * one drawn a size too small. `Info` is a circle with an `i` inside it, and the
+ * two surfaces that explain a setting — the settings help dot and the lint
+ * header's — already draw a 14px disc for it to sit in. Two concentric circles
+ * 1.4px apart is what the reader sees there, and the `i` between them is a
+ * 1.25px stroke over 2px of stem: a ring with a smudge in it. Dropping Lucide's
+ * circle and scaling what is left about the grid centre hands the ring to the
+ * disc, which was drawing one anyway, and spends the whole 14px on the mark
+ * that carries the meaning.
+ *
+ * Kept as a SECOND name rather than applied to `Info`, because the third
+ * surface that draws this glyph — the lint badge over the page — is a rounded
+ * SQUARE plate keyed by severity, and a bare `i` on a red square is a letter,
+ * not a notice. The ring is load-bearing there and redundant in a disc, so the
+ * set carries both drawings and each surface asks for the one it needs.
  */
 
 /** Every point in a path, moved by `move`, with arc flags kept honest. */
@@ -1484,12 +1522,28 @@ const REDRAWN = {
   // The note bubble: tail to the right, and pulled in to the size the seven
   // native marks beside it are drawn at. See the block above for both reasons.
   MessageSquare: { mirror: true, scale: 0.78 },
+  /*
+   * The info mark with its ring taken off, for the two dots that already have
+   * one. See the block above for why it is a separate name from `Info`.
+   *
+   * 1.5 is the factor that leaves the `i` sitting in the disc the way Lucide's
+   * own sits in its circle. Lucide inks 10.5 units of a 22-unit circle, 26% of
+   * it clear at each end; the scaled mark inks 14.5 of the 28 grid units the
+   * 14px disc covers at the `row` rung, 24% clear. Measured at 1x and 2x before
+   * it was chosen — 1.25 reads as a small `i` in a big disc and 1.625 crowds the
+   * edge, and both are legible where the ringed original at this size is not.
+   */
+  InfoMark: { drop: ["circle"], scale: 1.5 },
 }
 
 function redraw(name, shapes) {
   const recipe = REDRAWN[name]
   if (!recipe) return shapes
-  const { mirror = false, scale = 1 } = recipe
+  const { mirror = false, scale = 1, drop = [] } = recipe
+  if (drop.length) {
+    shapes = shapes.filter(([tag]) => !drop.includes(tag))
+    if (!shapes.length) throw new Error(`redraw: ${name} dropped every shape it had`)
+  }
   const mid = GRID / 2
   const move = (x, y) => [
     mid + (mirror ? -1 : 1) * (x - mid) * scale,
@@ -2107,7 +2161,21 @@ export function drawIcon(data: IconData, size: IconSize = 16, weight: IconWeight
  * which.
  */
 export function icon(name: IconName, size: IconSize = 16, weight: IconWeight = "auto"): SVGSVGElement {
-  return drawIcon(ICONS[name], size, weight)
+  const svg = drawIcon(ICONS[name], size, weight)
+  /*
+   * THE MARKER CARRIES THE NAME NOW, where it used to carry an empty string.
+   *
+   * Every rule that reads it is written \`svg[data-de-glyph]\`, which matches on
+   * presence and is unaffected. What the value adds is the ability to say
+   * something about ONE mark — and there is exactly one thing worth saying,
+   * which is the optical correction for \`Cursor\` in \`css/icons.ts\`.
+   *
+   * Set here and not in \`drawIcon\`, because \`drawIcon\` also renders the HOST
+   * app's own icons, whose names belong to a set this package did not author. A
+   * rule written against one of ours must not be able to reach one of theirs.
+   */
+  svg.setAttribute(ICON_MARKER_ATTRIBUTE, name)
+  return svg
 }
 
 /**

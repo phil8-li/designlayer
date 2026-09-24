@@ -75,6 +75,12 @@ function editorRow(entry) {
     kind: "editor",
     port: typeof entry.appPort === "number" ? entry.appPort : null,
     url: typeof entry.appUrl === "string" ? entry.appUrl : "",
+    // Empty, and it stays empty: the registry records what an editor is pointed
+    // at, not what the served page calls itself, and inventing a title from the
+    // URL here would be the same string twice under two keys. The browser falls
+    // back through the project folder before it reaches the URL — see
+    // `appLabel` in `src/panels/app-chooser.ts` — which is where a row with no
+    // package name gets something a person actually chose.
     title: "",
     projectRoot: typeof entry.projectRoot === "string" ? entry.projectRoot : null,
     packageName: typeof entry.packageName === "string" ? entry.packageName : null,
@@ -152,10 +158,22 @@ export function createAppSwitcher({
       const running = siblings()
 
       if (!chooserUrl) {
-        // No screen to ask about apps that have no editor yet, which is not the
-        // same as nothing to switch to: switching between editors needs nothing
-        // but their URLs.
-        return { chooser: running.length > 0, apps: running }
+        /*
+         * No screen to ask about apps that have no editor yet, which is not the
+         * same as nothing to switch to: switching between editors needs nothing
+         * but their URLs.
+         *
+         * `chooser` was `running.length > 0` here, and the browser read the
+         * `false` as "this session has no app chooser" and said so, inside the
+         * app chooser, to everybody running a single editor with no start
+         * screen — which is most people, most of the time. The field never
+         * meant that. It answers whether a supervisor can START something, and
+         * an empty list is a fact about the machine right now rather than a
+         * missing feature. So this reports the truth and lets the menu write
+         * its own empty state, which is where a sentence about what the reader
+         * can do next belongs.
+         */
+        return { chooser: true, apps: running }
       }
 
       let response

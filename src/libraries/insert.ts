@@ -57,6 +57,8 @@
 import { isAngularHost } from "../core/angular"
 import { resolveElementSource } from "../core/bridge"
 import { el, isChrome } from "../core/dom"
+import { tokens } from "../core/tokens"
+import { prefersReducedMotion } from "../core/motion"
 import { describeTarget, type ElementTarget } from "../core/element-target"
 import { isLayerCandidate } from "../core/resolve"
 import type { EditorContext } from "../core/context"
@@ -502,6 +504,21 @@ function setIndicatorPending(pending: boolean): void {
   indicator.classList.toggle("de-insert-indicator--pending", pending)
 }
 
+/**
+ * Which mark is on screen, for the settle in `commitInsert` to hold on to.
+ *
+ * The identity matters rather than the presence: a drag begun during the beat
+ * after a commit reuses this same node, and the settle must not then remove a
+ * mark that now belongs to a gesture in progress.
+ */
+function currentIndicator(): HTMLElement | null {
+  return indicator
+}
+
+/** How long a finished mark holds still before it goes. One rung, read off the ramp. */
+const SETTLE_MS = (): number =>
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
+
 /* ---------- the drag ---------- */
 
 /**
@@ -902,7 +919,28 @@ export async function insertComponent(
   } catch (error) {
     editor.toast(error instanceof Error ? error.message : `Could not insert ${component.name}`, "error")
   } finally {
+    /*
+     * THE PULSE RESOLVES BEFORE IT LEAVES.
+     *
+     * The mark used to breathe for the length of the request and then be
+     * deleted in the same task the request resolved in — the pulse stopped
+     * mid-breath, at whatever opacity it happened to be on, and the bar
+     * vanished. For a gesture whose result is invisible until the page reloads,
+     * that flash was the ONLY closure it had.
+     *
+     * So the pending class comes off, the mark holds still and settled for a
+     * beat, and then it goes. Not a tick and not a colour change: the indicator
+     * is a 2px line on somebody else's page, and the toast is already carrying
+     * the words. All this says is "that finished" rather than "that stopped".
+     *
+     * Guarded on the indicator still being the one this insert armed, so a
+     * second drag begun during the beat takes the mark over rather than having
+     * it pulled out from under it.
+     */
     setIndicatorPending(false)
-    showDropIndicator(null)
+    const settling = currentIndicator()
+    setTimeout(() => {
+      if (currentIndicator() === settling) showDropIndicator(null)
+    }, SETTLE_MS())
   }
 }

@@ -1,6 +1,6 @@
 /** Root variables, the palette, vendor-UI suppression, the app inset, and stacking order. */
 
-import { tokens as t, themeDeclarations } from "../tokens"
+import { tokens as t, themeDeclarations, themeProperties, themeRegistrations } from "../tokens"
 
 /*
  * The vendored React Rewrite overlay stays loaded — we drive it headlessly for
@@ -97,6 +97,50 @@ export const vendorChromeCss = `${VENDOR_CHROME.join(",\n")} { display: none !im
  * leave behind.
  */
 export const paletteCss = `/* ---------- palette ---------- */
+/*
+ * THE ROLES ARE REGISTERED, WHICH IS WHAT LETS THE THEME CROSSFADE.
+ *
+ * An unregistered custom property is untyped as far as the cascade is
+ * concerned, so the browser cannot interpolate one colour into another and a
+ * \`transition\` naming it does nothing. Flipping the theme repainted the whole
+ * chrome between two frames not because nobody had written the transition, but
+ * because there was no way to write one that worked.
+ *
+ * \`themeRegistrations()\` emits one \`@property\` per palette role, generated from
+ * the same rows as the declarations below, so a registration cannot drift from
+ * the value it types. See the note on it in \`tokens.ts\`.
+ */
+${themeRegistrations()}
+
+/*
+ * And the crossfade itself, on everything the chrome paints.
+ *
+ * One rule rather than a transition per surface: the theme changes every role
+ * at once, so the thing being animated is the palette and not any particular
+ * control. It has to name the ROLES — the registered properties — rather than
+ * \`background\` or \`color\`, because those are already being transitioned all
+ * over this chrome at their own durations for their own reasons, and re-timing
+ * them here would make every hover in the editor 180ms slow for the sake of a
+ * button pressed twice a session.
+ *
+ * On \`:root\`, where the roles are declared and from where they inherit, so a
+ * popover mounted on \`<body>\` fades with everything else.
+ *
+ * \`base\` is the rung: long enough that a whole-surface colour change reads as a
+ * dissolve rather than a cut, short enough that the chrome is not visibly
+ * mid-flip while the reader is already looking at it.
+ *
+ * Reduced motion clamps it to nothing — someone who asked for less motion gets
+ * the old instant repaint, and a repaint is not motion. That takes naming
+ * \`:root\` in the blanket below, which it originally did not: this selector is
+ * \`<html>\`, and \`<html>\` is not \`[data-designlayer]\`.
+ */
+:root {
+  transition: ${themeProperties()
+    .map((property) => `${property} ${t.duration.base} ${t.ease}`)
+    .join(",\n    ")};
+}
+
 :root,
 [data-designlayer][data-de-theme="dark"] {
 ${themeDeclarations("dark")}
@@ -108,14 +152,76 @@ ${themeDeclarations("light")}
 `
 
 export const baseCss = `${paletteCss}
+/*
+ * THE HALF OF THE CHROME THE PALETTE CANNOT REACH.
+ *
+ * Forty-six custom properties say what the editor paints. They say nothing
+ * about what the USER AGENT paints inside it, and the chrome has more of that
+ * than it looks: every \`<select>\`'s drop-down list, every checkbox, the colour
+ * input's native picker, the caret and the selection highlight in a text field,
+ * the scrollbar on any panel that overflows, an autofilled field's yellow. All
+ * of those follow \`color-scheme\`, and this stylesheet had never declared one —
+ * so they followed the HOST PAGE's, or failing that the operating system's. The
+ * editor could be in its dark theme with a stack of white native menus opening
+ * out of it, and the theme switch could not do anything about it.
+ *
+ * It is written here rather than inside the two palette blocks because those
+ * are generated from \`PALETTE\` and every row in \`PALETTE\` is registered
+ * \`syntax: "<color>"\` — \`dark\` is not a colour, the registration would drop it,
+ * and \`token-cases.mjs\` correctly reads any extra property in those blocks as a
+ * role that got renamed in one place only.
+ *
+ * SCOPED TO \`[data-designlayer]\`, NEVER \`:root\`. \`:root\` here is the product's
+ * own \`<html>\`: a scheme declared there would re-tint the app being edited,
+ * which is the one document this editor must leave exactly as its author wrote
+ * it. \`el()\` stamps the attribute on every node the chrome builds, so the
+ * attribute is a complete description of "ours" and \`<html>\` is not.
+ *
+ * Two selectors for the light case, because only \`<html>\` and the editor root
+ * carry \`data-de-theme\` (\`applyTheme\` in \`shell/toolbar.ts\` writes both). The
+ * options window, the token popover and the probe span are mounted straight
+ * onto \`<body>\`, so they are inside neither — the descendant selector is what
+ * reaches them, keyed off the document attribute the same writer sets.
+ *
+ * Dark is the unconditional base for the reason every other default in this
+ * file is dark: it is what the editor is when nothing has said otherwise.
+ */
+[data-designlayer] { color-scheme: dark; }
+:root[data-de-theme="light"] [data-designlayer],
+[data-designlayer][data-de-theme="light"] { color-scheme: light; }
+
 :root {
   --de-left: 0px;
   --de-right: 0px;
   --de-top: 0px;
   /* The toolbar's own pair, which does not collapse when the chrome hides —
-     see syncInsets in shell/shell.ts. */
+     see syncInsets in shell/shell.ts.
+
+     \`--de-bar-right\` is also read from OUTSIDE this repository: a companion
+     bundle docks itself into the canvas lane with it. Renaming the \`de-\`
+     prefix, or this variable, has to be done there too — see COMPANION
+     CONTRACT on \`.de-root\` below. */
   --de-bar-left: 0px;
   --de-bar-right: 0px;
+  /*
+   * ONE PERCENT OF THE CANVAS — the app's \`vw\` after \`shell/app-viewport.ts\`
+   * has rewritten it.
+   *
+   * The inset below shrinks the app's containing block, and an app laid out in
+   * percentages follows it. An app laid out in \`vw\` does not: \`100vw\` is the
+   * WINDOW, which the panels do not change, so the app kept its full width and
+   * ran underneath the inspector — visible only on the right, because padding
+   * on the left moves the origin while padding on the right has nothing to push
+   * against. \`app-viewport.ts\` rewrites those declarations to read this
+   * property instead, and this is the line that makes the substitution mean
+   * "the strip between the panels".
+   *
+   * Declared in CSS rather than written from \`syncInsets\`, because expressed
+   * this way it is already correct on a window resize, on a seam drag and while
+   * the chrome is hidden — the two properties it reads are the same two the
+   * shell keeps up to date, and a zeroed pair leaves this exactly \`1vw\`.
+   */
+  --de-vw: calc((100vw - var(--de-left) - var(--de-right)) / 100);
 }
 
 ${VENDOR_CHROME.map((selector) => `#react-rewrite-root ${selector}`).join(",\n")} {
@@ -164,6 +270,31 @@ html.designlayer-inspecting svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /*
+   * The ROOTS are in this list, and they were the hole in it.
+   *
+   * \`el()\` stamps the attribute on every node it builds, so \`[data-designlayer] *\`
+   * reaches everything the chrome contains — but not the handful of elements
+   * that are themselves a root. Four surfaces are mounted straight onto
+   * \`<body>\`, and one of them is the token popover, which is also the surface
+   * most recently given an entrance. A blanket that covers a popover's contents
+   * and not the popover is a blanket with the arrival still in it.
+   */
+  /*
+   * \`:root\` IS IN THIS LIST, AND LEAVING IT OUT WAS A REAL HOLE.
+   *
+   * The palette's crossfade above is declared on \`:root\` — that is \`<html>\`,
+   * which carries \`data-de-theme\` but NOT \`data-designlayer\`, so neither
+   * selector below reached it. Custom properties inherit, so the whole chrome
+   * dissolved over 180ms for a reader who had asked for none: every
+   * descendant's own transition was dutifully clamped while the VALUES they
+   * read were still interpolating at the root above them.
+   *
+   * Worth stating plainly, because the comment on that rule claimed it was
+   * covered. A blanket is only as good as the roots it names.
+   */
+  :root,
+  [data-designlayer],
   [data-designlayer] *, [data-designlayer] *::before, [data-designlayer] *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
@@ -203,12 +334,97 @@ html.designlayer-inspecting svg {
   html.designlayer-chrome-hidden .de-launcher { opacity: 1; }
 }
 
+/*
+ * THE TYPOGRAPHIC DECISIONS THAT BELONG TO THE WHOLE CHROME, NOT TO A
+ * COMPONENT.
+ *
+ * Face and size are obvious. The rest are here because each of them is a
+ * property that is wrong the moment a second rule declares it.
+ *
+ * SMOOTHING is the pair \`better-typography\` names: "apply
+ * \`-webkit-font-smoothing: antialiased\` and \`-moz-osx-font-smoothing:
+ * grayscale\` once on the root layout, never per component". Only the first half
+ * was here, which is the half Chromium and WebKit read — so on macOS Firefox
+ * the entire chrome kept subpixel antialiasing and rendered a visible notch
+ * heavier than the same build in Safari. One declaration, one browser, and the
+ * whole frame around the product a different weight in it.
+ *
+ * TABULAR FIGURES, and this is the one that is a judgement rather than a
+ * transcription, so it is argued rather than asserted.
+ *
+ * The rule is "tabular-nums on any value that changes". Taken literally that is
+ * a per-component decision, and it had been taken that way: nine rules across
+ * eight files each declared it for one span, and the list of what they covered
+ * — the canvas badge, a numeric input, the tab count, the note index, the saved
+ * tally, a library count, a token detail, the selection count — is a list of
+ * the numbers somebody happened to be looking at when they noticed. The ones
+ * left out are the same kind of thing: the lint group's count, the summary
+ * line's issue total, an options folder's "12 controls · 3 choices", every
+ * button whose label counts what it is about to act on.
+ *
+ * That split is not a hierarchy, it is coverage, and coverage is what a root
+ * declaration is for. This chrome is an instrument panel: essentially every
+ * numeral it prints is a measurement, a coordinate, a count or a port, and
+ * essentially every one of them is rewritten in place while the reader watches.
+ * The cost on the other side is real and small — proportional digits inside a
+ * sentence of prose set marginally better — and a 240px panel of 12px type is
+ * not where that difference is spent.
+ *
+ * So it is declared once and the nine per-component copies are gone. What is
+ * NOT redundant is the rule below: a form control gets the UA's \`font\`
+ * shorthand, which resets \`font-variant\` to normal, so an \`<input>\` does not
+ * inherit this no matter where it sits.
+ *
+ * LEADING is \`type.leadingRow\` and is unitless for the reason argued on the
+ * token: a flat \`16px\` here inherited onto the \`micro\` rung as 1.6 and onto
+ * \`body\` as 1.33, which is under the 1.4 floor for anything that wraps — and
+ * eleven rules in \`css/\` had already opted out of it to say so.
+ *
+ * WRAPPING, last, and root-level for a reason specific to this surface.
+ *
+ * \`text-wrap: pretty\` keeps a single short word off the final line. The usual
+ * caution is to put it on descriptions and keep it out of long-form text,
+ * because browsers spend real layout work on a long paragraph and evening one
+ * out is not worth it. There is no long-form text in this chrome. The longest
+ * run anywhere in it is a three-line hint in a 240px panel, and there are
+ * perhaps thirty such runs — every one of them a description in the sense the
+ * rule means, and every one of them at a width where a one-word last line is a
+ * third of the box wasted.
+ *
+ * So the alternative to one inherited declaration is thirty, added one at a
+ * time by whoever next notices an orphan. It costs nothing where it does not
+ * apply: a single-line label has no final line to fix, and a rule that sets
+ * \`white-space: nowrap\` or \`pre\` beats the inherited wrap mode outright.
+ * Headings that want \`balance\` instead say so locally — \`.de-empty\` below is
+ * the one place in the chrome that does.
+ */
 [data-designlayer] {
   box-sizing: border-box;
   font-family: ${t.font.ui};
   font-size: ${t.type.body};
-  line-height: 16px;
+  line-height: ${t.type.leadingRow};
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/*
+ * The figures again, for the elements that do not inherit them.
+ *
+ * Every UA ships \`font: <something>\` on form controls, and the \`font\`
+ * shorthand resets \`font-variant\` — so a control inside the chrome computes
+ * \`font-variant-numeric: normal\` however the root is set. The stylesheet
+ * already works around the size and face half of this by writing
+ * \`font-family: inherit; font-size: …\` on every field, button and select it
+ * draws; this is the third property in that set and was the one nobody knew to
+ * restate, which is how the inspector's numeric input came to be the only
+ * control in the panel that had it.
+ *
+ * \`:where()\` so it is beaten by anything, and the four elements by name rather
+ * than \`*\`, because only these carry the UA's shorthand.
+ */
+[data-designlayer] :where(input, textarea, select, button) {
+  font-variant-numeric: inherit;
 }
 /*
  * Ink is declared at the ROOTS of the chrome, not on every node of it.
@@ -286,12 +502,53 @@ html.designlayer-inspecting svg {
 .de-launcher,
 .de-ann-marker, .de-ann-marker::before,
 .de-ann-index, .de-ann-help,
-.de-ann-swatch, .de-ann-swatch::before,
 .de-ann-toggle, .de-ann-toggle::after,
 .de-lib-switch, .de-lib-switch::after,
-.de-instance-switch, .de-instance-switch::after {
+.de-instance-switch, .de-instance-switch::after,
+/*
+ * Five more, found by sweeping the sheet for \`50%\` and for a radius past half
+ * the height rather than by remembering.
+ *
+ * That is the point worth recording: this list has now been wrong three times,
+ * and each time for the same reason — it is maintained by hand against a rule
+ * that a machine could check. The severity dot and the lint disc are plain
+ * \`50%\` circles that were rendering as rounded squares; \`.de-opt-chip\` is a
+ * pill at \`radius.xl\` on a 20px box, which is the clamp case the paragraph
+ * above describes.
+ *
+ * That sweep now exists — \`test/concentric-cases.mjs\`, "every circle in the
+ * chrome has opted out of the squircle". It flags any rule declaring \`50%\`, or
+ * a radius at or past half its own declared height, that is not named here. It
+ * immediately found four more than the eye had: the align pad's dot, the
+ * annotation hint pill, the layers drop line and the library's busy bar. The
+ * list below is still where the decision is recorded; it can no longer be
+ * silently incomplete.
+ */
+.de-lint-dot,
+.de-lint-info,
+.de-opt-chip,
+.de-pad-cell::before,
+.de-ann-hint,
+.de-layer-drop {
   corner-shape: round;
 }
+/*
+ * \`.de-lib-status[data-de-busy]::after\` STOOD HERE and no longer needs to.
+ *
+ * It is the travelling sweep under the project scan's status line, and it was
+ * listed because a \`radius.sm\` on a two-pixel-high bar is a circle by this
+ * audit's arithmetic. That radius has gone — see \`css/libraries.ts\`, where the
+ * reasoning lives: the caps it drew sat where the gradient had already faded to
+ * transparent, so it rounded nothing visible. With no radius the rule is not a
+ * round shape and has nothing to opt out of.
+ *
+ * Worth keeping the note, because the sweep now carries a second selector for
+ * the sign-in dialog's waiting sentence, and a grouped rule can never satisfy
+ * this list: the check compares each comma-separated entry against a rule's
+ * WHOLE selector. Anybody who puts a radius back on that bar will find this
+ * test failing with no way to silence it, and the answer is not to split the
+ * rule — that spends a second infinite animation against a budget of five.
+ */
 /*
  * The UA's own button padding, gone — once, here, rather than in each rule that
  * remembers.
@@ -335,6 +592,171 @@ html.designlayer-inspecting svg {
  */
 [data-designlayer] svg { pointer-events: none; display: block; flex: none; }
 
+/*
+ * A ROW LEAVING A LIST, stated once for every list in the chrome.
+ *
+ * Resolving a note, deleting one, removing a library: three surfaces, one
+ * moment, and until now three instances of the row simply ceasing to exist
+ * while the list snapped shut around the hole. These are terminal acts, and
+ * "the thing you were looking at is gone" is the same appearance as a list that
+ * failed to draw.
+ *
+ * Here rather than in each sheet because it is one idea. The alternative is
+ * what the chrome already had too much of — the same pattern solved separately
+ * in \`annotations.ts\` and \`libraries.ts\`, free to drift apart by a rung.
+ *
+ * \`height\` is animated from a value \`core/leave.ts\` measures and pins one frame
+ * earlier: a row's height is its content's, so there is nothing for CSS alone
+ * to animate from. Everything that contributes vertical space goes to zero with
+ * it — padding, borders and the flex gap the list sets — or the row leaves
+ * behind a few pixels of nothing. \`overflow: hidden\` keeps the contents from
+ * spilling as the box closes, and \`pointer-events: none\` means a row on its way
+ * out cannot take a second click.
+ *
+ * The blanket above clamps all of this to 0.01ms under reduced motion, which is
+ * the right answer here: the row goes at once, and \`leaveRow\`'s timer settles
+ * on the next frame rather than waiting out a duration nothing is using.
+ */
+/*
+ * A SURFACE ARRIVING, stated once for every popover in the chrome.
+ *
+ * Five cards used to appear at full size and full shadow: the token picker, the
+ * options window, the layer context menu, the shortcuts sheet, the app
+ * chooser's menu. A surface that materialises at its final appearance reads as
+ * a paste rather than as something that opened — and one of them, the
+ * annotation composer, already had an entrance of its own, which made the other
+ * four look like an oversight rather than a decision.
+ *
+ * \`easeSpring\` is the curve \`tokens.ts\` reserves for "an object arriving rather
+ * than a value changing", which is what a card over the page is. It stays a
+ * SMALL arrival — three pixels and three percent — because these open under the
+ * pointer that asked for them, and a card that has to travel is a card the eye
+ * has to chase back to where it already was.
+ *
+ * The exit is shorter and flatter. Leaving is not news: it wants to be out of
+ * the way by the time the reader has looked elsewhere, and a spring on the way
+ * out would be a card bouncing as it stopped existing. \`forwards\` holds the
+ * end state so the surface does not flash back to full opacity in the frame
+ * between the animation finishing and \`core/leave.ts\` hiding it.
+ */
+/*
+ * AND IT GROWS OUT OF THE CONTROL THAT OPENED IT, NOT OUT OF ITSELF.
+ *
+ * This keyframe used to carry no \`transform-origin\`, which means \`center\` —
+ * every card expanded from its own middle — and a fixed \`translateY(-3px)\`,
+ * which means every card also drifted DOWN into place. That is right for a card
+ * that opens below its trigger and exactly backwards for one that opens above
+ * it, and three of the four surfaces using it flip above the trigger whenever
+ * dropping down would overrun the viewport: the app chooser's menu, the token
+ * picker's popover and the annotation composer each compute that branch
+ * already. In the flipped case the card entered travelling AWAY from the
+ * control that produced it — which is precisely the "card the eye has to chase"
+ * the note above says this animation exists to avoid.
+ *
+ * Both halves are variables now, and the placer writes them from the branch it
+ * has already taken. The default pair is the old behaviour — open below, grow
+ * from the top edge, settle downward — so a surface that never flips and never
+ * writes anything is unchanged.
+ *
+ * The precedent is in the repo and this is it generalised: \`css/tooltip.ts\`
+ * reads \`--de-tip-origin\` and \`--de-tip-rise-y\`, and \`core/tooltip.ts\`'s
+ * \`applySide\` writes the pair off the same above/below decision. One popover
+ * had solved this; the other five had not.
+ */
+@keyframes de-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(var(--de-arrive-rise, -3px));
+  }
+}
+.de-arrive {
+  animation: de-arrive ${t.duration.base} ${t.easeSpring};
+  transform-origin: var(--de-arrive-origin, center top);
+}
+/*
+ * THERE IS NO MATCHING EXIT, AND THAT IS A FINDING RATHER THAN AN OMISSION.
+ *
+ * One was built and taken back out. An exit needs the node to outlive the
+ * dismissal that removed it, and every dismissible surface in this chrome has a
+ * contract that says the opposite: the shortcuts sheet and the layer menu are
+ * on the Escape stack, where a surface still present absorbs the next
+ * dismissal; the options window owes its opener the focus back; the annotation
+ * composer is asserted gone the moment a note is saved. Deferring the removal
+ * broke twelve cases across four surfaces, and in two of them it was a real
+ * input hazard rather than a test being strict.
+ *
+ * A \`.de-arrive--fade\` rule and its \`de-arrive-fade\` keyframe sat here for a
+ * while afterwards, unreferenced, as a signpost. A rule nobody applies is still
+ * bytes in every editor's stylesheet and a name a sweep has to rule on twice,
+ * so the signpost is these words and the CSS has gone.
+ *
+ * Done properly, an exit means removing the node at once and playing the
+ * animation on a ghost in a pointer-inert layer — so that "closed" and "still
+ * painted" stop being the same question. That is a layer this chrome does not
+ * have, and inventing one to fade four cards is a poor trade.
+ *
+ * So: everything arrives, nothing lingers. Which is the right half to keep — an
+ * appearance is news and wants to be seen happening; a dismissal is the user
+ * having finished with something and wanting it gone.
+ */
+
+/*
+ * The other direction: a group opening to its own height.
+ *
+ * Paired with \`.de-leaving\` below and on the same rung, because they are one
+ * vocabulary — a list closing over a row and a disclosure opening under a
+ * toggle are the same statement about a panel changing size. The height is
+ * measured and written by \`core/leave.ts\`; this is only the curve.
+ */
+.de-entering {
+  transition: height ${t.duration.base} ${t.ease}, opacity ${t.duration.fast} ${t.ease};
+}
+
+.de-leaving {
+  overflow: hidden;
+  opacity: 0;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  /*
+   * The GAP goes too, and it cannot be zeroed — it belongs to the list, not to
+   * the row. Every list this runs in is a flex column with a \`gap\`, and a row
+   * that collapses to nothing still reserves one, so the list would close onto
+   * a few pixels of hole and then snap them shut on the rebuild.
+   *
+   * \`core/leave.ts\` reads the container's own \`row-gap\` and writes it here, so
+   * the margin cancels exactly one gap — the one that genuinely disappears with
+   * this row — and writes zero when the row is the list's only child, where
+   * there is no gap to cancel.
+   */
+  margin-block: 0 calc(-1 * var(--de-leave-gap, 0px)) !important;
+  pointer-events: none;
+  transition:
+    height ${t.duration.base} ${t.ease},
+    opacity ${t.duration.fast} ${t.ease},
+    padding ${t.duration.base} ${t.ease},
+    border-width ${t.duration.base} ${t.ease},
+    margin ${t.duration.base} ${t.ease};
+}
+
+/*
+ * COMPANION CONTRACT — two values here are depended on from outside this
+ * repository, where no repo-wide sweep will ever find them.
+ *
+ * A companion bundle under \`~/.local/share/designlayer/companions/<name>/\` is
+ * concatenated after \`dist/designlayer.js\` (see readCompanionBundles in
+ * runtime/launcher.mjs) and is built from its own source. The Agentation
+ * companion's \`src/entry.jsx\` hardcodes 2147483050 — one above the z-index
+ * below — to lift its pins over the panels, and reads \`--de-bar-right\` to dock
+ * its bar into the canvas lane.
+ *
+ * So renaming the \`de-\` prefix, or moving this z-index, breaks a companion
+ * silently as far as this repository is concerned: the toolbar parks under the
+ * inspector and its pins paint behind the panels. Change those two values in
+ * the companion's source and rebuild it (\`node build.mjs\` in that folder) in
+ * the same change.
+ */
 .de-root {
   position: fixed;
   inset: 0;
@@ -342,6 +764,56 @@ html.designlayer-inspecting svg {
   pointer-events: none;
 }
 .de-root > * { pointer-events: auto; }
+
+/*
+ * THE ESCAPE STOP: clipped until it is focused, then a real control.
+ *
+ * The keyboard's way back OUT of the chrome — \`shell/shell.ts\` argues why it is
+ * this and not a skip link. What it needs from a stylesheet is the oldest trick
+ * in the accessibility book, and the two halves both matter.
+ *
+ * CLIPPED, NOT HIDDEN. \`display: none\`, \`visibility: hidden\` and
+ * \`width/height: 0\` all remove the button from the tab order, which is the one
+ * thing it exists to be in. A 1px box with \`clip-path: inset(50%)\` is out of
+ * the reader's way and still focusable. \`white-space: nowrap\` stops the label
+ * wrapping into a tall sliver of a box that is about to be one pixel wide, and
+ * \`overflow: hidden\` keeps the text from painting outside the clip in engines
+ * that lay it out first.
+ *
+ * FOCUSED, IT BECOMES ORDINARY. The clip is released and it lands top-centre,
+ * over the app, styled like the rest of the chrome — it is the first thing a
+ * keyboard user sees of this editor, so it has to look like it belongs to it.
+ * Top-centre because that is where the toolbar is, so the thing appearing is
+ * where the thing it talks about already lives.
+ *
+ * \`:focus\`, not \`:focus-visible\`. This control is unreachable by pointer — it
+ * has no hit area to click — so every focus it can receive is a keyboard focus,
+ * and \`:focus-visible\` would add a heuristic with nothing to decide.
+ */
+.de-escape {
+  position: fixed;
+  top: 0; left: 50%;
+  width: 1px; height: 1px;
+  margin: 0; padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+  background: ${t.color.bgRaised};
+  color: ${t.color.text};
+  font-family: inherit; font-size: ${t.type.body};
+  cursor: pointer;
+}
+.de-escape:focus {
+  width: auto; height: auto;
+  padding: ${t.space.md}px ${t.space.lg}px;
+  transform: translate(-50%, ${t.space.md}px);
+  border-radius: ${t.radius.md};
+  box-shadow: ${t.shadow.float};
+  clip-path: none;
+  outline: 2px solid ${t.color.accent};
+  outline-offset: 2px;
+}
 
 /*
  * Inside .de-root's stacking context, canvas chrome sits below the panels.
@@ -355,6 +827,29 @@ html.designlayer-inspecting svg {
  * raise each panel over the zero-width seam sitting on its edge, and the half
  * of the seam's grab strip that overlaps the panel would stop being grabbable.
  */
+/*
+ * THE EDITOR'S OWN ARRIVAL, borrowed from its exit.
+ *
+ * \`shell/shell.ts\` mounts the root wearing this class and takes it off two
+ * frames later, so the chrome plays its stand-down backwards on the way in:
+ * panels slide off their edges, the bar is transparent, and both settle. The
+ * alternative was a second set of rules describing the same movement in the
+ * opposite direction, free to drift from the first.
+ *
+ * It reuses the hidden-state selectors deliberately rather than restating their
+ * transforms — those live in \`css/panels.ts\` and \`css/toolbar.ts\` beside the
+ * reasoning for the distances, and a copy here would be a second place to
+ * change them. Reduced motion needs nothing either: the blanket above already
+ * governs the rules this leans on.
+ *
+ * The launcher is excluded. It is the thing you press to bring the editor BACK,
+ * so it belongs to the hidden state and has no business appearing during an
+ * arrival that ends with it hidden.
+ */
+.de-root--arriving .de-panel--left { transform: translateX(-100%); }
+.de-root--arriving .de-panel--right { transform: translateX(100%); }
+.de-root--arriving .de-toolbar { opacity: 0; }
+
 .de-overlay-layer { z-index: 1; }
 .de-toolbar, .de-rail { z-index: 2; }
 /*
@@ -364,4 +859,28 @@ html.designlayer-inspecting svg {
  */
 .de-launcher { z-index: 3; }
 
+
+/*
+ * The live region, present in the layout and invisible in it.
+ *
+ * Not \`display: none\` and not \`visibility: hidden\`: neither is announced,
+ * which would make the region decorative. The 1px clip is the long-standing
+ * visually-hidden recipe, and it is 1px rather than 0 because some engines skip
+ * a zero-area node entirely.
+ *
+ * No \`margin: -1px\`. The classic recipe carries one to keep the node from
+ * affecting layout, which matters for a statically-positioned element and not
+ * for this one — it is absolute, so it is already out of flow, and the negative
+ * margin is a value off the spacing scale bought for nothing. The token suite
+ * flags exactly that, and it was right to.
+ */
+.de-announcer {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 `

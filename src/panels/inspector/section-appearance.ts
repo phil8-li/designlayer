@@ -36,9 +36,18 @@
  */
 
 import { el, round } from "../../core/dom"
+import { revealGroup } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
-import { group, iconButton, isExpanded, numberField, section, setExpanded } from "./field"
+import {
+  group,
+  iconButton,
+  isExpanded,
+  numberField,
+  section,
+  setExpanded,
+  takeJustExpanded,
+} from "./field"
 import { hasUtility, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -93,6 +102,31 @@ export const appearanceSection: InspectorSection = (context) => {
   const uniformRadius = radii.every((value) => value === radii[0]) ? radii[0] : null
   const radiusField = numberField({
     id: "appearance.radius",
+    /*
+     * `icon.control`, AND IT STAYS THERE — this was tried at `icon.row` and put
+     * back, so the next person does not spend the same hour.
+     *
+     * The case for moving it is real. A field label slot holds either a word or
+     * a glyph, and in this column the two alternate down the stack:
+     * `CornerRadius` here, TL/TR/BR/BL as words underneath. Those words set at
+     * 12px/400, whose stems render around 1.0–1.1px, while a `control`-rung
+     * glyph strokes at 1.500px — so the glyph labels read about 40% heavier
+     * than the worded ones they alternate with, which is a rank nobody
+     * designed. `icon.row` would put them at 1.250px, within ~15%.
+     *
+     * It cannot be done at the call site, because these are NATIVE glyphs. The
+     * hand-drawn family is set out on a grid whose strokes land on whole pixels
+     * only at 16, 24 and 32 — `NATIVE_ICON_SIZES` in `core/icons.ts`, with the
+     * measurements behind it — and at 12 the same construction resolves to four
+     * or six ink levels, which is the soft half-covered edge the family was
+     * drawn to remove. `icon-cases.mjs` fails the build on exactly this, by
+     * name, and it is right to: a blurrier glyph is a worse answer to
+     * "match the stroke to the text" than a heavier one.
+     *
+     * So the stroke mismatch is real and the fix is not here. It is either a
+     * 12px redrawing of the five glyphs this column uses, or a decision that a
+     * worded label is the only kind this column gets.
+     */
     label: icon("CornerRadius", tokens.icon.control),
     title: "Corner radius",
     value: uniformRadius,
@@ -168,6 +202,14 @@ export const appearanceSection: InspectorSection = (context) => {
         tokenHints(context, "corner-radius", "Corner radius"),
       ]
 
+  const radiusGroup = group("Corner radius", ...radiusControls)
+  /*
+   * Opened only on the render that follows the press — see `takeJustExpanded`.
+   * Every other rebuild of this panel, of which there is one per commit, leaves
+   * the group exactly as it found it.
+   */
+  if (takeJustExpanded(RADIUS_EXPANDER)) revealGroup(radiusGroup)
+
   /*
    * Captions, and the words are Figma's own: `Opacity` and `Corner radius`.
    *
@@ -196,7 +238,7 @@ export const appearanceSection: InspectorSection = (context) => {
         onCommit: (value) => apply("opacity", String(round(value / 100, 3))),
       })
     ),
-    group("Corner radius", ...radiusControls),
+    radiusGroup,
   ])
 
   return section("Appearance", body)

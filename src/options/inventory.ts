@@ -85,7 +85,18 @@ export interface LevaTree {
   selectCount: number
 }
 
-export type LevaInventory = ({ available: true } & LevaTree) | { available: false; reason: string }
+/**
+ * The unavailable branch carries a headline as well as a sentence, because the
+ * pane draws it as an empty state rather than as a status line. The four states
+ * differ in KIND — no integration, integration on another screen, integration
+ * with nothing in it, integration that threw — and a reader scanning a 240px
+ * column reads the heading before the prose. Splitting them here rather than
+ * letting the pane guess from the string keeps that decision with the code that
+ * actually knows which state it is in.
+ */
+export type LevaInventory =
+  | ({ available: true } & LevaTree)
+  | { available: false; title: string; reason: string }
 
 function levaConfig(): ClientLevaConfig | null {
   const raw = (globalThis as { __DESIGNLAYER_CONFIG__?: unknown }).__DESIGNLAYER_CONFIG__
@@ -173,14 +184,28 @@ function readBounds(settings: unknown): LevaControl["bounds"] {
   return bounds.min === null && bounds.max === null && bounds.step === null ? null : bounds
 }
 
-export function formatValue(value: unknown): string {
+/**
+ * A control's value as one line of text.
+ *
+ * `cut` is the row's version — an object longer than 64 characters is trimmed
+ * to 61 and closed with an ellipsis, because the row is one line in a 240px
+ * panel. Pass `false` for the whole thing.
+ *
+ * The two live in one function on purpose. This was the only truncation in the
+ * chrome whose full text existed NOWHERE on screen: every other ellipsis here
+ * cuts a string the file, the brief or the row above still holds, but a leva
+ * value is only ever this. A caller that shortens has to be able to get the
+ * long form back from the same place, or the second form drifts into being a
+ * different serializer.
+ */
+export function formatValue(value: unknown, cut = true): string {
   if (typeof value === "number") return String(round(value, 3))
   if (typeof value === "string") return value === "" ? '""' : value
   if (typeof value === "boolean") return value ? "on" : "off"
   if (value === null || value === undefined) return "—"
   try {
     const text = JSON.stringify(value) ?? "—"
-    return text.length > 64 ? `${text.slice(0, 61)}…` : text
+    return cut && text.length > 64 ? `${text.slice(0, 61)}…` : text
   } catch {
     return "—"
   }
@@ -324,15 +349,59 @@ export function levaStore(): LevaStoreLike | null {
   return store as LevaStoreLike
 }
 
+/**
+ * The inventory, or the reason there isn't one — and every reason names a way on.
+ *
+ * These four sentences ARE the Controls tab in every state but the working one,
+ * which is what makes them empty states rather than statuses: each has to say
+ * what the tab would list, why it is listing nothing, and the one thing the
+ * reader can do about it.
+ *
+ * "Leva" is gone from all four, and the comment that used to sit here argued
+ * the opposite: that the library's name should stay because the host app wired
+ * it up and their own config key spells it. That argument was about the config
+ * author and these sentences are read by a designer, who did not choose the
+ * library, cannot see it in the product, and has no use for its name. It also
+ * stopped being true in the narrow sense the argument rested on — `controls` in
+ * `designlayer.config.mjs` is the key, `leva` is one integration under it, so
+ * printing the vendor promises a specificity the editor does not keep. What
+ * matters is that ONE name is used consistently, and "control panel" is that
+ * name in all four.
+ *
+ * Neither does any of them send the reader to another tab in this pane. There
+ * used to be two, and the no-integration sentence pointed at the other one; the
+ * saved styles it pointed at are in the right panel now, beside the selection
+ * every one of their verbs needs, and an empty state that names a surface the
+ * reader would have to go hunting for is worse than one that names nothing.
+ *
+ * "Reopen this list" is gone too. It described work the product never required
+ * — the pane subscribes to the host's store and repaints itself — and an
+ * instruction for a step that does not exist teaches a reader to distrust the
+ * rest of the copy.
+ *
+ * The thrown case never shows the throw. `TypeError: Cannot read properties of
+ * undefined` rendered as a tab's empty state is a stack trace addressed to a
+ * designer; the value goes to the console, where the person who can act on it
+ * is, and the tab gets a sentence naming the reload.
+ */
 export function readInventory(): LevaInventory {
   const store = levaStore()
   if (!store) {
-    return {
-      available: false,
-      reason: levaConfig()
-        ? "The configured Leva store is not available on this page."
-        : "This host has not configured a Leva control integration.",
-    }
+    return levaConfig()
+      ? {
+          available: false,
+          title: "No app controls on this screen",
+          reason:
+            "The control panel this project configures is not on this page. Open the app " +
+            "surface that mounts it — this list updates on its own.",
+        }
+      : {
+          available: false,
+          title: "No app controls",
+          reason:
+            "This project has not connected a control panel. Add one under controls in " +
+            "designlayer.config.mjs, then reload the app.",
+        }
   }
   try {
     const data = store.getData()
@@ -341,14 +410,22 @@ export function readInventory(): LevaInventory {
     if (tree.controlCount === 0) {
       return {
         available: false,
+        title: "No app controls yet",
         reason:
-          "Leva is loaded but has not registered any controls yet. Open the app surface " +
-          "that owns the controls, then reopen this list.",
+          "The control panel is loaded but has registered no controls yet. Open the app " +
+          "screen that owns them — this list updates on its own.",
       }
     }
     return { available: true, ...tree }
   } catch (error) {
-    return { available: false, reason: `Could not read Leva's store: ${String(error)}` }
+    console.warn("[designlayer] could not read the control store", error)
+    return {
+      available: false,
+      title: "The control panel could not be read",
+      reason:
+        "This page’s control panel could not be read. Reload the page, then open the " +
+        "surface that owns the controls.",
+    }
   }
 }
 
@@ -457,6 +534,34 @@ export function filterTree(sections: readonly LevaFolder[], rawQuery: string): L
   const prune = (folder: LevaFolder): LevaFolder | null => {
     if (folder.path.toLowerCase().includes(query)) return folder
     const controls = folder.controls.filter((control) => matches(control, query))
+    const folders = folder.folders.map(prune).filter((child): child is LevaFolder => child !== null)
+    if (controls.length === 0 && folders.length === 0) return null
+    const pruned: LevaFolder = { ...folder, controls, folders }
+    rollUp(pruned)
+    return pruned
+  }
+
+  return sections.map(prune).filter((section): section is LevaFolder => section !== null)
+}
+
+/**
+ * Prunes to the controls a predicate keeps, dropping the folders left empty.
+ *
+ * `filterTree` cannot do this job: it keeps a whole folder whose NAME matches,
+ * which is right for a text query — searching "Hover" should show what is in
+ * Hover — and wrong for a scope, where a folder's name says nothing about
+ * whether its controls touch the selected element. Two prunes with two rules,
+ * composed by the caller: scope first, then the query over what survived.
+ *
+ * Counts are rolled up again on the way out, so a folder's "12 controls" is a
+ * promise about the rows under it rather than about the tree it came from.
+ */
+export function filterControls(
+  sections: readonly LevaFolder[],
+  keep: (control: LevaControl) => boolean
+): LevaFolder[] {
+  const prune = (folder: LevaFolder): LevaFolder | null => {
+    const controls = folder.controls.filter(keep)
     const folders = folder.folders.map(prune).filter((child): child is LevaFolder => child !== null)
     if (controls.length === 0 && folders.length === 0) return null
     const pruned: LevaFolder = { ...folder, controls, folders }

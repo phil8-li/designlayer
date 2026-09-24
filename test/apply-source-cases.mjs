@@ -205,8 +205,8 @@ await check("AS-03 a turbopack root marker and percent-encoded spaces are normal
     "src/components/ui/button.tsx"
   )
   assert.equal(
-    normalizeSourcePath("/Users/x/IG%20Projects%20Local/Workspaces/src/a.tsx"),
-    "/Users/x/IG Projects Local/Workspaces/src/a.tsx"
+    normalizeSourcePath("/Users/x/Client%20Projects%20Local/host-app/src/a.tsx"),
+    "/Users/x/Client Projects Local/host-app/src/a.tsx"
   )
   assert.equal(normalizeSourcePath("file:///Users/x/src/a.tsx"), "/Users/x/src/a.tsx")
   assert.equal(normalizeSourcePath("./src/a.tsx"), "src/a.tsx")
@@ -220,7 +220,7 @@ await check("AS-04 a bundler chunk is not a source file", () => {
   assert.equal(isProjectSourcePath("static/chunks/src_app_page.js"), false)
   assert.equal(isProjectSourcePath("node_modules/react-dom/index.js"), false)
   assert.equal(isProjectSourcePath("src/components/ui/button.tsx"), true)
-  assert.equal(isProjectSourcePath("/Users/x/Workspaces/src/components/ui/button.tsx"), true)
+  assert.equal(isProjectSourcePath("/Users/x/host-app/src/components/ui/button.tsx"), true)
 })
 
 // --- resolution ------------------------------------------------------------
@@ -232,14 +232,14 @@ await check("AS-05 the async resolver fills a selection the sync walk left empty
     asyncInfo: {
       tagName: "button",
       componentName: "Button",
-      filePath: "/Users/x/IG%20Projects%20Local/Workspaces/src/components/ui/button.tsx",
+      filePath: "/Users/x/Client%20Projects%20Local/host-app/src/components/ui/button.tsx",
       lineNumber: 57,
       columnNumber: 4,
       stack: [],
     },
   })
   const source = await resolveElementSource(bridge, element)
-  assert.equal(source.filePath, "/Users/x/IG Projects Local/Workspaces/src/components/ui/button.tsx")
+  assert.equal(source.filePath, "/Users/x/Client Projects Local/host-app/src/components/ui/button.tsx")
   assert.equal(source.lineNumber, 57)
   assert.equal(source.componentName, "Button")
 })
@@ -492,7 +492,7 @@ await check("AS-14 an unresolved file becomes a component to search for", () => 
 await check("AS-15 the clipboard text carries no home directory and no attribution", () => {
   const sanitized = sanitizeChangePrompt(
     [
-      "## /Users/phil8/Documents/Websites/IG Projects Local/Workspaces/src/a.tsx",
+      "## /Users/someone/Documents/Websites/Client Projects Local/host-app/src/a.tsx",
       "**Source:** src_components_ui_127363p._.js:2295",
       "- `<div>` — set `gap` to `8px`",
       "- see `packages/ui/src/b.tsx`",
@@ -500,7 +500,7 @@ await check("AS-15 the clipboard text carries no home directory and no attributi
     ].join("\n")
   )
   assert.ok(sanitized.includes("## src/a.tsx"), sanitized)
-  assert.ok(!sanitized.includes("phil8"), sanitized)
+  assert.ok(!sanitized.includes("someone"), sanitized)
   assert.ok(!sanitized.includes("**Source:**"), sanitized)
   // A relative path that merely contains `src/` is not an absolute one.
   assert.ok(sanitized.includes("packages/ui/src/b.tsx"), sanitized)
@@ -519,7 +519,7 @@ await check("AS-16 copy is one clipboard write with no fallback", async () => {
     configurable: true,
   })
   recordPreviewOnly({
-    filePath: "/Users/phil8/Workspaces/src/a.tsx",
+    filePath: "/Users/someone/host-app/src/a.tsx",
     componentName: "A",
     tagName: "div",
     className: "c",

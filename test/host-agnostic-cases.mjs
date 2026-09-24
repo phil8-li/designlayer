@@ -148,7 +148,7 @@ async function withInspector(helpers, markup, run) {
     helpers.installInspector(editor)
     editor.select(window.document.getElementById("target"))
     await paint()
-    await run({ window, right, paint })
+    await run({ window, right, paint, editor })
   } finally {
     globalThis.fetch = originalFetch
     dom.window.close()
@@ -521,6 +521,78 @@ await checkAsync("Aurora gets colour, text-style, radius and shadow rows — and
     expectPicker(harness, "fill-color", ["color:surface-base", "color:ink-primary"])
     expectPicker(harness, "shadow", ["shadow:lift", "shadow:halo"])
     expectPicker(harness, "text-style", ["typography:headline"])
+  })
+})
+
+/**
+ * The clamp a real engine applies to an emptied scroller, staged by hand.
+ *
+ * JSDOM lays nothing out, so the defect this case is about cannot occur here on
+ * its own: `scrollTop` is a number it stores and hands back, and emptying a
+ * container never touches it. A browser clamps the offset to zero the first
+ * time anything forces layout while the container has no content, and the
+ * inspector's sections force exactly that as they read computed geometry while
+ * they build — which is how a panel measured at 666px came back at 0 after a
+ * single property change.
+ *
+ * So the clamp is emulated at the one moment it happens for real: a child being
+ * removed from inside the pane. Scoped to that pane, undone by the caller, and
+ * deliberately blunt — what is being pinned is that the panel ends up where the
+ * reader left it, not how many times an engine would have zeroed it on the way.
+ */
+function clampOnEmpty(window, pane) {
+  const original = window.Node.prototype.removeChild
+  window.Node.prototype.removeChild = function removeChild(child) {
+    const removed = original.call(this, child)
+    if (this === pane || pane.contains(this)) pane.scrollTop = 0
+    return removed
+  }
+  return () => {
+    window.Node.prototype.removeChild = original
+  }
+}
+
+await checkAsync("picking a text style leaves the panel where the reader scrolled it", async () => {
+  await withInspector(auroraEditor, AURORA_FIXTURE, async (harness) => {
+    const { window, right, editor, paint } = harness
+    const pane = right.querySelector("#de-tabpanel-design")
+    assert.ok(pane, "the Design tab has no pane")
+
+    /*
+     * The text-style row, because it is the row this was reported against.
+     * Typography sits near the bottom of a panel about twice the height of the
+     * window, so choosing a style is always done scrolled down — and being
+     * returned to the top costs the reader the comparison they were in the
+     * middle of, on the one gesture people repeat most. Every committed
+     * property takes the same path through `render()`.
+     */
+    const field = right.querySelector('[data-de-field="design-system.text-style"]')
+    assert.ok(field, "no text-style row to pick in")
+    field.click()
+    const choice = window.document.querySelector(".de-token-popover [data-de-choice]")
+    assert.ok(choice, "the text-style picker offered nothing to choose")
+
+    pane.scrollTop = 240
+    let restore = clampOnEmpty(window, pane)
+    try {
+      choice.click()
+      await paint()
+    } finally {
+      restore()
+    }
+    assert.equal(pane.scrollTop, 240, "the panel jumped after a text style was picked")
+
+    // The other half of the rule: a DIFFERENT element is a different set of
+    // sections, so it gets the top of the panel rather than an offset into the
+    // box that is no longer selected.
+    restore = clampOnEmpty(window, pane)
+    try {
+      editor.select(window.document.querySelector("#target span"))
+      await paint()
+    } finally {
+      restore()
+    }
+    assert.equal(pane.scrollTop, 0, "a new selection kept the previous element's scroll")
   })
 })
 

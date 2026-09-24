@@ -86,18 +86,17 @@ function check(name, fn) {
  * Every entry is either a token namespace a single platform team owns or the
  * name of a product or component library. None of them can appear in a rule
  * that is supposed to hold for a stylesheet nobody here has read. The list is
- * not exhaustive and cannot be — it is a tripwire on the vendors this feature
- * was measured against, on the theory that whoever narrows the classifier will
+ * not exhaustive and cannot be — it is a tripwire on the vendors whose systems
+ * shaped this feature, on the theory that whoever narrows the classifier will
  * narrow it towards a system that was in front of them.
  *
  * Committed entries name PUBLIC systems only, for the same reason the fixtures
- * below are invented: the houses this feature was actually measured against are
- * not public, and writing their token namespaces into an MIT repository
- * publishes the one detail about them this project has no business publishing.
+ * below are invented: private namespaces are not ours to write into an MIT
+ * repository.
  *
- * Which would cost exactly the coverage that matters, since those are the
- * systems a narrowing would narrow towards — so the private half is supplied
- * from outside the repo instead of dropped. Set `DESIGNLAYER_VENDOR_WORDS` to
+ * Dropping them would cost exactly the coverage that matters, since those are
+ * the systems a narrowing would narrow towards — so the private half is supplied
+ * from outside the repo instead. Set `DESIGNLAYER_VENDOR_WORDS` to
  * a comma-separated list and the scan runs against both halves:
  *
  *   DESIGNLAYER_VENDOR_WORDS=acme-sys,acme-ref node test/library-generality-cases.mjs
@@ -225,9 +224,8 @@ check("the matcher reads a vendor spelling however it is embedded", () => {
 /*
  * The private half of the vocabulary, exercised with invented stand-ins.
  *
- * The systems this feature was measured against are not public and their token
- * namespaces are not in this file, so what is checked here is the MECHANISM
- * that carries them: an entry supplied through `DESIGNLAYER_VENDOR_WORDS`
+ * Private namespaces are not in this file, so what is checked here is the
+ * MECHANISM that carries them: an entry supplied through `DESIGNLAYER_VENDOR_WORDS`
  * matches on exactly the same terms as a committed one. The two shapes below
  * are the ones a private namespace tends to have and no public entry covers —
  * a multi-part hyphenated prefix, and a name that ends in a version digit.

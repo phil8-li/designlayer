@@ -76,7 +76,29 @@ const MAX_URL = 2000
 const MAX_ID = 200
 /** Past this a "design system file" is a build output, and parsing it is a stall. */
 const MAX_SOURCE_BYTES = 2 * 1024 * 1024
+/**
+ * How many files the walk will READ, which is not how many it will see.
+ *
+ * The distinction is the whole budget. Counting every file visited sounds
+ * conservative and is the opposite: a stock Next app ships a `public/` folder
+ * of images, fonts and generated OG cards, `public` sorts before `src`, and
+ * four thousand PNGs that could never be a candidate spent the entire budget
+ * before the walk reached the stylesheet it was looking for. Measured on a
+ * project with 4,100 SVGs in `public/img/` and a real `src/styles/tokens.css`,
+ * discovery answered `[]` in 18ms — fast, confident and wrong.
+ *
+ * Counting only the files that pass the extension test makes the budget mean
+ * what it is for: a ceiling on the work of PARSING candidates, which is the only
+ * expensive thing in here. Reading a directory entry's name and rejecting it on
+ * its extension costs nothing and is not rationed.
+ */
 const MAX_VISITED_FILES = 4000
+/**
+ * And a ceiling on the walk itself, since an unbudgeted tree still has to
+ * terminate. A project with a hundred thousand empty directories and not one
+ * stylesheet would otherwise walk all of them for free under the rule above.
+ */
+const MAX_VISITED_DIRECTORIES = 5000
 const MAX_CANDIDATES = 40
 const MAX_COMPONENT_CANDIDATES = 10
 /** A ceiling on how many directories are probed, since every probe reads files. */
@@ -86,12 +108,61 @@ const DISCOVERY_SCAN_FILES = 400
 
 const LIBRARY_ID_PATTERN = /^[a-z0-9-]{1,200}$/
 const SOURCE_EXTENSIONS = new Set([".css", ".json"])
-/** Vendored, generated, or a copy of the project's own CSS with a hash in it. */
-const SKIP_DIRECTORIES = new Set(["node_modules", "dist", "build", "coverage"])
+/**
+ * Folders whose contents are never this project's design system.
+ *
+ * Three groups, and each one was a measured false positive rather than a
+ * precaution.
+ *
+ * VENDORED AND GENERATED — `node_modules`, `dist`, `build`, `coverage`, `out`,
+ * `storybook-static`: somebody else's CSS, or a copy of the project's own with
+ * a hash in the name. A build output is the worst kind of candidate because it
+ * is a faithful copy of a real design system and adding it pins the tokens to
+ * whatever the last build emitted.
+ *
+ * SERVED ASSETS — `public`, `static`, `vendor`: the folder a project drops a
+ * downloaded stylesheet into. A vendored copy of Open Props here was offered
+ * ABOVE the project's own `src/styles/tokens.css`, because ranking is by token
+ * count and a general-purpose CSS library has two hundred colours to the
+ * project's four. The bigger file is not the more relevant one.
+ *
+ * TEST MATERIAL — `__tests__`, `__mocks__`, `fixtures`, `e2e`, `cypress`: a
+ * `theme.css` under `test/fixtures/` exists precisely BECAUSE it looks like a
+ * design system, so every content-based bar in this file passes it by design.
+ * The only thing that distinguishes it is where it lives. Note `test/` itself is
+ * not listed: a folder called `test` in somebody's project is not reliably a
+ * test folder, and `fixtures` catches the shape that actually occurs.
+ */
+const SKIP_DIRECTORIES = new Set([
+  "node_modules", "dist", "build", "coverage", "out", "storybook-static",
+  "public", "static", "vendor",
+  "__tests__", "__mocks__", "fixtures", "e2e", "cypress",
+])
 /** JSON that is certainly not a design system, skipped before it is parsed. */
 const SKIP_JSON = /^(package\.json|package-lock\.json|tsconfig[^/]*\.json)$/
 /** Candidate order in the Add panel: whatever describes a system best, first. */
 const KIND_RANK = ["manifest", "tokens", "icons", "components", "css"]
+/**
+ * Where a project keeps the file it thinks of as its design system.
+ *
+ * A tiebreak, not a filter — nothing is hidden for living somewhere else. It
+ * exists because the other tiebreak is token count, and token count is a
+ * measure of SIZE rather than of relevance: a single busy component stylesheet
+ * that enumerates thirty shades of one colour outranks the four colours, four
+ * spacing steps and two radii that are demonstrably the whole system. Between
+ * two files that both cleared the bar, the one in the folder a person would look
+ * in first is the better guess, and the guess is all this list is.
+ */
+const CONVENTIONAL_LOCATIONS = [
+  "app/", "src/app/", "src/styles/", "styles/", "src/theme/", "theme/",
+  "src/tokens/", "tokens/", "design/", "src/design/",
+]
+
+/** Project root or a conventional folder — a shallow, deliberate-looking home. */
+function conventionallyPlaced(relative) {
+  if (!relative.includes("/")) return true
+  return CONVENTIONAL_LOCATIONS.some((prefix) => relative.startsWith(prefix))
+}
 const FRAMEWORK_LABELS = { react: "React", angular: "Angular" }
 
 /**
@@ -195,17 +266,70 @@ function filledGroups(counts) {
  * Whether a parsed candidate is enough of a design system to be offered
  * unasked. See `MIN_SYSTEM_TOKENS` above for the bar and the reasoning.
  *
- * Only a stylesheet is judged. A manifest, a token file and an icon set are
- * already declarations of intent — somebody wrote that file in a design-system
- * format on purpose, and a small one is a small design system rather than an
- * accident — and a component directory had to pass `looksLikeComponentLibrary`
- * to get this far. A stylesheet is the one kind with no intent behind it: every
- * app has dozens, and it is the only kind the four-property rule over-collects.
+ * Only a stylesheet is judged against the counts. A manifest, a token file and
+ * an icon set are already declarations of intent — somebody wrote that file in a
+ * design-system format on purpose, and a small one is a small design system
+ * rather than an accident — and a component directory had to pass
+ * `looksLikeComponentLibrary` to get this far. A stylesheet is the one kind with
+ * no intent behind it: every app has dozens, and it is the only kind the
+ * four-property rule over-collects.
+ *
+ * WHAT NO KIND IS EXEMPT FROM IS BEING EMPTY. The detector for `tokens` matches
+ * any JSON with a nested `{ value: … }` leaf, which is also the shape of an i18n
+ * catalog, a Cypress fixture and a chart's data file — and `tokens` outranks
+ * `css`, so `locales/en.json` was offered at the TOP of the list, describing
+ * itself as "no tokens", above the project's real `src/styles/tokens.css`. A
+ * candidate that parses to nothing is not a small design system, it is a file
+ * that answered the detector's question by accident. Judging it on its parsed
+ * catalog rather than on a tighter detector keeps the rule where every other
+ * rule in this file already is: what makes a file a design system is what is
+ * inside it.
+ *
+ * Exported because `server/design-system-detect.mjs` reads the same parsed
+ * shape. It asks a DIFFERENT question, and `worthAdopting` below is that one —
+ * the two sit together so the difference between them is stated once, where
+ * both are read from.
  */
-function worthOffering(kind, counts) {
-  if (kind !== "css") return true
+export function worthOffering(kind, counts) {
   const total = totalTokens(counts)
+  if (total === 0) return false
+  if (kind !== "css") return true
   return filledGroups(counts) > 1 ? total >= MIN_SYSTEM_TOKENS : total >= MIN_SINGLE_AXIS_TOKENS
+}
+
+/**
+ * Whether a stylesheet at a project's CONVENTIONAL ENTRY POINT is that
+ * project's design system.
+ *
+ * The bar above answers "should this file, out of the hundreds in a project, be
+ * offered to somebody who did not ask for it". It is strict because it chooses
+ * from a whole tree: a lone list of a dozen colours could be a palette or could
+ * be one busy component, and with nothing else to go on the count has to settle
+ * it.
+ *
+ * The detector is not choosing from a tree. It has already been told where to
+ * look — `src/index.css`, `app/globals.css`, or whatever `components.json`
+ * names as the Tailwind entry — and a stylesheet at that path is the one the
+ * BUILD treats as the project's own. That is the corroborating signal the depth
+ * bar was standing in for, and it is a better signal than any count: a
+ * component's private stylesheet is never the configured entry point.
+ *
+ * Applying the strict bar there rejected real projects. Measured across four
+ * prototypes whose tokens live in `src/index.css`, two were adopted and two were
+ * refused for declaring a palette and nothing else — thirteen colours in one,
+ * seven in the other, both inside an explicit theme block with the words "Design
+ * tokens" written above them. The editor then offered no tokens at all for a
+ * project that plainly had them, which is the exact failure this detection was
+ * added to end.
+ *
+ * So the only bar left is emptiness. A file that parses to nothing is still
+ * nothing — which is what keeps a CSS reset, or an entry that does no more than
+ * `@import` a framework, from being adopted — but a conventional entry that
+ * declares any token at all is declaring the project's tokens, and the editor
+ * should read them.
+ */
+export function worthAdopting(counts) {
+  return totalTokens(counts) > 0
 }
 
 /**
@@ -545,10 +669,55 @@ export function createLibraryStore(config, urlOptions = {}, authStore = null) {
     const target = new URL(requested).toString()
     const id = urlLibraryId(target)
 
+    /*
+     * PASTING A LINK THAT IS ALREADY INSTALLED RE-READS IT, where this used to
+     * hand back the stored row untouched.
+     *
+     * A URL library's catalog is a snapshot. `list()` re-parses a local file on
+     * every call, but re-fetching every URL on every call would put somebody
+     * else's network on the panel's hot path — so what is on disk is whatever
+     * the site said at the moment it was added, and there was no way back once
+     * that snapshot was wrong.
+     *
+     * It is wrong more often than "the site changed". It is wrong for every row
+     * added while this editor had a bug in its own reading, which is not
+     * hypothetical: a stylesheet-parsing fix landed here and left every library
+     * added before it reporting zero colours, with the designer looking at an
+     * empty row and an editor that by then knew perfectly well how to read it.
+     *
+     * Re-pasting the link is what a person does when something looks wrong, and
+     * it is the only gesture the panel already has that means "try that again".
+     * So it means that now. Nothing else moves: the id is derived from the URL,
+     * so the row keeps its place, its name and its switch, and the list does
+     * not grow — which is what adding the same page twice has always promised.
+     *
+     * A FAILED re-read keeps the catalog it had. Otherwise a designer who
+     * re-pastes on a flaky connection loses the tokens that were working a
+     * moment ago, and the gesture becomes one to be afraid of.
+     */
     const installed = (await serial(readEntries)).find(
       (entry) => entry.id === id || entry.source.path === target
     )
-    if (installed) return { library: await loadLibrary(installed) }
+    if (installed) {
+      const fresh = await fetchUrlCatalog(target, installed.name)
+      // A wall is reported exactly as it is on a first add: the credential has
+      // expired, and the panel's sign-in is the way back to a reading.
+      if (fresh.auth) {
+        const error = badRequest(fresh.error)
+        error.auth = { ...fresh.auth, url: target }
+        throw error
+      }
+      if (fresh.error) return { library: await loadLibrary(installed) }
+      return serial(async () => {
+        const entries = await readEntries()
+        const index = entries.findIndex((entry) => entry.id === installed.id)
+        if (index === -1) return { library: await loadLibrary(installed) }
+        const entry = { ...entries[index], catalog: fresh.catalog, detail: fresh.detail, error: "" }
+        entries[index] = entry
+        await writeEntries(entries)
+        return { library: await loadLibrary(entry) }
+      })
+    }
 
     // Outside the queue on purpose: `serial` keeps two panels from clobbering
     // each other's row, and holding it across somebody else's network latency
@@ -671,6 +840,7 @@ export function createLibraryStore(config, urlOptions = {}, authStore = null) {
     const found = []
     const componentDirs = []
     let visited = 0
+    let walked = 0
     let probed = 0
 
     const fileCandidate = async (absolute, relative) => {
@@ -771,6 +941,8 @@ export function createLibraryStore(config, urlOptions = {}, authStore = null) {
      */
     const walk = async (directory, relative) => {
       if (visited >= MAX_VISITED_FILES || found.length >= MAX_CANDIDATES) return false
+      if (walked >= MAX_VISITED_DIRECTORIES) return false
+      walked += 1
       let entries
       try {
         entries = await fs.readdir(directory, { withFileTypes: true })
@@ -790,6 +962,11 @@ export function createLibraryStore(config, urlOptions = {}, authStore = null) {
           continue
         }
         if (!entry.isFile()) continue
+        // The budget is spent on files this walk would actually open. A name and
+        // an extension are already in hand from `readdir`, so rejecting an image
+        // here costs nothing and must not be charged for — see
+        // `MAX_VISITED_FILES`.
+        if (!SOURCE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue
         if (visited >= MAX_VISITED_FILES) break
         visited += 1
         const hit = await fileCandidate(path.join(directory, entry.name), childRelative)
@@ -820,7 +997,11 @@ export function createLibraryStore(config, urlOptions = {}, authStore = null) {
       .sort((first, second) => {
         const byKind =
           KIND_RANK.indexOf(first.candidate.kind) - KIND_RANK.indexOf(second.candidate.kind)
-        return byKind !== 0 ? byKind : second.weight - first.weight
+        if (byKind !== 0) return byKind
+        const byPlace =
+          Number(conventionallyPlaced(second.candidate.path)) -
+          Number(conventionallyPlaced(first.candidate.path))
+        return byPlace !== 0 ? byPlace : second.weight - first.weight
       })
       .map(({ candidate }) => ({ ...candidate, installed: installed.has(candidate.path) }))
   }

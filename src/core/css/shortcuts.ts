@@ -16,16 +16,21 @@
 
 import { tokens as t, nest } from "../tokens"
 
-/**
- * Above the app chooser's menu, which is otherwise the front-most surface.
+/*
+ * THERE IS NO `SHEET_Z` ANY MORE, and the deletion is worth the paragraph.
  *
- * A step above rather than equal to it: this is a modal, and the one time the
- * two can be on screen together is a designer opening the sheet with the
- * chooser's card still up. A modal painting behind a menu would be one you
- * cannot read and cannot click away, since its own scrim would be underneath
- * the thing covering it.
+ * It was 2147483400: one step above the app chooser's menu, the otherwise
+ * front-most surface, so that opening the sheet over an open chooser did not
+ * put a modal behind the thing it was meant to cover. A real number solving a
+ * real collision — and a number somebody has to keep correct every time another
+ * overlay is added to this chrome.
+ *
+ * `showModal()` makes the question go away. A modal dialog is promoted to the
+ * TOP LAYER, which paints above every stacking context in the document at any
+ * z-index: the chooser's menu, the vendor overlay's 2147483645, or whatever a
+ * host app has invented. The ordering is a property of what the element IS
+ * rather than of a constant that has to out-bid the field.
  */
-const SHEET_Z = 2147483400
 
 /**
  * The card's corner and the close button's, derived from one inset.
@@ -44,23 +49,38 @@ const SHEET = nest({
 
 export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- */
 /*
- * The scrim is the click target for "close", so it covers the viewport rather
- * than sizing to the card. Dark enough to say the page behind is out of play,
- * light enough to keep reading it — the sheet is a reference held up against
- * the thing you were doing, not a context switch away from it.
+ * THE SHEET IS A \`<dialog>\`, SO THE SCRIM IS \`::backdrop\` AND NOT AN ELEMENT.
+ *
+ * There was a \`.de-shortcuts-scrim\` div here: fixed, \`inset: 0\`, flex-centring
+ * the card, carrying the dim and a click handler for "close". Every one of
+ * those jobs is something the platform does for a modal dialog, and doing them
+ * by hand is what left the sheet claiming a modality it did not enforce — see
+ * the note in \`shell/shortcuts.ts\`.
+ *
+ * \`::backdrop\` is the dim. Same value it always had: dark enough to say the
+ * page behind is out of play, light enough to keep reading it, because the
+ * sheet is a reference held up against the thing you were doing rather than a
+ * context switch away from it.
+ *
+ * The centring is \`margin: auto\` on the dialog itself, which is what a browser
+ * already applies to a modal and what the flex parent was re-implementing. The
+ * \`5xl\` gutter the scrim used as padding survives as \`max-height\`/\`max-width\`
+ * arithmetic, so the card still never touches the viewport edge.
+ *
+ * No \`z-index\` either. A modal dialog is in the TOP LAYER, which is above every
+ * stacking context in the document — including the 2147483400 this sheet used
+ * to claim and the 2147483645 the vendor overlay claims. The constant is kept
+ * in the module for the comment that explains the ordering it used to buy.
  */
-.de-shortcuts-scrim {
-  position: fixed; inset: 0;
-  z-index: ${SHEET_Z};
-  display: flex; align-items: center; justify-content: center;
-  padding: ${t.space["5xl"]}px;
+.de-shortcuts::backdrop {
   background: rgba(0, 0, 0, 0.45);
 }
 
 .de-shortcuts {
   display: flex; flex-direction: column;
-  width: min(760px, 100%);
-  max-height: 100%;
+  width: min(760px, 100% - ${t.space["5xl"] * 2}px);
+  max-height: calc(100% - ${t.space["5xl"] * 2}px);
+  margin: auto;
   padding: ${SHEET.padding};
   border: 1px solid ${t.color.border};
   border-radius: ${SHEET.outer};
@@ -70,7 +90,16 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   font-family: inherit;
   font-size: ${t.type.body};
 }
+/*
+ * A \`<dialog>\` is focused on open — \`showModal\` puts focus on the card itself
+ * when nothing inside it is autofocused, which is what this sheet wants, since
+ * it is a document to read rather than a form to fill. The ring is suppressed
+ * because that focus is a side effect of opening rather than a place the reader
+ * navigated to; every control INSIDE the card keeps its own \`:focus-visible\`.
+ */
 .de-shortcuts:focus { outline: none; }
+/* Not shown is not displayed. Without this a closed dialog still lays out. */
+.de-shortcuts:not([open]) { display: none; }
 
 .de-shortcut-head {
   position: relative;
@@ -92,9 +121,11 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
  */
 .de-shortcut-note {
   margin: ${t.space.sm}px 0 0;
-  max-width: 62ch;
+  /* The measure this chrome picked by hand first, now the token everything
+     else reads. See \`type.measure\`. */
+  max-width: ${t.type.measure};
   font-size: ${t.type.caption};
-  line-height: 1.5;
+  line-height: ${t.type.leadingBody};
   color: ${t.color.textMuted};
 }
 .de-shortcut-close {
@@ -108,7 +139,10 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   color: ${t.color.textMuted};
   cursor: pointer;
 }
-.de-shortcut-close:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
+/* The sheet is \`bgRaised\`, so its close button lifts to \`bgRaisedHover\`.
+   \`bgHover\` is darker than the surface it sits on, so the one control that
+   dismisses this overlay receded under the pointer. */
+.de-shortcut-close:hover { background: ${t.color.bgRaisedHover}; color: ${t.color.text}; }
 
 /*
  * Two columns where they fit, one below that.
@@ -164,15 +198,18 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   border-radius: ${t.radius.sm};
   background: ${t.color.bgSunken};
   color: ${t.color.text};
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The token, not a retyped stack. The literal here was \`font.mono\` with
+     \`"SF Mono"\` dropped, so a key cap rendered in a different face from every
+     other mono run in the chrome on any Mac without SFMono-Regular installed. */
+  font-family: ${t.font.mono};
   font-size: ${t.type.caption};
-  line-height: 1.5;
+  line-height: ${t.type.leadingBody};
   text-align: center;
   white-space: nowrap;
 }
 
 .de-shortcut-text { display: flex; flex-direction: column; gap: ${t.space.xs}px; min-width: 0; }
-.de-shortcut-label { color: ${t.color.text}; line-height: 1.4; }
+.de-shortcut-label { color: ${t.color.text}; line-height: ${t.type.leadingRow}; }
 /*
  * The Figma lineage, and it is deliberately quiet.
  *
@@ -183,7 +220,7 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
  */
 .de-shortcut-figma {
   font-size: ${t.type.micro};
-  line-height: 1.4;
+  line-height: ${t.type.leadingRow};
   color: ${t.color.textDim};
 }
 `

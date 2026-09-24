@@ -2,11 +2,12 @@
  * The LEFT panel's tab host — and almost nothing else, on purpose.
  *
  * The left panel used to be one list: a header, a filter, and the layer tree,
- * appended straight into `.de-panel-body` and scrolled as a whole. It is now
- * two views, Layers and Assets, because the library stopped being something you
- * read about the current selection and became something you BROWSE — a
- * catalogue of components you go looking through and then place. A browsing
- * surface belongs beside the other browsing surface, which is the tree.
+ * appended straight into `.de-panel-body` and scrolled as a whole. It is three
+ * views now — Layers, Code and Controls — and the thread running through all
+ * three is that this column is where you BROWSE. The tree says what is on the
+ * page, the code view says what one node is written as, and Controls lists
+ * every tunable the running app exposes. `panels/left.ts` argues the
+ * placements; this file only has to make the body hold panes instead of a list.
  *
  * ## Why this file is two rules long
  *
@@ -17,17 +18,23 @@
  * in step forever — which is a promise nothing enforces. Sharing it is also
  * what keeps the two strips reading as one control through a restyle: when the
  * right panel traded its underlined icon+label tabs for Figma's neutral pills,
- * Layers and Assets became pills in the same commit, because there was only
- * ever one rule to change. Two words in a 240px panel fit with room to spare,
- * so the left strip inherits a scroller it rarely needs and costs nothing for
- * it — the seam is draggable, so "rarely" is the honest word, not "never".
+ * the left strip became pills in the same commit, because there was only ever
+ * one rule to change.
+ *
+ * The inherited scroller has stopped being insurance. Two short words fit a
+ * 240px panel with room to spare, which is why this paragraph used to call the
+ * overflow a thing that "rarely" happens. "Layers · Code · Controls" does not
+ * survive the drag down to `panelMinWidth`, which is 180, so the strip
+ * overflows at the narrow end as an ordinary state — and the rule that answers
+ * it was already written for the inspector, which has always had three labels
+ * and one of them two words long.
  *
  * What is genuinely LEFT-specific is the pair of rules below, and both are
  * about the panel body rather than about the strip. Nothing in here reaches
- * into either pane's own content: the tree and the assets browser each bring
- * their own header, inset and rhythm, and a rule out here imposing padding or a
- * flex basis on `.de-tabpanel > *` would be this file overruling two surfaces it
- * does not own.
+ * into any pane's own content: the tree, the code view and the controls list
+ * each bring their own header, inset and rhythm, and a rule out here imposing
+ * padding or a flex basis on `.de-tabpanel > *` would be this file overruling
+ * three surfaces it does not own.
  *
  * ## Ordering
  *
@@ -73,6 +80,15 @@ export const leftTabsCss = `/* ---------- left panel tabs ---------- */
  * by design, so one deeply indented node with a long component name would hang
  * a horizontal scrollbar under the whole tree — furniture across the bottom of
  * the panel, reporting an overflow the clipped name already reports.
+ *
+ * The Controls pane arrived under this rule and needed checking against it,
+ * because its content is the worst case the rule has ever faced: a control's
+ * dot path can run sixty monospace characters inside a folder body already
+ * indented 16px. It survives because \`.de-opt-path\` carries
+ * \`word-break: break-all\`, so the path WRAPS rather than reaching for an axis
+ * that is not there — at 240px and at the 180px floor alike. Anything mounted
+ * here in future has the same obligation: clip is the policy, so a pane that
+ * plans to scroll sideways will silently lose its tail instead.
  *
  * This is what the panel did before the tabs existed, since \`.de-panel\` is
  * \`overflow: hidden\` and the body only ever scrolled vertically. It restores
