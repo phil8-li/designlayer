@@ -152,7 +152,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
 
   function reportRefused(): void {
     setCopyLabel(false)
-    setStatus("Could not copy — clipboard access was blocked", "error")
+    setStatus("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
   }
 
   function render(): void {

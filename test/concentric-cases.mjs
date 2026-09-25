@@ -128,7 +128,7 @@ check("an inner radius is the outer one less the gap between the curves", () => 
   assert.equal(nest({ of: "t", outer: "12px", inset: 4 }).radius, "8px")
   assert.equal(nest({ of: "t", outer: "8px", inset: 4 }).radius, "4px")
   assert.equal(nest({ of: "t", outer: "12px", inset: 8 }).radius, "4px")
-  assert.equal(nest({ of: "t", outer: "36px", inset: 4 }).radius, "32px")
+  assert.equal(nest({ of: "t", outer: "26px", inset: 4 }).radius, "22px")
 })
 
 check("a corner eroded to nothing squares off, and never rounds back", () => {
@@ -199,108 +199,44 @@ console.log("\nThe chrome's nests")
  * `.de-segmented` USED TO BE IN THIS LIST, and its absence is a decision rather
  * than a deletion.
  *
- * The track carried a 4px rail and nested its segments at `radius.sm` inside a
- * `radius.md` corner. Measured against Figma's own right panel at 2x, that rail
+ * The track carried a 4px rail and nested its segments at `radius.xs` inside a
+ * `radius.sm` corner. Measured against Figma's own right panel at 2x, that rail
  * does not exist: the chosen chip's border begins on the same device column the
  * track's outer edge does, so the two curves COINCIDE instead of nesting. Both
- * are `radius.sm` now with nothing between them, and an inset of zero is not a
+ * are `radius.xs` now with nothing between them, and an inset of zero is not a
  * nest — it is one corner drawn twice.
  *
  * The pair is still checked, by the case below rather than by this list: a
  * segment must draw the same radius its track does, and both must be on the
  * ramp. What is no longer asserted is a gap that no longer exists.
  */
+/*
+ * Re-derived for the design foundations kit's radius ladder
+ * (4/8/10/12/14/16/18/22/26). Its menu recipe — a 16px card, 6px padding,
+ * 10px items — is concentric by construction, and both menus take it. Modals
+ * take the kit's 18px dialog rung; text buttons draw the kit's 14px action
+ * radius, so a container whose corner child is a `.de-button` is sized to
+ * leave 14 at the corner.
+ */
 const EXPECTED = [
   [".de-toolbar", "16px", 4, 1, "3px", "12px"],
-  [".de-app-menu", "12px", 4, 1, "3px", "8px"],
-  [".de-ann-composer", "16px", 8, 1, "7px", "8px"],
-  /*
-   * `.de-ann-box` was here, and it was the only nest in the chrome whose
-   * padding sat on a WRAPPER rather than on the container itself — the case
-   * `padOn` was added for.
-   *
-   * The Changes tab no longer draws that container. It was a bordered, sunken
-   * frame around rows that each already carry a hairline, a raised ground, an
-   * index disc and a badge, so it framed a set of objects that were not short
-   * of definition. With the frame gone there is no second curve for a row to be
-   * parallel to.
-   *
-   * `padOn` stays supported, and the arithmetic cases above still exercise it;
-   * what left is the only container in the chrome that needed it.
-   */
-  /*
-   * The note row, retuned when the frame around the list came off.
-   *
-   * It was `radius.md` over a `space.sm` inset — a 3px pad, sized for life
-   * inside `.de-ann-box`, where the frame supplied the air and the row could
-   * not afford its own. With the frame gone the rows are the only objects in
-   * the list, and 3px reads as text pressed against a border.
-   *
-   * The radius had to move with the padding rather than after it: the
-   * `.de-mini` in the row's top-right corner draws `radius.sm`, and `8 - 8`
-   * clamps to zero, which would have put square buttons inside a rounded row.
-   * At `radius.lg` the inner radius lands back on 4. Roomier and rounder are
-   * one decision here, not two.
-   */
-  [".de-ann-item", "12px", 8, 1, "7px", "4px"],
-  [".de-layer-menu", "12px", 4, 1, "3px", "8px"],
-  [".de-lint-ignored-row", "12px", 4, 0, "4px", "8px"],
-  /*
-   * The local-file drawer on the Design system tab, and the first of the two
-   * nests the libraries sheet declares.
-   *
-   * All three rounded things it holds — a candidate row in its top corners, a
-   * path field and a button across its foot — are drawn at `radius.md`, and two
-   * of those by shared rules that sheet does not own. So the INSET is what
-   * moved to make them concentric rather than their radii: 12 − 4 = 8. Same
-   * call, and the same direction, as `.de-lint-ignored-row` above it.
-   */
+  /* The kit's menu: 16 − 6 = 10, the kit's menu-item rung. No hairline: the
+     overlay shadow carries it as a layer. */
+  [".de-app-menu", "16px", 6, 0, "6px", "10px"],
+  [".de-layer-menu", "16px", 6, 1, "5px", "10px"],
+  /* The composer's corner children are its 14px buttons: 22 − 8 = 14. */
+  [".de-ann-composer", "22px", 8, 0, "8px", "14px"],
+  /* A note row is a kit card (16) whose top-right `.de-mini` draws 8. */
+  [".de-ann-item", "16px", 8, 1, "7px", "8px"],
+  /* The ignored row's corner child is a 14px `.de-button`: 18 − 4 = 14. */
+  [".de-lint-ignored-row", "18px", 4, 0, "4px", "14px"],
+  /* The local-file drawer: its candidate rows and path field draw 8. */
   [".de-lib-panel", "12px", 4, 0, "4px", "8px"],
-  /*
-   * The sign-in dialog, which is the chrome's SECOND modal.
-   *
-   * A wall refusing an add used to be answered in a well inside the Libraries
-   * section; it is a `<dialog>` opened with `showModal()` now. The hairline came
-   * with the change and is counted in the gap, the way `.de-shortcuts` counts
-   * its own: a card floating over a backdrop carries a border, a card sunk into
-   * a panel does not.
-   *
-   * `radius['2xl']` over a `space.lg` inset rather than the sheet's 2xl/2xl,
-   * because what reaches the bottom-right corner is different. The sheet's
-   * corner child is a `radius.sm` close control; this one's is the primary
-   * `.de-button`, which draws `radius.md` by a rule this sheet does not own. So
-   * 20 − 12 = 8 is the only pairing that leaves the two curves parallel without
-   * asking shared furniture to move — the same direction as the two entries
-   * above it.
-   */
-  [".de-lib-signin", "20px", 12, 1, "11px", "8px"],
-  [".de-lib-signed-row", "12px", 8, 1, "7px", "4px"],
-  /*
-   * THREE ASSET NESTS LEFT HERE, and the reason is worth keeping.
-   *
-   * `.de-asset-card`, `.de-asset-row` and `.de-asset-details` were the browsing
-   * rail's card, its library row, and the details popover a card opened. That
-   * whole surface is gone — the Assets tab became the Libraries section of the
-   * Design system tab, which lists libraries and deliberately no longer lists
-   * components — and `css/assets.ts` went with it.
-   *
-   * `.de-asset-details` is the one whose loss matters to this file: it was the
-   * second `padOn` nest, and the one that proved the first was not a one-off.
-   * The feature is still exercised by the arithmetic cases at the top, and
-   * `tools/concentric-audit.mjs` is still the only thing that could have found
-   * either of them — a container with a radius and no padding of its own is
-   * invisible to the static sweep below.
-   */
-  /*
-   * The shortcuts sheet, which is the chrome's one modal.
-   *
-   * A wider gap than the popovers above it, and deliberately: this card is
-   * 760px of two-column list rather than a menu, so the air has to scale with
-   * it. `radius['2xl']` over a `space['2xl']` inset lands the close button in
-   * its top-right corner on 4, which is `radius.sm` — the step every other
-   * small control in the chrome draws.
-   */
-  [".de-shortcuts", "20px", 16, 1, "15px", "4px"],
+  /* A signed-in origin: a kit card (16) with the Forget `.de-mini` at 8. */
+  [".de-lib-signed-row", "16px", 8, 1, "7px", "8px"],
+  /* The shortcuts sheet: the kit's 18px dialog, with the close button in its
+     top-right corner at 18 − 8 = 10. */
+  [".de-shortcuts", "18px", 8, 1, "7px", "10px"],
 ]
 
 check("the set of nests is the one this file was written against", () => {
@@ -383,7 +319,7 @@ check("the radius a nest computed is the radius its children are given", () => {
     ".de-app-menu": [".de-app-menu-row"],
     ".de-ann-composer": [".de-ann-composer-text", ".de-button"],
     /* Shared furniture again: the row's action column puts a `.de-mini` in the
-       top-right corner, and `radius.sm` is what the nest asks of it. The row's
+       top-right corner, and `radius.xs` is what the nest asks of it. The row's
        padding was corrected to make that true rather than the button's radius,
        for the reason the `.de-lint-ignored-row` note gives below. */
     ".de-ann-item": [".de-mini"],
@@ -394,20 +330,13 @@ check("the radius a nest computed is the radius its children are given", () => {
        box across the foot. `.de-button` beside it is covered by the
        `.de-lint-ignored-row` entry below, which asserts the same shared rule. */
     ".de-lib-panel": [".de-lib-candidate", ".de-lib-field"],
-    /* The sign-in dialog's one corner child: the primary button in its
-       bottom-right. The title heading leads the top edge and draws no corner,
-       and "Not now" is a bare text control with neither padding nor radius, so
-       the other three corners hold nothing. Asserted against the shared
-       `.de-button` rule on purpose — if that ever moves off `md`, this card
-       stops being concentric and should say so. */
-    ".de-lib-signin": [".de-button"],
     /* A signed-in origin's card: the Forget `.de-mini` sits in its right
-       corner, and `radius.sm` is what the nest asks of it. */
+       corner, at the radius the nest asks of it. */
     ".de-lib-signed-row": [".de-mini"],
-    /* The button in its corner is shared furniture — `.de-button` draws its own
-       `radius.md`, and the row was raised to `radius.lg` so that IS the nest's
+    /* The button in its corner is shared furniture — `.de-button` draws the
+       kit's 14px action radius, and the row is sized so that IS the nest's
        radius. Asserted against the shared rule on purpose: if `.de-button` ever
-       moves off `md`, this row stops being concentric and should say so. */
+       moves, this row stops being concentric and should say so. */
     ".de-lint-ignored-row": [".de-button"],
     /* The close button is the only thing in a corner of the sheet: the header
        occupies the top edge and the body scrolls, so nothing else can reach
@@ -532,6 +461,9 @@ const LEAVES = {
    * staleness case below is what said so.
    */
   ".de-insert-ghost": "one child, `.de-insert-ghost-name`, which draws no corner.",
+  ".de-lib-signin":
+    "the kit's dialog: an 18px corner over its 24px modal inset. The inset erodes the corner " +
+    "to nothing, so the 14px action buttons in its foot share no centre with it.",
 }
 
 check("every container that could share a corner has been ruled on", () => {
@@ -578,7 +510,9 @@ check("every corner the chrome draws is on the ramp, a circle, or square", () =>
    * would otherwise sail past every check in this file — nothing else here
    * looks at a radius that is not part of a declared nest.
    */
-  const allowed = new Set([...RAMP, "0", "0px", "50%", "inherit"])
+  // `999px` is the kit's pill rung. The circle sweep below holds every rule
+  // that draws one to the `corner-shape: round` opt-out.
+  const allowed = new Set([...RAMP, "0", "0px", "50%", "999px", "inherit"])
   const strays = new Set()
   for (const rule of ALL) {
     const radius = declaration(rule.body, "border-radius")
@@ -655,9 +589,11 @@ check("every circle in the chrome has opted out of the squircle", () => {
  * and the rest were a consistency problem: pressing two buttons a centimetre
  * apart moved them by visibly different amounts.
  *
- * `better-ui` is explicit that this is a value and not a range — "always 0.96;
- * anything below 0.95 feels exaggerated" — so there is nothing to tune per
- * control and no reason for a call site to hold its own number.
+ * It is a value and not a range, so there is nothing to tune per control and
+ * no reason for a call site to hold its own number. The design foundations
+ * kit sets it at 0.98 (MICRO-INTERACTIONS § 1): a 2% dip says "received"
+ * without moving layout. Menu triggers skip it; the menu opening is their
+ * feedback.
  *
  * Scoped to `:active` on purpose. A drag ghost at 0.98 and the popover
  * entrance's 0.97 are not presses, they are a different gesture and a
@@ -671,7 +607,7 @@ check("every press in the chrome squeezes by the same amount", () => {
     const transform = declaration(rule.body, "transform")
     if (!transform) continue
     for (const [, value] of transform.matchAll(/scale\(([^)]+)\)/g)) {
-      if (value.trim() !== "0.96") strays.push(`${rule.selector} { transform: scale(${value}) }`)
+      if (value.trim() !== "0.98") strays.push(`${rule.selector} { transform: scale(${value}) }`)
     }
   }
   assert.deepEqual(strays, [], `a press at a size the house does not use:\n      ${strays.join("\n      ")}`)

@@ -1,688 +1,332 @@
 /**
  * Chrome tokens for the editor UI.
  *
- * This chrome sits *around* the product and must read as tooling, never as
- * product surface — but "not product surface" is not the same as "not the
- * design system". The design system already owns a theme-invariant CHROME rung
- * for exactly this: the surfaces the workspace paints around its content
- * canvas. That rung is what the editor wears now, in place of the Figma greys
- * it was born with.
+ * SOURCE: the design foundations kit (`css/palette.css`, `css/tokens.css`,
+ * `tokens/tokens.ts`). The editor adopts its treatment — the cool neutral
+ * family, the near-white ladder, the chrome-wash ladder, the indigo focus and
+ * selection hue, the radius ladder and squircle corners, the elevation recipes
+ * and the motion vocabulary — while keeping its own DENSITY: 12px UI text and
+ * 24px rows, because it is a Figma-style editor packed into two 240px columns,
+ * not a product page. Every value below names the kit role it came from.
  *
- * Values are vendored as literals rather than read from the app. The package
- * contract is that nothing here imports the app and nothing in the app imports
- * this, so the coupling is the comment naming each source role, not a module
- * edge. Regenerate against `src/app/globals.css` if the rung moves.
- *
- *   --sem-background-chrome   --base-gray-1200   #363c44
- *   --sem-fixed-always-light  --base-gray-white  #ffffff
- *   --sem-decorative-on-chrome --base-indigos-indigo-01  #a1bbff
- *   --sem-fixed-always-dark   --base-gray-1600   #0c1014
+ * Values are vendored as literals rather than read from a stylesheet. The
+ * package contract is that nothing here imports the host app and nothing in
+ * the app imports this, so the coupling is the comment naming each source role.
  *
  * ---------------------------------------------------------------------------
- * TWO THEMES, AND WHY THE COLOURS ARE THE ONLY THING THAT MOVED
+ * TWO THEMES, AND WHY THE COLOURS ARE THE ONLY THING THAT MOVES
  *
- * Everything in `color`, `code` and the tints inside `shadow` is now a
- * REFERENCE — `var(--de-color-bg)` rather than `#1c1d21`. The values live in
- * `PALETTE` below, two per role, and `css/base.ts` emits them as two blocks of
- * custom properties switched by `data-de-theme`.
+ * Everything in `color`, `code` and `shadow` below is a REFERENCE —
+ * `var(--de-color-bg)` rather than a literal. The values live in `PALETTE`, two
+ * per role, and `css/base.ts` emits them as two blocks of custom properties
+ * switched by `data-de-theme`. The css modules interpolate these tokens once,
+ * at build time, so a reference is the only shape that lets one stylesheet
+ * resolve differently per theme.
  *
- * This is not a stylistic preference for variables. Fourteen css modules
- * interpolate these tokens at BUILD time, into one string, once — so a literal
- * here is a literal baked into the stylesheet, and there is exactly one theme
- * available for the lifetime of the bundle. A reference is the only shape that
- * lets the same interpolation resolve differently at run time, and it means
- * every `${t.color.x}` already written keeps compiling untouched.
- *
- * `icon`, `size`, `type`, `radius`, `duration` and `ease` stay literal. Two of
- * those are read by JAVASCRIPT as numbers — `tokens.icon.control` is handed to
- * `icon()` and `tokens.size.panelInset` to the drag clamp — and `var(--x)` is a
- * string a browser resolves, not a number a program can add. They also do not
- * vary by theme, which is the other half of the test: a token belongs in
- * `PALETTE` when the answer depends on which theme is up, and nowhere else.
+ * `icon`, `size`, `type`, `radius`, `space`, `duration` and `ease` stay
+ * literal: several are read by JavaScript as numbers, and none varies by theme.
  */
 
 // ─────────────────────────────────────────────────── the dark theme ────────
 
 /**
- * The ground every surface below is a step off.
+ * The dark ground: the kit's dark `--card` / `--popover`
+ * (`--sem-background-elevated` -> `--base-neutral-205`, oklch(0.205 0 0)).
  *
- * Near-black, not the host app's `--sem-background-chrome` slate (`#363c44`)
- * this used to borrow, and not the `#2c2c2c` neutral grey it was after that.
- * The editor is chrome AROUND someone else's product, not a panel inside one,
- * and any grey bar over a page reads as a fourth colour competing with the
- * design under review. Near-black recedes: it stops looking like part of the
- * app and starts looking like the frame around it.
- *
- * IT IS THE SAME VALUE AS `INK`, and that is the symmetry rather than a
- * collision. The note on `INK` states the rule this kit is built on — each
- * theme paints with the other's ground — and until now that was true only
- * approximately. The two constants are kept separate anyway, because they are
- * separate decisions that happen to agree: `INK` means "what the light theme
- * writes with", `CHROME` means "the ground the dark theme is built on", and
- * moving one must not silently move the other.
- *
- * NOT PURE `#000`, WHICH THIS BRIEFLY WAS, and the reason is measurable rather
- * than aesthetic. The sRGB ramp compresses near black, so `lift()` buys less
- * separation the lower the ground sits. In L*, against the ground:
- *
- *                #2c2c2c   #000000   #1a1a1a
- *   sunken        +5.97     +4.31     +6.85
- *   hoverQuiet    +8.65     +7.74    +10.14
- *   hover        +11.29    +11.76    +12.90
- *   raised       +13.46    +14.20    +15.16
- *   raisedHover  +16.88    +18.94    +19.15
- *
- * On black the control surface — the rung every field, track and pad in the
- * chrome is drawn on — lost a quarter of its step off the ground. `#1a1a1a`
- * does not merely recover that, it beats both alternatives on every rung: dark
- * enough to recede behind the product, high enough that a percentage of white
- * still cuts a visible step. `borderInteractive` lands at 3.22:1 here, its best
- * of the three and clear of the 3:1 WCAG 1.4.11 asks of a control's boundary,
- * where on black it scraped 3.00.
- *
- * THE PANEL EDGE does not depend on any of this. Against a dark app the ground
- * may sit within a point or two of the page, so the edge is drawn by
- * `color.borderStrong` — white cut to alpha — which is the whole reason the
- * hairlines are alpha rather than a mixed grey. It survives on any ground.
- *
- * Every derived step follows from here, which is the point of routing them all
- * through `lift`/`rule`: moving this one constant restyles the whole chrome,
- * and the white-on-chrome contrast ratios documented below only IMPROVE as the
- * ground darkens — white on this ground is 17.4:1 against 13.97:1 on the old
- * `#2c2c2c`, so the tightest of them, `textDim` at 70% on a hovered control,
- * sits further clear of its floor rather than nearer it.
+ * The editor floats in front of someone else's product, so every panel is a
+ * card-family surface — elevated, not the page (`oklch(0.145)`) and not the
+ * graphite `--chrome` rail (`#363c44`), which is theme-invariant and would
+ * leave the light theme with a dark frame.
  */
-const CHROME = "#1a1a1a"
-/** `--sem-fixed-always-light`. Also the substance every quiet step is cut from. */
+const CHROME = "#171717"
+/**
+ * The substance every dark step is cut from: paper. The kit builds its dark
+ * hairlines (`--base-paper-a08/a10/a15`) and its chrome washes
+ * (`--chrome-hover` 10%, `--chrome-selected` 12%, `--chrome-shelf` 6%,
+ * `--chrome-border` 32%, `--chrome-muted-foreground` 75%) the same way.
+ */
 const ON_CHROME = "#ffffff"
+/** Dark text: `--sem-text-icon-primary` -> `--base-neutral-985`. */
+const TEXT_DARK = "#fafafa"
 /**
- * The accent as INK — a stroke, a focus ring, a chosen glyph.
- *
- * Figma's published `--figma-color-icon-brand` in dark, which is also its
- * `text-brand`, `icon-selected` and `border-selected-strong`: one light blue
- * doing every accent-as-ink job. That is the half of Figma's accent most easily
- * got wrong, because the brand blue it ships on a filled CTA is far darker and
- * would be 3.1:1 as ink on this ground.
- *
- * This was `#8dc2f3` — screen-measured off Figma's own chrome, and wrong by the
- * width of a colour space. The capture came off a Display-P3 panel, which
- * shifts every reading; the light-theme numbers happened to match the published
- * list because that capture came off a second, sRGB display. The published
- * token is authoritative and the measurement is not, so the measurement loses.
- *
- * 7.4:1 on the chrome and 3.8:1 on the selected tint it most often sits in —
- * past the 3:1 WCAG 1.4.11 asks of a glyph, which is all this token ever is.
+ * The accent as INK in dark — the kit's dark indigo lifted one rung
+ * (`--base-indigo-6817`, the dark `--hue-indigo`). The kit's own dark `--ring`
+ * (`--base-indigo-6219`) is tuned for its near-black page and "lifted in dark
+ * to clear 5:1"; on this lighter card ground it measures 4.7:1 and falls under
+ * 3:1 on a hovered row, so it takes the next rung up the same hue: 6.0:1 on
+ * the ground and past 3:1 on every wash a stroke is drawn over.
  */
-const RAIL = "#7cc4f8"
+const RING_DARK = "#798cff"
 /**
- * The accent as a FILL, under a glyph.
- *
- * Figma's published `--figma-color-bg-brand` in dark, which is also its
- * `bg-selected-strong` and `border-selected`: the fill behind a primary button
- * and under a selected tool. White on it measures **3.53:1** — past the 3:1
- * WCAG 1.4.11 asks of a non-text component, so it is right for a fill whose
- * content is a mark, which is nearly every accent-filled surface in this
- * chrome: the selected toolbar tool, the lint toggle, a canvas handle.
- *
- * It is NOT enough under a word — see `RAIL_FILL_TEXT`.
- *
- * This was `#3f8ae2`, from the same P3-shifted capture that got `RAIL` wrong.
- * The two blues land on the same lightness (both 3.53:1 under white) and differ
- * in hue and saturation, so the correction is invisible in the contrast table
- * and visible on screen: the published blue is the more saturated one, which is
- * the half of "looks like Figma" a ratio cannot check.
+ * The accent as a FILL in dark: `--hue-indigo` (`--base-indigo-1000`).
+ * White on it is 4.97:1, so one rung carries both a glyph and a word.
  */
-const RAIL_FILL = "#0c8ce9"
-/**
- * The accent fill for a surface that carries a text LABEL.
- *
- * `RAIL_FILL` is 3.53:1 under white, which is not enough under a word: 1.4.3
- * wants 4.5:1 for a 12px label, and the primary button and the tab's count
- * badge both put one on this fill.
- *
- * Figma's own answer to "the same blue, darker" is `bg-brand-hover`, which is
- * also its `bg-brand-pressed` — one rung down the published brand ramp, and
- * **5.28:1** under white. So the AA-safe text fill does not have to be invented
- * after all; it is already in the list. This used to be `#2e77cc`, a hand-mixed
- * blue that cleared the floor by 0.04 and belonged to nobody.
- *
- * Two tokens rather than one compromise blue, because the compromise loses
- * twice — too dark to be Figma's brand colour on the eight glyph surfaces, and
- * still the wrong question on the two that carry text. Figma ships both; it
- * just calls the second one a hover.
- */
-const RAIL_FILL_TEXT = "#0a6dc2"
-/** Ink on a filled accent. White in both themes now, the way Figma draws it. */
-const ON_RAIL = "#ffffff"
+const INDIGO_FILL_DARK = "#4a5df9"
+/** The accent as a WORD in dark: `--base-indigo-7414`, 7.6:1 on the ground. */
+const INDIGO_TEXT_DARK = "#90a3ff"
 
-/** A quiet step off the chrome, expressed the way the app expresses it. */
+/** A chrome wash: the kit's dark hover/selected/shelf recipe over the ground. */
 const lift = (percent: number) => `color-mix(in srgb, ${ON_CHROME} ${percent}%, ${CHROME})`
-/** A hairline cut from the chrome ink, so it survives on any ground. */
+/** A paper hairline, so it survives on any ground (`--base-paper-a*`). */
 const rule = (percent: number) => `color-mix(in srgb, ${ON_CHROME} ${percent}%, transparent)`
 
 // ────────────────────────────────────────────────── the light theme ────────
 
-/**
- * The light ground, and it IS `#ffffff` — which is not the mirror of `CHROME`
- * stopping short of `#000`, and the asymmetry is deliberate.
- *
- * This comment used to say the opposite, and described an off-white `#f4f5f7`
- * that had already been replaced. The reasoning then was that a pure-white
- * chrome over a white page leaves the panel edge invisible, and that white
- * should be kept free to mean "raised". Both halves were overtaken by the same
- * change: Figma's light panel measures `#ffffff` with its controls a step DOWN
- * at `#f5f5f5`, so `press()` does the stepping and the ground does not have to.
- * A popover is told apart by its shadow, which is what a shadow is for.
- *
- * The dark end cannot borrow that trick, which is why it stops at `#1a1a1a`
- * rather than going to `#000`: `lift()` has to cut its steps UPWARD out of the
- * ground, and the sRGB ramp gives it less to work with the lower it starts. See
- * the L* table on `CHROME`.
- */
+/** `--sem-background-primary` / `--sem-background-elevated` -> `--base-gray-white`. */
 const PAPER = "#ffffff"
 /**
- * The light theme's ink, and the substance its quiet steps are cut from.
- *
- * `--sem-fixed-always-dark`, the same constant the dark theme uses as the ink
- * that rides on a filled accent. That is the symmetry the two themes are built
- * on: each one paints with the other's ground.
+ * `--sem-text-icon-primary` -> `--base-gray-1600`. Near-black with the kit's
+ * faint cool cast (hue ≈ 254), never pure black.
  */
-const INK = "#1a1a1a"
+const INK = "#0c1014"
 /**
- * The accent, recomputed rather than reused.
- *
- * `RAIL` is the dark theme's `icon-brand` and it means it: on `PAPER` it
- * measures 1.6:1, invisible as a stroke and unusable as a focus ring. Figma
- * publishes a separate light `icon-brand`, and this is it — 4.2:1 as ink, past
- * the 3:1 a focus ring needs, and 4.2:1 under white when it is used as a fill.
- *
- * NOT the light `bg-brand`, `#0d99ff`, even though that is the fill Figma puts
- * behind its own Share button. White on it is 2.99:1, which fails even the 3:1
- * a non-text component needs, so it cannot carry a glyph here. Figma's light
- * CTA is the one place its published system does not clear its own floor, and
- * `icon-brand` is the nearest rung that does.
- *
- * This was `#0a8ae8`, derived rather than looked up, and the comment claimed
- * 5.9:1 as ink where it actually measured 3.61:1 — the derivation was both
- * unsourced and over-reported. The published token is darker and better.
- *
- * The pairing therefore flips with the theme, and that is the point of having
- * `onAccent` at all: dark chrome gets a light fill under dark ink, light chrome
- * gets a dark fill under white ink, and no call site has to know which.
+ * The kit's near-white ladder. Four rungs within 8/255 of each other, each a
+ * different decision (ADOPTION-GUIDE § 1); never collapse two together.
  */
-const INDIGO = "#007be5"
+const SECONDARY = "#f0f2f5" /* --secondary: control surface, selected pill */
+const SECONDARY_HOVER = "#dce0e5" /* --secondary-hover: its hover, selected segment */
+const MUTED = "#f8f9f9" /* --muted: ghost hover, chips */
+const BORDER = "#e9edf0" /* --border / --input: structural dividers, field fill */
+/** `--muted-foreground` -> `--base-slate-5100`. 5.8:1 on paper. */
+const SLATE = "#5f6670"
 /**
- * The light theme's text-bearing accent fill: Figma's `bg-brand-secondary`,
- * the rung below `INDIGO` on the published light brand ramp. 5.4:1 under white,
- * where `INDIGO` itself is 4.2:1 and a 12px label wants 4.5:1.
+ * The accent in light — the kit's `--ring` (`--base-indigo-4922`). 6.7:1 on
+ * paper and 6.7:1 under white, so it is ink, fill and word at once.
  */
-const INDIGO_TEXT = "#0768cf"
+const INDIGO = "#3849da"
+/** `--unseen` (`--base-indigo-9602`): the kit's pale indigo, a tint carried by hue. */
+const INDIGO_TINT = "#ebf1ff"
 
-/**
- * A quiet step DOWN, which is the direction a light theme recesses in.
- *
- * The mirror of `lift` and deliberately not `lift` with a different constant. A
- * `color-mix` with white is how you cut a visible step out of near-black; the
- * same mix on near-white returns near-white, and the two or three percent of
- * difference it can manage reads as a rendering artefact rather than as a
- * surface. Wells, hovers and fields all go this way on paper.
- *
- * The one role that does NOT is `bgRaised`, which goes up to `#ffffff` — a
- * panel in front of the ground is nearer the light in both themes, and on paper
- * that is the only direction with room left in it.
- */
-const press = (percent: number) => `color-mix(in srgb, ${INK} ${percent}%, ${PAPER})`
-/** A hairline cut from the light theme's ink, so it survives on any ground. */
+/** An ink hairline (`--base-ink-a*`), so it survives on any ground. */
 const wash = (percent: number) => `color-mix(in srgb, ${INK} ${percent}%, transparent)`
 
 /**
  * Every value that depends on which theme is up, as ROLE -> the two it takes.
  *
- * One table rather than two, because the failure this shape exists to prevent
- * is a role defined in one theme and missing from the other — which does not
- * crash, it ships a white label on a white ground. A pair per row makes that
- * unspellable, and `test/token-cases.mjs` checks the emitted CSS for it anyway.
- *
- * Read a row across and you are reading the design decision: the two values are
- * the same ROLE, recomputed for their ground, never the same swatch inverted.
+ * One table rather than two, because the failure this shape prevents is a
+ * role defined in one theme and missing from the other — which does not crash,
+ * it ships a white label on a white ground. `test/token-cases.mjs` checks the
+ * emitted CSS for it anyway.
  */
 const PALETTE = {
   color: {
+    /** The panel ground: the kit's `--card` / `--popover` in each theme. */
     bg: { dark: CHROME, light: PAPER },
     /**
-     * Panels and popovers. 6% is the app's `--sidebar-shelf` step; on paper the
-     * step is to white, which is the only lift a near-white ground has left.
+     * A surface in front of the control layer — a popover, a chosen chip.
+     * Dark: `--chrome-selected` (12%). Light: white, told apart by its shadow,
+     * which is how the kit separates every floating card.
      */
-    /*
-     * A surface IN FRONT of the control layer — a popover, a chosen segment.
-     *
-     * `lift(14)` rather than the `lift(6)` it was, because `lift(6)` is now the
-     * control surface itself: a chip drawn at the same value as the track it
-     * rides in is not a chip. 14 puts it a clear step above — `#3a3a3a` on this
-     * ground — which is the separation Figma's own selected segment has from
-     * its rail, the same eight rungs it was when the ground was `#2c2c2c` and
-     * this landed on `#4a4a4a`.
-     *
-     * Light keeps `#ffffff`. Its control surface stepped DOWN to `#f5f5f5`, so
-     * the ground is already the raised value and the chip returning to white is
-     * exactly what Figma draws.
-     */
-    bgRaised: { dark: lift(14), light: "#ffffff" },
+    bgRaised: { dark: lift(12), light: PAPER },
     /**
-     * The rung BELOW chrome — wells, inset tracks, the code view's ground.
-     *
-     * Derived rather than the literal `#25292e` it was: that value was a step
-     * below the old slate and sat LIGHTER than the near-black ground, so every
-     * well inverted into a raised panel the moment the chrome went dark. Its
-     * light twin is a literal for the same reason the dark one is: this is a
-     * large slab, and it is picked to sit clear of the transient hover tints
-     * rather than derived from one of them.
+     * THE CONTROL SURFACE — every field, track and pad. The name predates the
+     * direction: in dark it is a step UP (`--chrome-shelf`, 6%), in light the
+     * kit's `--secondary` rung, a step down. The role is "the surface a control
+     * is drawn on", which did not change.
      */
-    /*
-     * THE CONTROL SURFACE — and in dark it is a step UP, not down.
-     *
-     * This was `#121316`, below the ground, on the reasoning that a field is a
-     * recess. Figma's dark chrome does the opposite and the measurement is
-     * unambiguous: its panel ground is `#2c2c2c` and every field, track and
-     * pad inside it is `#383838` — lighter. Light flips the other way, `#f5f5f5`
-     * under a white ground, because that is the direction with room.
-     *
-     * Both are the same rule, which is why they are derived rather than
-     * literal: move AWAY from the ground, whichever way the ground leaves free.
-     * `press(4)` lands on `#f5f5f5`, Figma's light value exactly. `lift(6)`
-     * used to land on Figma's `#383838` and now lands on `#282828`, because the
-     * ground moved down to `#1a1a1a` under it — the same six rungs off the
-     * ground, lower down. The relationship is what is being kept here, not the
-     * swatch: a control still reads as a step up from the panel it sits in, and
-     * at ΔL* 6.85 it reads as a slightly clearer one than it did on the slate.
-     *
-     * The name is now half wrong and is kept anyway: every call site says
-     * `bgSunken` and the role it names — "the surface a control is drawn on" —
-     * did not change, only its direction. Renaming it touches sixty rules to
-     * say nothing new.
-     */
-    bgSunken: { dark: lift(6), light: press(4) },
-    /* Six rungs above the control surface — `#353535` on this ground, where on
-       the old `#2c2c2c` it was `#454545` against Figma's measured `#444444`.
-       The quiet rung sits between the control surface and it. */
-    bgHover: { dark: lift(12), light: press(9) },
-    bgHoverQuiet: { dark: lift(9), light: press(6) },
-    bgActive: { dark: RAIL, light: INDIGO },
-    /** Dividers and rests — decorative, so the 3:1 rule does not apply. */
-    border: { dark: rule(14), light: wash(13) },
-    borderStrong: { dark: rule(22), light: wash(24) },
+    bgSunken: { dark: lift(6), light: SECONDARY },
+    /** Ghost hover. Dark `--chrome-selected`; light `--secondary`. */
+    bgHover: { dark: lift(12), light: SECONDARY },
+    /** The quiet hover — a row under the cursor. Dark `--chrome-hover`; light `--muted`. */
+    bgHoverQuiet: { dark: lift(10), light: MUTED },
+    bgActive: { dark: RING_DARK, light: INDIGO },
+    /** Structural dividers. Dark `--border` (paper 10%); light `--border`. */
+    border: { dark: rule(10), light: BORDER },
     /**
-     * Boundary of a control you can act on, per WCAG 1.4.11.
-     *
-     * 32% is the app's `--sidebar-border` step. Measured, it is 2.90:1 on the
-     * near-black ground rather than the 3.2:1 this comment used to claim, and
-     * `css/options.ts` already records the shortfall and accepts it as the best
-     * the vendored rung set offers. It is left alone here so that note stays
-     * true; the light theme has no such constraint and is set where the floor
-     * actually lands — 48% ink is 3.3:1 on paper and still clears 3:1 on the
-     * darkest ground a control is ever drawn on, a hovered field.
+     * The panel's outer edge, over a page of unknown colour. Dark `--input`
+     * (paper 15%); light `--hairline-strong` (ink 26%) — the card hairline at
+     * interactive strength, since the edge has to hold against any product.
+     */
+    borderStrong: { dark: rule(15), light: wash(26) },
+    /**
+     * Boundary of a control you can act on, per WCAG 1.4.11. The kit's fields
+     * carry no resting border, so this is the one role it has no rung for; it
+     * is set where 3:1 lands on the darkest ground a control is drawn on.
      */
     borderInteractive: { dark: rule(35), light: wash(48) },
-    text: { dark: ON_CHROME, light: INK },
-    /** `--sem-fixed-always-light-weaker` — Prism's 75% step. 9.9:1 on chrome. */
+    text: { dark: TEXT_DARK, light: INK },
+    /** Secondary ink. Dark `--chrome-muted-foreground` (75%); light ink at 80%. */
     textMuted: { dark: "rgba(255,255,255,0.75)", light: wash(80) },
     /**
-     * The quietest readable ink, in both themes, and the pair is tuned to the
-     * WORST ground each one is drawn on rather than to the base.
-     *
-     * 58% is 6.5:1 on the chrome and 4.7:1 on a hovered field, which is the
-     * tightest pairing the dark theme actually produces (a placeholder in a
-     * hovered composer). 66% ink is the light theme's equivalent: 6.0:1 on
-     * paper, 5.4:1 on a hovered field. The obvious 55%/60% both land under 4.5
-     * somewhere and fail.
+     * The quietest readable ink, tuned to the WORST ground each theme draws it
+     * on (a placeholder in a hovered field). Light is the kit's
+     * `--muted-foreground`; dark stays a chrome wash so it keeps its step
+     * above `textDisabled`.
      */
-    textDim: { dark: "rgba(255,255,255,0.70)", light: wash(70) },
+    textDim: { dark: "rgba(255,255,255,0.70)", light: SLATE },
     /**
-     * The ink of a control that cannot be pressed — quieter than `textDim`, and
-     * still above the floor on purpose.
-     *
-     * This role exists because the chrome used to say "disabled" with
-     * `opacity`, and opacity fades a control's ink and its fill by the same
-     * factor toward whatever is behind them. On the toolbar that put a disabled
-     * Undo at 2.38:1 against the 3:1 that WCAG 1.4.11 asks of a glyph; on the
-     * primary pill it was worse, because the fade took the accent away and left
-     * the near-black ink meant to sit on it, at 1.06:1 — invisible.
-     *
-     * Tuned to the STRICTER of the two floors, because one role serves both: a
-     * disabled glyph owes 3:1 and disabled label text owes 4.5:1, and a value
-     * chosen for the glyph quietly fails the label. 40% was that mistake — it
-     * measured 3.8:1 on the bar, fine for an icon, and put the disabled Copy
-     * pill's text at 3.2:1. 50% is 5.1:1 on the bar, 4.7:1 on a raised surface
-     * and 5.3:1 on a sunken one, so the worst ground in the chrome still clears
-     * 4.5, against `textDim`'s 6.5:1 for a live control.
-     *
-     * The light theme's 60% is the same floor found the same way, and its worst
-     * ground is the opposite one: `bgRaised` is plain white on paper, so the
-     * lightest surface is where dark ink has least to work with. It measures
-     * 5.0:1 there against the live control's 19.1:1. 56% was tried first and
-     * came to 4.36 — close enough to look fine and still a failure.
-     *
-     * WCAG exempts inactive controls from contrast entirely. This chrome does
-     * not take that exemption anywhere, and the reason is in `css/panels.ts`:
-     * an editor is read while it is half-unusable, and a greyed-out control is
-     * information about what the tool wants next, not decoration.
+     * The ink of a control that cannot be pressed — quieter than `textDim`,
+     * and still at 4.5:1 on the worst ground, because a greyed-out control in
+     * an editor is information about what the tool wants next. WCAG exempts
+     * inactive controls; this chrome does not take the exemption.
      */
-    textDisabled: { dark: "rgba(255,255,255,0.62)", light: wash(62) },
-    /** Strokes, handles, and focus rings. 7.4:1 dark, 4.2:1 light. */
-    accent: { dark: RAIL, light: INDIGO },
-    /**
-     * Accent as a FILL, under a MARK. Both themes carry white on it, which is
-     * how Figma draws it in both: `text-onbrand` and `icon-onbrand` are
-     * `#ffffff` on either side of the published list.
-     *
-     * 3.5:1 dark and 4.2:1 light — each past the 3:1 a non-text component
-     * needs, neither past the 4.5:1 a word needs, which is the whole reason
-     * `accentSurfaceText` exists beside it.
-     */
-    accentSurface: { dark: RAIL_FILL, light: INDIGO },
-    /** The same fill for a surface with a WORD on it. See `RAIL_FILL_TEXT`. */
-    accentSurfaceText: { dark: RAIL_FILL_TEXT, light: INDIGO_TEXT },
-    /**
-     * The accent as INK ON A PANEL, where the thing it writes is a word.
-     *
-     * The third rung of the same split `accentSurface` and `accentSurfaceText`
-     * already make, and it was the missing one. `accent` is Figma's published
-     * `icon-brand`, tuned to be a STROKE — a focus ring, a border, a chosen
-     * glyph — all of which owe 3:1 and all of which it clears. A word owes 4.5,
-     * and measured on the three panel grounds it does not have it in light:
-     *
-     *            bg     bg-raised   bg-sunken
-     *   dark    7.39      4.72        6.14      accent, fine everywhere
-     *   light   4.23      4.23        3.91      accent, short on all three
-     *   light   5.40      5.40        4.99      this role
-     *
-     * Dark keeps `RAIL` because it already passes and because the accent a
-     * reader sees as text should be the accent they see as a stroke wherever
-     * that is legible. Light drops to `INDIGO_TEXT`, the rung below on Figma's
-     * own published ramp, which is the same value `accentSurfaceText` takes —
-     * the two are the same colour arrived at from opposite directions, one as
-     * ink on paper and one as a fill under white.
-     *
-     * Found by the contrast sweep rather than by eye, on the annotation badge
-     * reading "Ready" at 4.23:1. That is the kind of pair that survives review:
-     * accent-on-panel looks systematic, both halves came out of the palette,
-     * and nobody measures a colour that was already approved.
-     */
-    accentText: { dark: RAIL, light: INDIGO_TEXT },
-    /**
-     * Hover on a filled accent moves AWAY from its own ink, whichever way that
-     * is: lighter on the dark theme's light fill, darker on the light theme's
-     * dark one. Mixing white into the light theme's fill would have walked it
-     * toward the white ink sitting on top of it.
-     */
-    /*
-     * Hover on a filled accent moves AWAY from its own ink. Both fills now
-     * carry WHITE, so both go darker — the dark theme's no longer lightens,
-     * because its fill stopped being a light indigo under near-black ink.
-     */
+    textDisabled: { dark: "rgba(255,255,255,0.62)", light: wash(64) },
+    /** Strokes, handles, focus rings: the kit's `--ring`. */
+    accent: { dark: RING_DARK, light: INDIGO },
+    /** Accent as a FILL under a mark. White on it: 4.97 dark, 6.7 light. */
+    accentSurface: { dark: INDIGO_FILL_DARK, light: INDIGO },
+    /** The same fill under a WORD. Both rungs already clear 4.5:1. */
+    accentSurfaceText: { dark: INDIGO_FILL_DARK, light: INDIGO },
+    /** The accent as a word on a panel. */
+    accentText: { dark: INDIGO_TEXT_DARK, light: INDIGO },
+    /** The fills' hover: the same hue with 14% ink in it. */
     accentSurfaceHover: {
-      dark: `color-mix(in srgb, ${INK} 14%, ${RAIL_FILL})`,
+      dark: `color-mix(in srgb, ${INK} 14%, ${INDIGO_FILL_DARK})`,
       light: `color-mix(in srgb, ${INK} 14%, ${INDIGO})`,
     },
-    /**
-     * Hover on the TEXT-bearing accent fill.
-     *
-     * Without this the primary button hovered to `accentSurfaceHover`, which is
-     * derived from the glyph fill and is therefore lighter — it took the
-     * button's own label from 5.28:1 down to 4.40:1, under AA, at the exact
-     * moment the pointer was on it. Same 14% step as its sibling, taken from
-     * the darker fill so the label keeps its floor while the surface still
-     * visibly answers: 6.35:1 dark, 6.45:1 light.
-     *
-     * A derived step rather than Figma's own next rung, and deliberately. The
-     * published brand ramp is three deep and this palette has already spent two
-     * of its rungs — `bg-brand` under a mark, `bg-brand-hover` under a word —
-     * so a hover for the second one would have to come from `bg-brand-secondary`,
-     * which is the rung the LIGHT theme's text fill already occupies. Deriving
-     * keeps the two themes' hovers built the same way instead of one reaching
-     * down a ramp the other has run out of.
-     */
     accentSurfaceTextHover: {
-      dark: `color-mix(in srgb, ${INK} 14%, ${RAIL_FILL_TEXT})`,
-      light: `color-mix(in srgb, ${INK} 14%, ${INDIGO_TEXT})`,
+      dark: `color-mix(in srgb, ${INK} 14%, ${INDIGO_FILL_DARK})`,
+      light: `color-mix(in srgb, ${INK} 14%, ${INDIGO})`,
     },
+    /** A raised surface's hover. Dark 16%; light `--muted`. */
+    bgRaisedHover: { dark: lift(16), light: MUTED },
     /**
-     * Hover on a RAISED surface, which the palette had no way to express.
+     * The selected segment of a segmented control, and nothing else.
      *
-     * `bgRaised` is `lift(14)` in dark and a control on it hovered to
-     * `bgHover` — `lift(12)`, which is DARKER. A hover that recedes is a hover
-     * that reads as a press, or as nothing. One rung above the surface it sits
-     * on, in whichever direction that theme lifts.
+     * A FILL darker than its track in light (`--segmented-selected` =
+     * `--secondary-hover` on the `--secondary` track), with no shadow and no
+     * hairline: a shadow claims elevation, and the selected segment is not
+     * nearer the light than the trough it sits in (MICRO-INTERACTIONS § 9).
+     * Dark: the kit's `--secondary-hover` dark rung, `--base-gray-1200`.
      */
-    bgRaisedHover: { dark: lift(18), light: press(6) },
+    segmentSelected: { dark: "#363c44", light: SECONDARY_HOVER },
     /**
-     * Ink for anything sitting on `accentSurface`.
-     *
-     * White in both themes, which is right, because the accent fill is a Figma
-     * blue in both — `RAIL_FILL` dark, `INDIGO` light — and both are dark
-     * enough to carry it. This role does not flip and must not.
+     * The kit's `--secondary-hover`: a secondary (filled) button's hover, and
+     * an inset-ghost control's hover on an already-filled surface. The same
+     * values as `segmentSelected` and a different decision, which is why the
+     * kit — and this table — names both.
      */
-    onAccent: { dark: ON_RAIL, light: ON_CHROME },
+    secondaryHover: { dark: "#363c44", light: SECONDARY_HOVER },
+    /** The kit's `--tab-pill-selected` (= `--secondary`): the chosen tab's pill. */
+    tabSelected: { dark: "#25292e", light: SECONDARY },
     /**
-     * Ink for a SEMANTIC fill: `success`, `danger`, `lintWarning`, `component`,
-     * `guide`, `autoLayout`. The half of `onAccent` that was lost, split back
-     * out into its own role.
-     *
-     * The two were one role until the accent moved to Figma's published blues.
-     * That move was right for the accent and silently wrong for everything else
-     * sharing the ink. The blues are dark fills in both themes, so `onAccent`
-     * correctly became `#ffffff` in both; the six semantic hues did NOT move,
-     * and they are pale in dark and deep in light precisely so they can be read
-     * as INK on their own ground. White landed on the pale ones.
-     *
-     * Measured, every hue, both themes — the numbers this was retuned from:
-     *
-     *   role         dark fill  white  near-black    light fill  white
-     *   success      #7ee2a8     1.58      11.05     #0e6e40      6.32
-     *   danger       #ff8a65     2.31       7.52     #b83408      5.94
-     *   lintWarning  #f5b74e     1.78       9.75     #8a5a00      5.93
-     *   component    #c9b8ff     1.78       9.77     #6435cc      7.18
-     *   guide        #ff6b9a     2.68       6.48     #c41149      5.96
-     *
-     * Unanimous in both directions, which is what makes this one role and not
-     * six: near-black on every dark-theme hue, white on every light-theme one,
-     * and the worst pair either way is 5.93:1 — past the 4.5:1 a label owes.
-     *
-     * The failures it replaces were not marginal, and three of them were
-     * regressions against a fix already recorded in the file. `css/panels.ts`,
-     * `css/options.ts` and `css/annotations.ts` each carry a comment naming
-     * "white on it measures about 2.3:1" as the bug they had fixed, and each had
-     * gone back to exactly 2.31:1. The "In your files" badge measured 1.58:1.
-     *
-     * `INK` rather than `CHROME` for the dark end, and the two are now the
-     * SAME VALUE — `#1a1a1a` both — which makes the choice of name look
-     * arbitrary and is exactly when it stops being. `INK` is what this palette
-     * means by "the dark theme's ink"; `CHROME` means "the ground the dark
-     * theme is built on". A fill's ink is the first of those. They agree today
-     * and nothing holds them together, so the day the ground moves again this
-     * has to follow the ink and not the ground.
+     * The kit's `--hairline`: the one outline every card-family surface shares
+     * (ink 7% / paper 8%). Structural dividers stay on `border`.
+     */
+    hairline: { dark: rule(8), light: wash(7) },
+    /**
+     * The keyboard focus halo: the ring colour at 30%, three pixels wide, drawn
+     * outside a control whose edge has taken `accent` (MICRO-INTERACTIONS § 3).
+     * Not `focusHalo`, which is the white half of the canvas ring over product
+     * pixels.
+     */
+    accentHalo: {
+      dark: `color-mix(in srgb, ${RING_DARK} 30%, transparent)`,
+      light: `color-mix(in srgb, ${INDIGO} 30%, transparent)`,
+    },
+    /** The kit's `--scrollbar-thumb` / `-hover`: ink 26/45% in light, paper 28/50% in dark. */
+    scrollbarThumb: { dark: rule(28), light: wash(26) },
+    scrollbarThumbHover: { dark: rule(50), light: wash(45) },
+    /**
+     * The kit's `--overlay-scrim`: a static 70% near-black veil behind a modal,
+     * the same in both appearances and never blurred. Drawn over the app, so it
+     * does not follow the editor's theme.
+     */
+    scrim: { dark: "rgba(12,16,20,0.7)", light: "rgba(12,16,20,0.7)" },
+    /** White on a filled accent, in both themes. */
+    onAccent: { dark: ON_CHROME, light: ON_CHROME },
+    /**
+     * Ink on a filled SEMANTIC hue — the kit's `--on-hue`: white in light,
+     * near-black in dark, because the dark hues are lifted into bright plates.
      */
     onSemantic: { dark: INK, light: ON_CHROME },
-    /**
-     * Ink for a fill the USER picked, which is the one fill the theme does not
-     * get to flip.
-     *
-     * `onSemantic` above is near-black in dark and white in light, and that is
-     * right for every fill the stylesheet owns, because those flip with it:
-     * `success` is a pale mint in dark and a deep green in light, so its ink has
-     * to swap ends to stay on the fill. A note pin's colour is one of the seven
-     * `MARKER_PRESETS` and is the same hex in both themes, so an ink that swaps
-     * is an ink that is wrong in one of them. It was: the numeral on a green pin
-     * measured 5.7:1 in dark and 3.4:1 in light — same pin, same green, and the
-     * theme had turned the ink white underneath it.
-     *
-     * White, fixed, both themes. This was near-black until the palette moved:
-     * the old presets were mid-to-light hues picked to sit under dark ink, and
-     * white on them bottomed out at 1.95:1. The presets are Apple's system
-     * colours now, which is the set white is designed against, and a white
-     * numeral on a saturated disc is what a map pin looks like everywhere the
-     * pattern appears — Agentation included, which is where this one is from.
-     *
-     * It does not clear 4.5:1 on all seven, and cannot: white on `#FFCC00` is
-     * 1.4:1 whatever the weight. `css/annotations.ts` carries that with a 1px
-     * contact shadow on the glyph rather than by bending the palette, and the
-     * reasoning is recorded there.
-     */
+    /** Ink on a colour the user picked. White in both; it rides a shadow. */
     onUserColor: { dark: ON_CHROME, light: ON_CHROME },
     /**
-     * The light half of the note pin's two-tone focus ring.
-     *
-     * Fixed white in both themes for the same reason `onUserColor` is fixed
-     * dark: this ring is drawn over the app being edited, not over the chrome,
-     * so the editor's theme is not evidence about what is behind it. Paired
-     * with the near-black inner ring, one of the two always has contrast —
-     * white carries a dark page at up to 21:1, the near-black carries a light
-     * one, and neither needs to know which it got.
+     * The two halves of the canvas focus ring drawn over product pixels: a
+     * near-black core inside a white halo, so one of the two always contrasts
+     * with whatever the page is. Fixed in both themes; the ring is over the app.
      */
     focusHalo: { dark: ON_CHROME, light: ON_CHROME },
+    focusCore: { dark: INK, light: INK },
     /**
-     * The dark half of that same two-tone ring.
-     *
-     * A separate role from `onUserColor` even though both were near-black once,
-     * and the split is the point: `onUserColor` means "ink on the fill the user
-     * picked" and followed the palette to white when the pins became Apple
-     * system colours. This one means "the dark tone of a focus ring drawn over
-     * an unknown page" and must not move when a palette does. They were the same
-     * value and are not the same decision; sharing one role would have turned
-     * the pin's focus ring white-on-white the moment the numeral changed.
+     * The selected container — a chosen icon's plate, a selected row. Hue,
+     * never another grey: the neutral ladder can only say "recessed", it cannot
+     * say "this one". Light is the kit's `--unseen` indigo tint; dark is the
+     * indigo fill at 28% over the ground, since the kit's dark `--unseen`
+     * (`#24272e`) is too close to the chrome washes to read as chosen.
      */
-    focusCore: { dark: ON_RAIL, light: ON_RAIL },
-    /**
-     * THE BLUE CONTAINER BEHIND A CHOSEN ICON — and the selected layer row.
-     *
-     * Figma's published `--figma-color-bg-selected`, which is one token in its
-     * system doing both jobs: the container behind an ON icon button in the
-     * right panel, and the band under the selected row in the layers tree. So
-     * it is one token here too — see `rowSelected`, which points at this.
-     *
-     * OPAQUE, where this was a transparent wash. A tint that composites against
-     * whatever is behind it is a different colour on the panel than it is on a
-     * hovered row, and the whole point of the treatment is that a selected
-     * thing looks the same everywhere. Figma's is flat.
-     *
-     * Not the brand blue at an alpha, and not close either:
-     * `color-mix(#0a6dc2 25%, #2c2c2c)` comes out `#0f4a72` against the
-     * published `#4a5878`, which is far greyer and slightly violet. The
-     * selection tint is its own hue in Figma's system, not the CTA diluted.
-     *
-     * This was `#3b435e`, from the P3-shifted capture described on `RAIL`. The
-     * correction is the largest of the four: `#4a5878` is ΔL* 19.5 off the
-     * chrome against the old value's 10.8, so a selected row now separates from
-     * its ground at 1.97:1 where it used to manage 1.43:1.
-     */
-    accentSoft: { dark: "#4a5878", light: "#e5f4ff" },
-    /**
-     * The canvas overlay's wash. Lighter on paper because the accent under it
-     * is four times darker: the same 18% that reads as a tint over near-black
-     * reads as a solid band over white.
-     */
+    accentSoft: {
+      dark: `color-mix(in srgb, ${INDIGO_FILL_DARK} 28%, ${CHROME})`,
+      light: INDIGO_TINT,
+    },
+    /** The canvas overlay's wash: the accent at a share. */
     selectionSurface: {
-      dark: `color-mix(in srgb, ${RAIL} 18%, transparent)`,
-      light: `color-mix(in srgb, ${INDIGO} 14%, transparent)`,
+      dark: `color-mix(in srgb, ${RING_DARK} 18%, transparent)`,
+      light: `color-mix(in srgb, ${INDIGO} 12%, transparent)`,
     },
     /**
-     * A control's own well.
-     *
-     * Fields used to be transparent until hovered, which made a panel of eight
-     * numbers read as eight pieces of text. Giving every field a resting well
-     * — the step open-pencil calls `--color-panel-field` — is what turns the
-     * column into a form. A percentage rather than a literal grey so it still
-     * tracks the ground if the rung moves.
+     * A field's resting well. The kit's fields are filled with no resting
+     * border (`.ui-field`): dark the shelf wash, light `--secondary`.
      */
-    field: { dark: lift(10), light: press(6) },
-    fieldHover: { dark: lift(16), light: press(12) },
+    field: { dark: lift(6), light: SECONDARY },
+    /** Its hover. Dark `--chrome-hover`; light `--border`, the next rung down. */
+    fieldHover: { dark: lift(10), light: BORDER },
+    /** A selected layer row: the same indigo container as `accentSoft`. */
+    rowSelected: {
+      dark: `color-mix(in srgb, ${INDIGO_FILL_DARK} 28%, ${CHROME})`,
+      light: INDIGO_TINT,
+    },
+    /** Still selected, focus elsewhere: half the tint. */
+    rowSelectedMuted: {
+      dark: `color-mix(in srgb, ${INDIGO_FILL_DARK} 16%, ${CHROME})`,
+      light: `color-mix(in srgb, ${INDIGO_TINT} 55%, ${PAPER})`,
+    },
     /**
-     * A selected LAYER ROW, which is not a selected element outline.
-     *
-     * The row is a solid band the width of the panel, so it carries ink at
-     * full contrast rather than the 18% wash the canvas overlay uses. Muted is
-     * the same band while focus is elsewhere: still findable, no longer loud.
-     *
-     * The light band is a smaller share of a much darker accent — 22% of the
-     * indigo over paper — because the band has to stay light enough to carry
-     * near-black ink, exactly as the dark band stays dark enough to carry white.
+     * Status as TEXT (≥ 4.5:1), and as a fill under `onSemantic`. Light takes
+     * the kit's `--*-text` rungs; dark takes its lifted decorative hues, which
+     * the kit uses as dark status text too.
      */
-    /*
-     * A selected LAYER ROW is the same blue container a chosen icon gets.
-     *
-     * These were two hand-mixed bands — 34% of the accent for the focused row,
-     * 16% for the unfocused one. Figma draws the selected row at exactly the
-     * value it draws a selected icon's container, so the focused band is now
-     * `accentSoft` itself and there is one blue-selection colour in the chrome
-     * instead of three that nearly agreed.
-     *
-     * The muted band — "still selected, focus is elsewhere" — was then a 55%
-     * mix of that band into the ground, and it turns out Figma publishes the
-     * role: `bg-selected-secondary`. The mix landed at ΔL* 10.8 off the chrome
-     * and the published token sits at 10.7, so this is a literal replacing a
-     * formula that had independently found it, which is the best evidence
-     * either one is right.
-     */
-    rowSelected: { dark: "#4a5878", light: "#e5f4ff" },
-    rowSelectedMuted: { dark: "#394360", light: "#f2f9ff" },
+    /** `--positive-text`: `--base-green-4712` / `--base-green-7212`. */
+    success: { dark: "#72b875", light: "#0e6c34" },
+    /** Component names: `--hue-violet`, taken one step darker in light for words. */
+    component: { dark: "#c09aeb", light: "#6e4c96" },
+    /** `--destructive`: `--base-crimson-5825` darkened for words / `--base-crimson-7019`. */
+    danger: { dark: "#ff6467", light: "#c8000a" },
     /**
-     * A committed write, in the one place that reports one: the code footer.
-     *
-     * Each of the four role colours below is the same hue in both themes and a
-     * different lightness, because each one is read as INK on its ground and as
-     * a FILL under `onAccent`. The dark theme's are lifted so they carry on
-     * near-black; the light theme's are taken down so they carry on paper — at
-     * 5.2:1 or better as ink, and 5.9:1 or better under white.
+     * A destructive ghost's hover: the danger hue at 10% under danger ink
+     * (MICRO-INTERACTIONS § 2). A wash rather than a solid block, so an icon
+     * about to delete something warns without shouting.
      */
-    success: { dark: "#7ee2a8", light: "#0e6e40" },
-    /** Component (as opposed to plain element) names. */
-    component: { dark: "#c9b8ff", light: "#6435cc" },
-    /** `--sem-text-icon-alert`, lifted to carry on the dark chrome. */
-    danger: { dark: "#ff8a65", light: "#b83408" },
+    dangerWash: {
+      dark: "color-mix(in srgb, #ff6467 14%, transparent)",
+      light: "color-mix(in srgb, #c8000a 10%, transparent)",
+    },
     /**
-     * A design-system violation, and deliberately NOT `danger`.
-     *
-     * The note pin already spends `danger` as its default, and the two marker
-     * layers have to be told apart at a glance — so the audit's severities take
-     * their own pair of hues: amber for a warning the page still renders, and
-     * `danger` itself for an error, which is the one case where the two layers
-     * agree that something is wrong. Shape carries the rest of the distinction,
-     * because hue alone is not a difference every reader can see.
+     * A design-system violation, and deliberately NOT `danger`: `--warning-text`
+     * (`--base-amber-5213` / `--base-amber-7813`). Shape carries the rest of
+     * the distinction, because hue alone is not a difference every reader sees.
      */
-    lintWarning: { dark: "#f5b74e", light: "#8a5a00" },
-    guide: { dark: "#ff6b9a", light: "#c41149" },
-    measure: { dark: "#ff6b9a", light: "#c41149" },
+    lintWarning: { dark: "#e1af4a", light: "#8d5f00" },
+    /** Canvas guides and measurements: `--record` (`--base-vermilion-*`). */
+    guide: { dark: "#f14445", light: "#d73337" },
+    measure: { dark: "#f14445", light: "#d73337" },
   },
   /**
-   * Syntax tints for the Code tab, and only there.
-   *
-   * Kept out of `color` because they are not chrome roles — nothing else in
-   * the editor may reach for "the colour of a string literal". They are tuned
-   * against `bgSunken`, which is the only ground the code view is drawn on, and
-   * they are themed because that ground moves: the pastels that read at 10:1 on
-   * a near-black slab read at 1.4:1 on a light one, which is a code view with
-   * no code in it.
+   * Syntax tints for the Code tab, and only there, tuned against `bgSunken`.
+   * Drawn from the kit's decorative hues so the code view belongs to the
+   * same family: blue, violet, green and coral.
    */
   code: {
-    tag: { dark: "#7dd3fc", light: "#0369a1" },
-    attribute: { dark: "#c4b5fd", light: "#6d28d9" },
-    string: { dark: "#86efac", light: "#166534" },
-    number: { dark: "#fca5a5", light: "#b3261e" },
+    tag: { dark: "#60c2ff", light: "#005aa8" },
+    attribute: { dark: "#c09aeb", light: "#6e4c96" },
+    string: { dark: "#72b875", light: "#0e6c34" },
+    number: { dark: "#f6835d", light: "#b74a00" },
     punctuation: { dark: "rgba(255,255,255,0.58)", light: wash(66) },
   },
   /**
-   * The TINT of a cast shadow, and only the tint.
-   *
-   * The geometry stays literal in `shadow` below, because an offset and a blur
-   * are not a theme decision — how dark the cast is, is. A 50%-black 22px cast
-   * is what puts a popover in front of near-black; dropped on paper unchanged
-   * it is a grey smudge under a white card, which is the one way a light theme
-   * reads as unfinished no matter how well the palette is tuned.
+   * The TINT of the kit's elevation, and only the tint; geometry stays literal
+   * in `shadow` below. Light reads elevation from a cast shadow and a 7% ink
+   * hairline (`--hairline`); dark from a heavier pure-black ambient plus a top
+   * rim highlight (`--rim-light`, paper 10%), where the hairline is paper 8%.
    */
   shadow: {
-    cast: { dark: "rgba(0,0,0,0.5)", light: `color-mix(in srgb, ${INK} 16%, transparent)` },
-    ring: { dark: "rgba(0,0,0,0.6)", light: `color-mix(in srgb, ${INK} 14%, transparent)` },
-    castSoft: { dark: "rgba(0,0,0,0.4)", light: `color-mix(in srgb, ${INK} 12%, transparent)` },
+    cast: { dark: "rgba(0,0,0,0.36)", light: "rgba(0,0,0,0.12)" },
+    ring: { dark: rule(8), light: wash(7) },
+    castSoft: { dark: "rgba(0,0,0,0.42)", light: "rgba(0,0,0,0.13)" },
+    rim: { dark: rule(10), light: "rgba(255,255,255,0)" },
+    /** The kit's `--elev-tooltip` tint: an inverse chip needs a firmer cast. */
+    castTooltip: { dark: "rgba(0,0,0,0.36)", light: "rgba(0,0,0,0.16)" },
   },
 } as const satisfies Record<string, Record<string, { dark: string; light: string }>>
 
@@ -804,57 +448,48 @@ export const themeProperties = (): string[] =>
     Object.keys(roles).map((role) => customProperty(group, role))
   )
 
-const { cast, castSoft, ring } = references("shadow", PALETTE.shadow)
+const { cast, castSoft, castTooltip, ring, rim } = references("shadow", PALETTE.shadow)
 
 export const tokens = {
   color: references("color", PALETTE.color),
   code: references("code", PALETTE.code),
   /*
-   * The design kit's radius scale: 4, 8, 12, 16, 20, 24, 28, 32, 36.
+   * The kit's radius ladder (ADOPTION-GUIDE § 4), under the kit's own names.
    *
-   * The role names are unchanged so no call site moves, but every value did:
-   * the old ramp was 2/4/6/10, which is half this one and reads as a different
-   * product beside it. A `50%` circle is still written as `50%` at the call
-   * site — a pill is not a step on a radius scale, it is the absence of one.
+   *   xs 4    protected micro floor: swatches, tiny chips, arrow tips
+   *   sm 8    small controls, glyph plates, mini buttons
+   *   md 10   menu items (concentric in a 16px menu with 6px padding)
+   *   lg 12   the default: segmented tracks, row highlights, tooltips
+   *   2xl 14  ACTION BUTTONS — every text button is one family
+   *   3xl 16  cards, menus, popovers, fields, floating panels
+   *   5xl 18  modals, dialogs, overlay windows
+   *   6xl 22 / 7xl 26  large cards, the composer
+   *
+   * Nested corners are concentric — inner = outer − inset — and `nest()` below
+   * refuses an inset whose inner corner is not a rung. A circle or a pill is
+   * not a rung: it is written `50%` / `999px` at the call site and carries the
+   * round-corner opt-out (see `cornerShape`).
    */
   radius: {
-    /** The tightest corner the kit has. Chips, swatches, inline marks. */
-    sm: "4px",
-    /** Controls: fields, buttons, rows. */
-    md: "8px",
-    /** Cards and grouped containers. */
+    xs: "4px",
+    sm: "8px",
+    md: "10px",
     lg: "12px",
-    /** Panels and popovers. */
-    xl: "16px",
-    /** Larger surfaces, up the kit's own scale. */
-    "2xl": "20px",
-    "3xl": "24px",
-    "4xl": "28px",
-    "5xl": "32px",
-    "6xl": "36px",
+    "2xl": "14px",
+    "3xl": "16px",
+    "5xl": "18px",
+    "6xl": "22px",
+    "7xl": "26px",
   },
   /*
    * Every corner in the chrome is a squircle, and this is the only place the
-   * curve is chosen.
+   * curve is chosen — the kit's `corner-shape: squircle`, spelled as the
+   * number it stands for so the next person has something to turn.
    *
-   * `border-radius` sets how BIG a corner is; `corner-shape` sets what curve is
-   * drawn inside it. A plain radius draws a circular arc, which meets the
-   * straight edge at a curvature discontinuity — the thing the eye reads as a
-   * corner being "stuck on" rather than the side flowing into it. A superellipse
-   * has no such break, which is why Apple's icons, and Figma's smoothing
-   * slider, are this shape and not an arc.
-   *
-   * `superellipse(2)` is the `squircle` keyword spelled out, and it is the
-   * strongest smoothing this chrome can actually carry. The keyword is not used
-   * because a bare word gives the next person nothing to turn; the number does.
-   *
-   * Higher is NOT better here, and the radii are the reason. The whole chrome
-   * draws at 4, 8, 12 and 16px, and `superellipse()` — unlike Figma's slider,
-   * which scales its smoothing against the shape — applies the same exponent
-   * whatever the radius. At K=3 a 4px corner is already square to the eye and
-   * at K=4 the 8px one is too: dialling "smoothing" up past 2 does not make
-   * these corners smoother, it deletes them. Verified by rendering the kit's
-   * radii at K = 1, 2, 2.5, 3 and 4 side by side.
+   * A squircle at a 999px or 50% radius renders as a rounded SQUARE, so every
+   * true circle and pill (dots, discs, pill tags, round buttons) must opt out
+   * with `corner-shape: round`. That is the most common porting miss the kit
+   * names, and `test/concentric-cases.mjs` sweeps for it.
    */
   cornerShape: "superellipse(2)",
   /*
@@ -872,56 +507,29 @@ export const tokens = {
    * floats. Those are two different decisions and only one of them is a colour.
    */
   shadow: {
-    popover: `0 6px 22px ${cast}, 0 0 0 0.5px ${ring}`,
     /**
-     * A surface that hangs over the product rather than docking to an edge.
-     *
-     * The toolbar pill and the launcher both float in the middle of the screen
-     * over live product pixels of an unknown colour, where a tight cast reads
-     * as a rectangle pasted on rather than as something in front. Wide, and
-     * hung below the element, is what puts air underneath.
-     *
-     * TWO LAYERS, like `popover`, and the second one is the edge.
-     *
-     * It was one layer for a long time, and the consequence was that its three
-     * users each solved the edge themselves: the launcher and the bar added a
-     * real `border: 1px solid border`, and the drag ghost added nothing and had
-     * no edge at all. A wide soft cast fades to nothing at the rim, so on a page
-     * whose colour happens to sit near `color.bg` the surface has no boundary —
-     * which is the failure a `float` surface is most exposed to, because the
-     * page under it belongs to someone else and cannot be tuned.
-     *
-     * A border is the wrong instrument for it anyway, and this kit says so
-     * twice already: `shadow.marker` replaced a pin's border with an inset
-     * hairline because a real border grew the 22px disc to 24 and laid a hard
-     * line between the fill and the page, and `css/annotations.ts` fixed the
-     * same problem on the note hint by reaching for `popover`'s ring. A
-     * `0 0 0 0.5px` layer costs no layout, cannot be knocked off the pixel grid
-     * by a radius, and rides the cast instead of fighting it.
-     *
-     * Same `ring` tint as `popover`, not a new value: these are the same
-     * decision — "where does this surface end" — made for two distances.
+     * The kit's `--elev-overlay`: menus, popovers, floating cards. A wide soft
+     * cast, the 1px card-family hairline (`--hairline`) as a layer that costs
+     * no layout, and in dark the top rim highlight that the kit uses instead
+     * of a cast to say "nearer the light".
      */
-    float: `0 8px 30px ${castSoft}, 0 0 0 0.5px ${ring}`,
+    popover: `0 14px 44px ${cast}, 0 0 0 1px ${ring}, inset 0 1px 0 ${rim}`,
     /**
-     * The note pin's lift and its edge, in one declaration — Agentation's pair.
-     *
-     * Deliberately NOT theme-referenced, unlike `popover` and `float` above.
-     * Those hang over the editor's own surfaces, so their cast is mixed against
-     * the theme's ink; a pin hangs over the app being edited, where the theme is
-     * not evidence about what is behind it. Fixed black at low alpha is the only
-     * cast that behaves the same on a white page and a dark one.
-     *
-     * The second layer is an INSET hairline, and it is the pin's border. Drawing
-     * a real `border` would grow the 22px disc to 24 and lay a hard line between
-     * the fill and the page; an inset shadow darkens the fill's own rim instead,
-     * which reads as the disc curving away rather than as a ring on top of it.
-     * 0.04 is nearly nothing on purpose — enough to stop a light pin dissolving
-     * into a light page, not enough to be seen as an outline.
-     *
-     * Tight, too: `0 2px 6px` against `popover`'s `0 6px 22px`. A 22px disc with
-     * a 22px blur under it reads as a balloon; the pin is supposed to sit ON the
-     * page it is marking, close enough that the shadow says "attached here".
+     * The kit's `--elev-modal` geometry, for surfaces that hang over the
+     * product in mid-screen — the toolbar pill, the launcher, the drag ghost —
+     * where a tight cast reads as a rectangle pasted on. Same hairline and rim
+     * as `popover`: the same decision, "where does this surface end", made for
+     * a longer distance.
+     */
+    float: `0 18px 56px ${castSoft}, 0 0 0 1px ${ring}, inset 0 1px 0 ${rim}`,
+    /** The kit's `--elev-tooltip`, for the inverse tooltip chip. No hairline: the chip is solid ink. */
+    tooltip: `0 10px 30px ${castTooltip}`,
+    /**
+     * The note pin's lift and its edge. Deliberately NOT theme-referenced: a
+     * pin hangs over the app being edited, where the editor's theme says
+     * nothing about what is behind it, so fixed black at low alpha is the only
+     * cast that behaves the same on a white page and a dark one. The inset
+     * hairline is the pin's border, drawn without growing the disc.
      */
     marker: "0 2px 6px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.04)",
   },
@@ -931,172 +539,98 @@ export const tokens = {
     mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
   },
   /**
-   * One type scale for the whole shell. Editor chrome is denser than the
-   * product's 14px body on purpose — but the density lives here, once, so a
-   * surface picks a role rather than a number.
-   */
-  /*
-   * Three steps, floor 10.
+   * The kit's type roles (ADOPTION-GUIDE § 5), at the editor's density.
    *
-   * This ramp has now been moved twice and both moves were right at the time.
-   * It began 11/10/9, which is where density lands if it is tuned on a 27-inch
-   * display and never rechecked; it went to 13/12/12 when the brief was a hard
-   * 12px floor, which bought legibility and spent it on a `micro` rung that was
-   * no longer a rung at all. The floor is 10 now, so all three steps are real
-   * again and the body rung comes back down to the density a 260px panel wants.
-   *
-   * 10 is for a mark, not for prose: an eyebrow, a type tag, a numeral in a
-   * chip. Anything a person reads a sentence of belongs on `body`.
+   * The kit's UI workhorse is body-sm (14/22). The editor keeps its 12px
+   * density on purpose — two 240px columns of fields — so its workhorse is the
+   * kit's CAPTION role (12/16) and its floor is the kit's BADGE role (10).
+   * There is no 11px step: the kit has none, and a one-pixel step reads as a
+   * blurrier label rather than a smaller one. To make something stand out,
+   * change its colour or weight, not its size by a pixel.
    */
   type: {
-    /** Panel rows, field labels, tool labels. The editor's body. */
+    /** Panel rows, field labels, tool labels: the kit's caption size. */
     body: "12px",
-    /** Group headers and hints. Density, not tone — use sparingly. */
-    caption: "11px",
-    /** The floor. Eyebrows and type tags, and only where a word is a label. */
+    /**
+     * Group headers, hints, metadata: also the caption size. It was 11px; the
+     * hierarchy is now carried by `textDim` ink and weight, as the kit does.
+     */
+    caption: "12px",
+    /** The kit's badge role. Counts, type tags, eyebrows — a mark, never prose. */
     micro: "10px",
     weightBody: 400,
+    /** The kit's caption weight: values, labels you read at a glance. */
     weightValue: 500,
+    /** The kit's strong weight (body-sm / caption strong). */
     weightSection: 600,
-    /*
-     * AND THE LEADING, WHICH THIS SCALE DID NOT HAVE.
-     *
-     * A type scale that ships three sizes and no line-heights is two thirds of
-     * a scale: a role is "a size, a leading and a weight" and only two of those
-     * were ever a decision anybody could look up. What the stylesheets did
-     * instead is exactly what happens when there is nothing to name — a survey
-     * of `css/` found `1`, `1.4`, `1.45`, `1.5`, `1.55`, `14px`, `15px` and
-     * `16px` in 40 declarations, which is not five roles, it is eight numbers
-     * that happen to be near each other. 1.4 and 1.45 differ by 0.6px at the
-     * body rung and nothing anywhere said which of them a wrapping sentence was
-     * supposed to take.
-     *
-     * UNITLESS, so a line box scales with the size it is set on. The four
-     * px-valued leadings this replaces did the opposite: the root's `16px`
-     * inherited down onto a `micro` eyebrow as 1.6 and onto `body` as 1.33, so
-     * the tightest leading in the chrome landed on the rung that reads
-     * sentences and the loosest on the rung that never wraps at all.
-     *
-     * Four roles, and the boundary between the first two is the one that
-     * matters — `better-typography` puts the floor for anything wrapping to
-     * three lines at 1.4 even in a height-constrained row, and every value
-     * below that floor in this chrome was on prose.
-     */
+    /** The kit's heading weight, between semibold and bold. Panel and dialog titles. */
+    weightTitle: 650,
+    /** Heading tracking at the editor's title size (the kit tightens with size). */
+    trackingTitle: "-0.01em",
+    /** The kit's eyebrow: caption strong, uppercase, 0.08em. */
+    trackingEyebrow: "0.08em",
     /** A single line centred in a box of its own: a numeral in a disc, a chip. */
     leadingFlush: 1,
-    /**
-     * The chrome's default, and the floor for text that wraps inside a row of
-     * fixed height. 16.8px at the body rung, against the 16px flat it replaces.
-     */
-    leadingRow: 1.4,
-    /**
-     * Prose: a hint, a description, an empty state, a composer. The bottom of
-     * the 1.5–1.6 band a reader wants, picked rather than the top because a
-     * 240px panel pays for every pixel of leading twice — once per line and
-     * again in how much of the list is left on screen under it.
-     */
-    leadingBody: 1.5,
-    /**
-     * Code, which wants more air than prose and not less.
-     *
-     * Monospace sets denser than the UI face at the same size — every glyph is
-     * the width of the widest one — so a code slab at body leading reads as a
-     * block rather than as lines. This is also the only leading in the chrome
-     * applied to text that is WRAPPED but must still be counted in logical
-     * lines, and a wrapped continuation has to be visibly nearer its own line
-     * than the next one.
-     */
+    /** The kit's caption leading, 12/16. The default for text in a row. */
+    leadingRow: 1.333,
+    /** The kit's relaxed reading leading (body 16/26): hints, empty states, notes. */
+    leadingBody: 1.625,
+    /** Code, which wants more air than prose: monospace sets denser. */
     leadingCode: 1.55,
     /**
-     * THE MEASURE, which this scale did not have either.
-     *
-     * A role is a size, a leading, a weight — and, for anything anybody reads a
-     * SENTENCE of, a maximum line length. Past roughly 75 characters the eye
-     * loses the start of the next line on the return sweep, which is why the
-     * long-standing advice is 60–75; 62 is inside that band and is already the
-     * number this chrome picked once, by hand, on `.de-shortcut-note`.
-     *
-     * It matters more here than it does on a web page, because these panels are
-     * RESIZABLE. `size.panelMax` lets the inspector out to 38% of the viewport,
-     * so a component description that reads at a comfortable 55 characters on a
-     * 1280px laptop is ~87 on a 1440 and ~155 on a 2560 — and it is the reader
-     * with the biggest display who gets the least readable prose, which is
-     * backwards.
-     *
-     * `ch` rather than `px` on purpose: the cap is a statement about characters
-     * per line, and `ch` is the one unit that keeps meaning that if the type
-     * scale ever moves.
-     *
-     * For PROSE only. A row, a label, a value and a path all want the width
-     * they are given — capping those would leave a panel with a ragged right
-     * edge and no reason for it.
+     * The measure for anything read as a SENTENCE. The panels are resizable,
+     * so without a cap the reader with the biggest display gets the longest
+     * lines. `ch`, because the cap is a statement about characters per line.
      */
     measure: "62ch",
   },
   /**
-   * The design kit's spacing scale: 2, 4, 8, 12, 14, 16, 18, 20, 24, 30, 36.
+   * The kit's spacing scale (ADOPTION-GUIDE § 3), under the kit's own names.
+   * Layout moves in whole 4px steps; the 2px step is for micro gaps only, and
+   * there is no 10px (it always rounded up), 14px or 18px step.
    *
-   * There was no scale before this, only numbers: a survey of the stylesheets
-   * found 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16 and 24 in use, which is not a
-   * system, it is twelve separate decisions that happened to be near each
-   * other. Six of those values are not on the kit's scale at all.
-   *
-   * Numbers, not strings, so arithmetic at a call site stays honest — a rule
-   * that needs `space.md * 2` should say so rather than interpolate a string
-   * and hope. The `px` is added where it is written.
+   * Numbers, not strings, so arithmetic at a call site stays honest. The `px`
+   * is added where it is written.
    */
   space: {
-    /** A hairline gap: the space inside a chip, between a glyph and its word. */
-    xs: 2,
-    /** The default tight step. Row padding, icon-to-label. */
-    sm: 4,
-    /** The workhorse. Gaps between controls in a row. */
-    md: 8,
-    /** Between groups of controls. */
-    lg: 12,
-    xl: 14,
-    "2xl": 16,
-    "3xl": 18,
-    "4xl": 20,
-    /** Between sections of a panel. */
-    "5xl": 24,
-    "6xl": 30,
-    "7xl": 36,
+    /** Micro gaps only: a tight icon cluster, a hairline offset. */
+    "3xs": 2,
+    /** Gap in an icon-button cluster, between stacked rows. */
+    "2xs": 4,
+    /** Icon-to-label inside a chip, menu padding. */
+    xs: 6,
+    /** The workhorse: group padding, small gaps, row-to-row. */
+    sm: 8,
+    /** Row inner padding, gap between blocks, pill padding. */
+    md: 12,
+    /** Panel and card inner padding. */
+    lg: 16,
+    /** Panel body padding, section gap. */
+    xl: 20,
+    /** Card content padding, modal side insets. */
+    "2xl": 24,
+    "3xl": 28,
+    "4xl": 32,
+    "5xl": 40,
   },
   /**
-   * The glyph ramp: 10, 12, 16, 20, 24, 32. Every icon in the chrome is one of them.
-   *
-   * It used to be seven sizes — 10, 12, 13, 14, 16, 18, 20 — arrived at one
-   * call site at a time, and the two that did the damage were the odd ones: a
-   * 13px tab mark and a 14px align mark, each a single step off the 12 and 16
-   * beside them. A step that small is not read as a smaller icon, it is read as
-   * a blurrier one, because it lands the same drawing on a different subpixel
-   * grid. Five values, each a clear step from the next, is what makes two icons
-   * either obviously the same size or obviously different.
-   *
-   * Roles rather than numbers at the call site, for the reason the type scale
-   * above gives: a surface should pick what the glyph is FOR. The numbers are
-   * here so the ramp can be read in one place, and `IconSize` in `core/icons`
-   * makes anything off it a type error rather than a review note.
+   * The kit's six icon roles (ADOPTION-GUIDE § 6). Every glyph in the chrome
+   * is one of them; `IconSize` in `core/icons` makes anything off it a type
+   * error. No 10, 13, 15 or 17px one-offs.
    */
   icon: {
-    /**
-     * The floor, and a mark rather than a control: a numeral in a chip, a
-     * twisty, an inline dot beside a label. Nothing you press lives here — a
-     * 10px hit target is not one, and the row actions that briefly sat at this
-     * end of the ramp are the reason the panel read as too small.
-     */
-    mark: 10,
-    /** Dense panel rows: chips, tree glyphs, inline marks. */
-    row: 12,
-    /** The default. Toolbar controls, tabs, and panel tool buttons. */
-    control: 16,
-    /** A glyph alone on a surface of its own — today, the floating launcher. */
-    launcher: 20,
-    /** Empty states, where the mark is the largest thing in the box. */
-    display: 24,
-    /** The top of the ramp. Nothing draws here yet; a hero slot would. */
-    hero: 32,
+    /** Status markers, dense pills, twisties. */
+    marker: 12,
+    /** Inline chrome, breadcrumbs, small tags. */
+    inline: 14,
+    /** The default: rows, toolbars, menus, close. */
+    action: 16,
+    /** Primary floating chrome — the launcher, search fields. */
+    chrome: 18,
+    /** Detail-view header controls. */
+    header: 20,
+    /** Empty states, success confirmation. */
+    feature: 24,
   },
   size: {
     toolbarHeight: 36,
@@ -1166,38 +700,32 @@ export const tokens = {
     /** Handles, guides, and the marquee all share one hairline. */
     hairline: 1,
   },
-  /** Shared curve for occasional controls; high-frequency selection chrome stays instant. */
+  /** The kit's `emphasized` curve: lateral panel slides, occasional controls. */
   ease: "cubic-bezier(0.32, 0.72, 0, 1)",
+  /** The kit's `reveal`: anything settling in — a surface, a toast, a fold. */
+  easeReveal: "cubic-bezier(0.22, 1, 0.36, 1)",
+  /** The kit's `exit`: anything leaving accelerates out. */
+  easeExit: "cubic-bezier(0.4, 0, 1, 1)",
   /**
-   * One curve that overshoots, for the one thing that should feel like an
-   * object arriving rather than a value changing: the launcher popping in.
-   *
-   * Bounce this small (the curve passes 1 at about 60% and settles back) is the
-   * top of the range UI can carry — anything springier belongs to drag, where
-   * the user supplied the energy. Nothing in a panel uses it; a field that
-   * bounced would read as a bug.
+   * A small overshoot for a direct-manipulation PAYOFF only — a drop, a
+   * reorder, the launcher landing. The kit reserves its lively spring
+   * (bounce 0.2) for these moments and nothing else.
    */
   easeSpring: "cubic-bezier(0.34, 1.2, 0.64, 1)",
+  /**
+   * The kit's bounded tweens (ADOPTION-GUIDE § 8). The asymmetry is the point:
+   * dismissal (150) hands control back sooner than a reveal (250) arrives.
+   * Menus and tooltips OPEN instantly and only use `exit`.
+   */
   duration: {
-    /**
-     * The bottom rung: a change you register without watching it happen.
-     *
-     * For a surface that only crossfades — no travel to follow — on a control
-     * pressed many times a session. At this length the eye reads "it went"
-     * rather than "it is going", which is the point: the toolbar is not telling
-     * you a story about leaving, it is getting out of the way. Much below this
-     * and the crossfade stops doing its one job, which is to keep the change
-     * from registering as a flicker.
-     */
-    snap: "70ms",
-    fast: "120ms",
-    base: "180ms",
-    /**
-     * A whole surface crossing the screen edge. Longer than `base` because the
-     * distance is the panel's own width rather than a few pixels of hover, and
-     * still under the 300ms where UI starts to feel like it is waiting for you.
-     */
-    drawer: "240ms",
+    /** Hover washes, press, colour changes. */
+    hover: "150ms",
+    /** Dismissal: a menu closing, a toast leaving. */
+    exit: "150ms",
+    /** A surface or fold settling in. */
+    reveal: "250ms",
+    /** A panel or width changing: the kit's resize tween. */
+    resize: "320ms",
   },
 } as const
 
@@ -1206,21 +734,16 @@ export type Tokens = typeof tokens
 /**
  * A filled accent surface and the ink that rides on it, as ONE declaration.
  *
- * The fill and its foreground are not two decisions. While the accent was
- * Figma's dark blue a call site could write `background: accentSurface` alone
- * and inherit the shell's white ink harmlessly; against the design system's
- * light indigo that same line lands at 1.9:1 and the label disappears. Five
- * call sites were already written that way. Emitting both properties together
- * means the wrong pairing cannot be written — the same reason `glyph-plate.ts`
- * owns a fill and a radius rather than exporting a colour.
+ * The fill and its foreground are not two decisions. A call site that writes
+ * `background: accentSurface` alone inherits whatever ink surrounds it — in
+ * light that is near-black `text` on `#3849da`, 2.85:1, and the label
+ * disappears. Emitting both properties together means the wrong pairing
+ * cannot be written — the same reason `glyph-plate.ts` owns a fill and a
+ * radius rather than exporting a colour. White on the fill: 4.97:1 dark,
+ * 6.70:1 light.
  *
- * Written through the TOKENS rather than through `RAIL`/`ON_RAIL`, which it
- * used to be. The two literals only happened to equal `accentSurface` and
- * `onAccent`; with two themes they are the dark theme's half of a pair, so
- * spelling them here would have pinned every accent-filled surface in the
- * chrome — nine of them — to a light indigo under near-black ink whichever
- * theme was up. On paper that is the 1.9:1 this export exists to prevent,
- * reintroduced by the export itself.
+ * Written through the TOKENS rather than through literals, so every
+ * accent-filled surface in the chrome follows whichever theme is up.
  */
 export const accentFill = `background: ${tokens.color.accentSurface}; color: ${tokens.color.onAccent};`
 export const accentFillHover = `background: ${tokens.color.accentSurfaceHover}; color: ${tokens.color.onAccent};`
@@ -1228,11 +751,11 @@ export const accentFillHover = `background: ${tokens.color.accentSurfaceHover}; 
 /**
  * The accent fill for a surface with a WORD on it.
  *
- * Same pairing, one step darker, because the floor is different: `accentFill`
- * is Figma's `bg-brand` at 3.53:1 under white in dark and 4.23:1 in light,
- * which clears the 3:1 a non-text component owes and not the 4.5:1 a 12px
- * label owes. The two call sites that need this are the primary button and the
- * tab's count badge.
+ * A separate role because the floor is different: a glyph fill owes 3:1, a
+ * 12px label owes 4.5:1. Today both resolve to the same indigo rungs, which
+ * already clear 4.5:1 under white (4.97:1 dark, 6.70:1 light). The call sites
+ * that need it are the ones carrying a word — the primary button, the tab's
+ * count badge, and the other filled labels.
  *
  * Emitted as a pair for the same reason `accentFill` is: a call site that set
  * only the background would inherit whatever ink the surface around it had, and
@@ -1275,10 +798,10 @@ export const accentFillTextHover = `background: ${tokens.color.accentSurfaceText
  * `npm run build`: esbuild bundles this file without running it, so a bad nest
  * compiles perfectly and then throws the first time anything loads it.
  *
- * The ramp moves in steps of 4 and a hairline is 1, so the mistake it catches
- * is nearly always one of two — an inset that forgot the border, or a padding
- * taken from the spacing scale's odd rungs (2, 14, 18, 30). Both land the child
- * between two steps of a scale the rest of the chrome is drawn on.
+ * The ramp is 4/8/10/12/14/16/18/22/26 and a hairline is 1, so the mistake it
+ * catches is nearly always one of two — an inset that forgot the border, or an
+ * odd padding that lands the child between two steps of a scale the rest of
+ * the chrome is drawn on.
  */
 export interface Nest {
   /** The container this describes, quoted back in errors and by the guard. */

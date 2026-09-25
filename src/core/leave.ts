@@ -36,7 +36,7 @@ import { tokens } from "./tokens"
 import { prefersReducedMotion } from "./motion"
 
 /** Parsed once: the ramp's own value, not a number to keep in agreement. */
-const LEAVE_MS = Number.parseFloat(tokens.duration.base)
+const LEAVE_MS = Number.parseFloat(tokens.duration.reveal)
 
 /**
  * How long to wait for a transition that may have been clamped to nothing.

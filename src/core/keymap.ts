@@ -502,7 +502,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     command: "element.nudge",
     chord: { key: "arrowleft" },
     aliases: [{ key: "arrowright" }, { key: "arrowup" }, { key: "arrowdown" }],
-    label: "Nudge by 1px — hold ⇧ for 10px",
+    label: "Nudge by 1px. Hold ⇧ for 10px",
     figma: "Nudge / big nudge (arrows, ⇧arrows)",
     group: "Edit",
     owner: "canvas",

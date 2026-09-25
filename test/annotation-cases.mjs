@@ -1378,7 +1378,7 @@ const write = (comment) => {
   const box = composer()
   assert.ok(box, "no composer opened, so there was nothing to type into")
   box.querySelector("textarea").value = comment
-  const save = Array.from(box.querySelectorAll("button")).find((b) => b.textContent === "Save")
+  const save = Array.from(box.querySelectorAll("button")).find((b) => b.textContent === "Save note")
   save.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
 }
 

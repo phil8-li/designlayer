@@ -572,7 +572,7 @@ console.log("\nDeleting from a React file")
       { op: "removeElement", componentName: "Solo", filePath: "src/solo.tsx", target: jsxTarget("div", ["solo"]) },
     ])
     assert.equal(result.applied.length, 0)
-    assert.match(result.failed[0].reason, /not a child of another element/)
+    assert.match(result.failed[0].reason, /not inside another element/)
     assert.equal(fs.readFileSync(solo, "utf8"), ROOT_TSX)
   })
 
@@ -583,7 +583,7 @@ console.log("\nDeleting from a React file")
       parentClasses: ["page"],
     }))
     assert.equal(result.applied.length, 0)
-    assert.match(result.failed[0].reason, /not a child of another element/)
+    assert.match(result.failed[0].reason, /not inside another element/)
     assert.equal(fs.readFileSync(page, "utf8"), PAGE_TSX)
   })
 

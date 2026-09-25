@@ -608,7 +608,7 @@ export function installLintMarkers(context: EditorContext): void {
      * circle in the mark, and dropping it would leave a bare `i` on a red
      * square — a letter to decode rather than a notice.
      */
-    badge.append(icon("Info", tokens.icon.row))
+    badge.append(icon("Info", tokens.icon.marker))
 
     badge.addEventListener("click", (event) => {
       // The badge belongs to the editor, not to the page beneath it: a click

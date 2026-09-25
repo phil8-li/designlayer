@@ -204,7 +204,7 @@ check("DW-01 a drag past the threshold reaches the writer", () => {
   assert.equal(element.style.transform, "translate(70px, 20px)")
   assert.equal(history.canUndo(), true, "the drag left no history step")
   assert.equal(previewOnlyChanges().length, 1, "the Prompts tab still has nothing to hand over")
-  assert.deepEqual(toasts, [{ message: "Move — preview only (transform)", kind: "error" }])
+  assert.deepEqual(toasts, [{ message: "Move: preview only (transform)", kind: "error" }])
 })
 
 check("DW-02 one gesture is one step, however many frames it took", () => {

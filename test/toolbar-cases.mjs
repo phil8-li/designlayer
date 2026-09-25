@@ -962,16 +962,16 @@ check("the bar takes its height from its contents, not from a fixed number", () 
    * in tokens.ts does the subtraction, which is why this asserts a value the
    * spacing scale does not contain — it is not a spacing decision any more, it
    * is the remainder of one. The border is asserted beside it because the two
-   * only add up to `space.sm` together.
+   * only add up to `space["2xs"]` together.
    */
   assert.match(bar, /padding: 3px;/)
   assert.match(bar, /border: 1px solid/)
   // A pill hanging over live product pixels needs a wider cast than the panels
   // that are already docked against an edge.
-  assert.match(bar, /box-shadow: 0 8px 30px/)
+  assert.match(bar, /box-shadow: 0 18px 56px/)
   assert.doesNotMatch(bar, /0 2px 14px/, "the docked panel's shadow is back on the pill")
   // Concentric: the outer curve, the inner curve, and the gap between them.
-  assert.match(bar, new RegExp(`border-radius: ${editor.tokens.radius.xl};`))
+  assert.match(bar, new RegExp(`border-radius: ${editor.tokens.radius["3xl"]};`))
   const square = block("\\.de-toolbar \\.de-tool")
   assert.match(square, new RegExp(`border-radius: ${editor.tokens.radius.lg};`))
   assert.match(square, /width: 32px; height: 32px;/)
@@ -1061,15 +1061,16 @@ check("a pressed panel toggle takes no chip, and still answers the pointer", () 
   const quiet = block('\\.de-toolbar \\.de-tool--quiet\\[aria-pressed="true"\\]')
   assert.ok(quiet, "the quiet override must exist")
   assert.ok(quiet.includes("background: transparent;"), quiet)
+  // Full ink, pressed or not: an icon-only control wears the body ink in every
+  // state (MICRO-INTERACTIONS § 5). Stated as a pair, because the failure is a
+  // DIFFERENCE rather than a value: the rest rule is the one that would drift.
   assert.ok(
-    quiet.includes(`color: ${editor.tokens.color.textMuted};`),
+    quiet.includes(`color: ${editor.tokens.color.text};`),
     `a pressed panel toggle must keep the resting ink: ${quiet}`
   )
-  // Stated as a pair, because the failure is a DIFFERENCE rather than a value:
-  // the rest rule is the one that would drift away from this next.
   const rest = block("\\.de-tool")
   assert.ok(
-    rest.includes(`color: ${editor.tokens.color.textMuted};`),
+    rest.includes(`color: ${editor.tokens.color.text};`),
     `the resting ink is what the pressed toggle keeps: ${rest}`
   )
   assert.ok(
@@ -1462,8 +1463,9 @@ check("everything pressable in the bar answers the press", () => {
    * asserted verbatim: a control that cannot act must not answer as though it
    * did, and that is a correctness claim rather than a taste one.
    */
+  // On every square now, not the bar's alone, and never on a menu trigger.
   const toolPress = editor.toolbarCss.match(
-    /\.de-toolbar \.de-tool:active:not\(\[disabled\]\) \{ transform: scale\(([\d.]+)\); \}/
+    /\.de-tool:active:not\(\[disabled\]\):not\(\[aria-haspopup\]\) \{ transform: scale\(([\d.]+)\); \}/
   )
   assert.ok(toolPress, "a tool in the bar no longer answers a press, or stopped excluding disabled ones")
   const toolScale = Number(toolPress[1])
@@ -1982,7 +1984,7 @@ check("deleting a note is what takes it off the handover", () => {
    * off takes, and the one that must not report a success it did not get.
    */
   pressCopy()
-  assert.match(copyLane.toasts.at(-1).message, /clipboard access was blocked/)
+  assert.match(copyLane.toasts.at(-1).message, /blocked clipboard access/)
   assert.equal(copyLane.toasts.at(-1).kind, "error")
 
   copyLane.module.removeAnnotation(note.id)

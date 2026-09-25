@@ -637,8 +637,8 @@ await check("hidden chrome hands the pointer back, exactly as interactive mode d
  *
  * The size comparison went with it, and had to. It read the mark against the
  * disc rather than against a literal, which was right while the two were the
- * same glyph a frame apart; these two are `tokens.icon.launcher` and
- * `tokens.icon.control` and are SUPPOSED to differ by a rung, because one sits
+ * same glyph a frame apart; these two are `tokens.icon.chrome` and
+ * `tokens.icon.action` and are SUPPOSED to differ by a rung, because one sits
  * alone on a disc and the other in a row of eight. What is left is the drawing
  * and the weight, which is the whole of what the eye reads as the same mark.
  *

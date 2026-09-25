@@ -392,7 +392,7 @@ const WALLED = "vault.example.com asked this editor to sign in"
  */
 const OPENS = "eyJhbGciOiJSUzI1NiJ9.a-real-looking-identity-token"
 const BAD_CREDENTIAL =
-  "That credential was refused — the site still asked for sign-in. Check it has not expired."
+  "The site refused that credential and still asked for sign-in. Check that it has not expired."
 
 /** What the walled link resolves to once a credential opens it. */
 const VAULT = {
@@ -871,7 +871,7 @@ console.log("\nAdding a library by link")
 await check("the CTA is a URL field with a real name, and an Add beside it", () => {
   const field = one("url")
   assert.ok(field, "there is no way to add a library by link")
-  assert.equal(field.getAttribute("placeholder"), "https://…")
+  assert.equal(field.getAttribute("placeholder"), "https://")
   assert.equal(field.getAttribute("aria-label"), "Link to a design system or Storybook")
   assert.ok(one("url-add"), "the URL field has no Add button")
 })
@@ -1093,7 +1093,7 @@ await check("a refused add says in plain words that the site is private", async 
    */
   const body = seen
     .replace(heading.textContent, "")
-    .split(/I have an access token/)[0]
+    .split(/Use an access token/)[0]
     .trim()
   assert.ok(
     body.split(/\s+/).length <= 20,

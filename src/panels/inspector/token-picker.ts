@@ -13,7 +13,7 @@
  */
 
 import { clamp, clear, el } from "../../core/dom"
-import { arriveFrom, smoothScroll } from "../../core/motion"
+import { smoothScroll } from "../../core/motion"
 import { focusControl } from "../../core/focus"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
@@ -229,8 +229,13 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
   // has nothing to create. A control that cannot do anything is worse than none.
   const closeButton = el(
     "button",
-    { class: "de-mini", type: "button", title: "Close", "aria-label": "Close" },
-    [icon("X", tokens.icon.row)]
+    {
+      class: "de-mini",
+      type: "button",
+      title: `Close ${options.title} picker`,
+      "aria-label": `Close ${options.title} picker`,
+    },
+    [icon("X", tokens.icon.marker)]
   )
   /**
    * The escape hatch, as a fourth child rather than a second control on the
@@ -246,19 +251,19 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
       }) as HTMLInputElement)
     : null
   /*
-   * `de-arrive` is the chrome's shared entrance (`css/base.ts`). It plays once,
-   * on mount, which is exactly when this node is built — there is no reopen
-   * path to re-trigger it, because a second open constructs a fresh popover.
+   * No `de-arrive`: the kit opens menus and pickers instantly, in their final
+   * geometry, because they are opened dozens of times an hour and an entrance
+   * is a tax on every read (MICRO-INTERACTIONS § 6).
    */
   const popover = el(
     "div",
-    { class: "de-token-popover de-arrive", role: "dialog", "aria-label": options.title },
+    { class: "de-token-popover", role: "dialog", "aria-label": options.title },
     [
     el("div", { class: "de-token-popover-header" }, [
       el("span", { class: "de-token-popover-title" }, [options.title]),
       closeButton,
     ]),
-    el("div", { class: "de-token-search" }, [icon("Search", tokens.icon.row), search]),
+    el("div", { class: "de-token-search" }, [icon("Search", tokens.icon.marker), search]),
     list,
     customInput
       ? el("div", { class: "de-token-custom" }, [
@@ -350,7 +355,7 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
          */
         el("span", { class: "de-token-row-name", title: choice.name }, [choice.leaf]),
         choice.detail ? el("span", { class: "de-token-row-detail" }, [choice.detail]) : null,
-        chosen ? el("span", { class: "de-token-row-check" }, [icon("Check", tokens.icon.row)]) : null,
+        chosen ? el("span", { class: "de-token-row-check" }, [icon("Check", tokens.icon.marker)]) : null,
       ]
     )
     row.addEventListener("click", () => commit(choice))
@@ -375,7 +380,11 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
         list.append(row)
       }
     }
-    if (!visible.length) list.append(el("div", { class: "de-token-empty" }, ["No matches"]))
+    if (!visible.length) list.append(
+        el("div", { class: "de-token-empty" }, [
+          customInput ? "No matching tokens. Enter your own value below." : "No matching tokens",
+        ])
+      )
     const chosen = visible.findIndex((choice) => choice.id === options.selectedId)
     setActive(chosen < 0 ? 0 : chosen)
     /*
@@ -465,9 +474,4 @@ function place(field: HTMLElement, popover: HTMLElement): void {
   const below = anchor.bottom + 4
   const fits = below + height + EDGE <= window.innerHeight
   popover.style.top = fits ? `${below}px` : `${Math.max(EDGE, anchor.top - 4 - height)}px`
-  // The entrance follows the placement. A picker pushed above its field has to
-  // grow out of its bottom edge, or it opens travelling away from the field it
-  // belongs to — and a token field near the foot of a long Design tab is where
-  // that happens most. See `arriveFrom`.
-  arriveFrom(popover, fits ? "below" : "above")
 }

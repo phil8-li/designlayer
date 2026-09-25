@@ -544,7 +544,7 @@ await check("the control shows the name of the app being edited", () => {
   )
   const chevron = withName.trigger.querySelector("svg")
   assert.ok(chevron, "no glyph on the control")
-  assert.equal(chevron.outerHTML, named.icon("ChevronDown", named.tokens.icon.row).outerHTML)
+  assert.equal(chevron.outerHTML, named.icon("ChevronDown", named.tokens.icon.marker).outerHTML)
 })
 
 /*
@@ -589,7 +589,7 @@ await check("with no app known it keeps its shape and asks you to choose one", (
   assert.equal(withoutName.trigger.getAttribute("aria-label"), "Choose an app")
   const chevron = withoutName.trigger.querySelector("svg")
   assert.ok(chevron, "the empty state dropped the chevron")
-  assert.equal(chevron.outerHTML, ghost.icon("ChevronDown", ghost.tokens.icon.row).outerHTML)
+  assert.equal(chevron.outerHTML, ghost.icon("ChevronDown", ghost.tokens.icon.marker).outerHTML)
 })
 
 /*
@@ -1009,26 +1009,27 @@ await check("resizing the window closes the card rather than stranding it", asyn
 })
 
 /*
- * The chrome's shared entrance, and nothing on the way out.
+ * The kit's menu grammar: no entrance, and a 150ms exit played on a copy.
  *
- * `de-arrive` is the one class every floating surface in this chrome opens
- * with, so a card that skipped it would be the one surface that appears without
- * explanation. It is removed on close rather than swapped for an exit: a
- * dismissal has to be complete at the instant it is asked for, and a card still
- * in the document is one that still absorbs the next Escape. The removal is
- * also what re-arms it, since a CSS animation runs when the class lands.
+ * A menu opens instantly in its final geometry — it is opened dozens of times
+ * an hour — so the card wears no entrance class. Dismissal must still be
+ * complete at the instant it is asked for (a card still in the document absorbs
+ * the next Escape), so the real card hides at once and the fade plays on an
+ * inert, aria-hidden, id-less clone that removes itself.
  */
-await check("the card plays the chrome's entrance, and leaves without one", async () => {
+await check("the card opens with no entrance, and its exit plays on an inert copy", async () => {
   await opened(withName)
-  assert.ok(withName.menu.classList.contains("de-arrive"), "the card appeared with no entrance")
+  assert.ok(!withName.menu.classList.contains("de-arrive"), "the card still plays an entrance")
   press(withName.trigger)
-  assert.ok(
-    !withName.menu.classList.contains("de-arrive"),
-    "a dismissed card kept the class that plays its entrance"
-  )
-  await opened(withName)
-  assert.ok(withName.menu.classList.contains("de-arrive"), "the entrance played once and never again")
-  press(withName.trigger)
+  assert.equal(withName.menu.style.display, "none", "the real card did not close at once")
+  const ghost = window.document.querySelector(".de-app-menu--leaving")
+  assert.ok(ghost, "no exit was played")
+  assert.equal(ghost.getAttribute("aria-hidden"), "true")
+  assert.ok(ghost.inert, "the leaving copy can still take focus or a click")
+  assert.equal(ghost.querySelector("[id]"), null, "the leaving copy duplicates an id")
+  assert.ok(!ghost.hasAttribute("role"), "the leaving copy is still announced as a menu")
+  await new Promise((resolve) => window.setTimeout(resolve, 260))
+  assert.equal(window.document.querySelector(".de-app-menu--leaving"), null, "the copy outlived its exit")
 })
 
 withName.destroy()
@@ -2137,7 +2138,7 @@ await (async () => {
     // opened at all. `http://127.0.0.1:9100 · source folder not found` said the
     // same thing with a url in front of it that no reader could act on.
     assert.equal(dead.querySelector(".de-app-menu-where").textContent, "No project folder")
-    assert.match(dead.getAttribute("aria-label"), /project folder not found/)
+    assert.match(dead.getAttribute("aria-label"), /project folder not found/i)
   })
 
   await check("the row says it cannot work; the note under the list says what can", () => {
@@ -2165,7 +2166,7 @@ await (async () => {
     key("ArrowDown")
     key("ArrowDown")
     assert.equal(window.document.activeElement, ui.rows()[1], "the walk stepped over the reason")
-    assert.match(window.document.activeElement.getAttribute("aria-label"), /project folder/)
+    assert.match(window.document.activeElement.getAttribute("aria-label"), /project folder/i)
     // And it still wraps, so the walk is a loop rather than a dead end.
     key("ArrowDown")
     assert.equal(window.document.activeElement, ui.rows()[0])
@@ -2440,7 +2441,7 @@ await check("the figure takes the armed row's ink by inheriting it, not by resta
 await check("the card still stops at the viewport and scrolls past it", () => {
   const menuRule = rule(named.appChooserCss, ".de-app-menu")
   // 16, and the number is pinned rather than matched loosely because it was
-  // wrong: the sheet read `space.sm` where the positioner reads 8, so the
+  // wrong: the sheet read `space["2xs"]` where the positioner reads 8, so the
   // ceiling was `100vh - 8px` and the card was allowed to be one edge taller
   // than the room it had. Off by an amount too small to see and exactly big
   // enough to hide the last row's lower half.

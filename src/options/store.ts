@@ -413,7 +413,7 @@ function createStore(editor: EditorContext): OptionsStore {
       }
       // Saving is not an edit, but it is the moment the element gains its
       // first option — re-apply so the queued source write matches what is shown.
-      applySnapshot(selection, writer, snapshot, `Save option "${option.name}"`)
+      applySnapshot(selection, writer, snapshot, `Save style “${option.name}”`)
       commit({ ...set, activeOptionId: option.id, options: [...set.options, option] })
     },
 

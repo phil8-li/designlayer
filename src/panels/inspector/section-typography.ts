@@ -226,7 +226,7 @@ export const typographySection: InspectorSection = (context) => {
       options: choices.map((choice) => ({
         value: choice.value,
         label: choice.label,
-        glyph: icon(choice.glyph, tokens.icon.control),
+        glyph: icon(choice.glyph, tokens.icon.action),
         disabled: !enabled,
       })),
       onCommit,
@@ -280,7 +280,7 @@ export const typographySection: InspectorSection = (context) => {
          * that means "this is text", and dropping the word gives the whole
          * field to the family name, which is the longest value in the section.
          */
-        label: icon("Type", tokens.icon.control),
+        label: icon("Type", tokens.icon.action),
         title: "Font family",
         value: primaryFamily(computed.fontFamily),
         placeholder: "Inter",

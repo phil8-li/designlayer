@@ -55,7 +55,7 @@ import type { InspectorSection, SectionContext } from "./index"
  * does not have, one off the 16 beside it — close enough that it read as a
  * softer icon rather than as a smaller one.
  */
-const GLYPH = tokens.icon.control
+const GLYPH = tokens.icon.action
 
 /** Every button here is a drawn mark and nothing else, so it is worth a name. */
 const mark = (glyph: IconName) => icon(glyph, GLYPH)

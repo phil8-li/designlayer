@@ -138,7 +138,7 @@ function alignmentPad(options: {
       cells.push({
         label: `${justify.replace("flex-", "")} / ${align.replace("flex-", "")}`,
         pressed: justify === options.justify && align === options.align,
-        glyph: icon(glyphs[PLACES.indexOf(align)], tokens.icon.control),
+        glyph: icon(glyphs[PLACES.indexOf(align)], tokens.icon.action),
         onClick: () => options.onPick(justify, align),
       })
     }
@@ -171,7 +171,7 @@ function paddingControls(
     // Four cells to split, one box to relink. Drawn at the `control` rung,
     // where this was a typed `⊞` at whatever size the button's text happened
     // to be — see the same toggle in `section-appearance.ts`.
-    glyph: icon(perSide ? "Square" : "Grid2x2", tokens.icon.control),
+    glyph: icon(perSide ? "Square" : "Grid2x2", tokens.icon.action),
     pressed: perSide,
     onClick: () => {
       setExpanded(PADDING_EXPANDER, !perSide)
@@ -208,7 +208,7 @@ function paddingControls(
         // edge weighted says which side without being learned. `title` carries
         // the words, so the tooltip and the accessible name still read
         // "Padding top".
-        label: icon(PAD_GLYPH[side], tokens.icon.control),
+        label: icon(PAD_GLYPH[side], tokens.icon.action),
         title: `Padding ${side}`,
         value: values[index],
         min: 0,
@@ -305,7 +305,7 @@ export function autoLayoutControls(
       options: FLOWS.map((entry) => ({
         value: entry.value,
         label: entry.label,
-        glyph: icon(entry.glyph, tokens.icon.control),
+        glyph: icon(entry.glyph, tokens.icon.action),
       })),
       onCommit: (next) => {
         // Looked up rather than cast: `iconSegmented` speaks in strings, and a
@@ -328,7 +328,7 @@ export function autoLayoutControls(
      * question asked about two axes, and two glyphs of the same two bars turned
      * ninety degrees do.
      */
-    label: icon("GapColumn", tokens.icon.control),
+    label: icon("GapColumn", tokens.icon.action),
     title: "Gap between children",
     value: Number.parseFloat(computed.columnGap) || 0,
     min: 0,
@@ -344,7 +344,7 @@ export function autoLayoutControls(
     direction === "wrap"
       ? numberField({
           id: "autolayout.rowgap",
-          label: icon("GapRow", tokens.icon.control),
+          label: icon("GapRow", tokens.icon.action),
           title: "Gap between wrapped rows",
           value: Number.parseFloat(computed.rowGap) || 0,
           min: 0,

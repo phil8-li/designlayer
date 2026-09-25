@@ -11,7 +11,7 @@ import { tokens } from "../../core/tokens"
 
 /** The chip's own exit, off the ramp and clamped for reduced motion. */
 const CHIP_LEAVE_MS = (): number =>
-  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.reveal)
 import { icon } from "../../core/icons"
 import { tokens as t } from "../../core/tokens"
 import { section, textField } from "./field"
@@ -24,7 +24,7 @@ const CHIP_STYLE = [
   "max-width:100%",
   "height:18px",
   "padding:0 2px 0 6px",
-  `border-radius:${t.radius.sm}`,
+  `border-radius:${t.radius.xs}`,
   `background:${t.color.bgRaised}`,
   `color:${t.color.textMuted}`,
   "font-size:10px",
@@ -35,7 +35,7 @@ const PATH_STYLE = [
   "padding:4px 6px",
   "text-align:left",
   "border:none",
-  `border-radius:${t.radius.md}`,
+  `border-radius:${t.radius.sm}`,
   `background:${t.color.bgSunken}`,
   `color:${t.color.textDim}`,
   `font-family:${t.font.mono}`,
@@ -43,7 +43,7 @@ const PATH_STYLE = [
   "line-height:1.4",
   "word-break:break-all",
   "cursor:copy",
-  `transition:color ${t.duration.fast} ${t.ease}`,
+  `transition:color ${t.duration.hover} ${t.ease}`,
 ].join(";")
 
 export const classesSection: InspectorSection = ({ editor, selection, writer, invalidate }) => {
@@ -95,7 +95,7 @@ export const classesSection: InspectorSection = ({ editor, selection, writer, in
             })
           },
         },
-        [icon("X", t.icon.row)]
+        [icon("X", t.icon.marker)]
       ),
     ])
   )
@@ -104,7 +104,7 @@ export const classesSection: InspectorSection = ({ editor, selection, writer, in
     navigator.clipboard
       .writeText(path)
       .then(() => editor.toast("Source path copied"))
-      .catch(() => editor.toast("Could not copy path", "error"))
+      .catch(() => editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error"))
   }
 
   const body = el("div", { class: "de-stack" }, [

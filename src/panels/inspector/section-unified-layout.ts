@@ -105,7 +105,7 @@ function spacingBindings(context: SectionContext, housed: boolean): HTMLElement 
      * below", which is what the control does, and it cannot be confused with the
      * single chevron already spent on section disclosure and the layer twisty.
      */
-    glyph: icon(open ? "ChevronsDownUp" : "ChevronsUpDown", tokens.icon.row),
+    glyph: icon(open ? "ChevronsDownUp" : "ChevronsUpDown", tokens.icon.marker),
     pressed: open,
     onClick: () => {
       setExpanded(PRECISION_EXPANDER, !open)

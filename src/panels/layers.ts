@@ -23,6 +23,7 @@ import { createWriter } from "../core/writer"
 import type { EditorContext } from "../core/context"
 import type { LayerElement, Selection } from "../core/types"
 import { tokens } from "../core/tokens"
+import { plural } from "../core/format"
 
 const INDENT = LAYER_INDENT, MAX_DEPTH = 40
 /** Filtering is the only full-tree walk; bound it so typing can never lock up. */
@@ -60,7 +61,7 @@ function glyphFor(element: LayerElement, promoted: boolean): IconName {
 function setAction(button: HTMLElement, on: boolean, glyph: IconName, label: string): void {
   if (button.dataset.glyph !== glyph) {
     button.dataset.glyph = glyph
-    button.replaceChildren(icon(glyph, tokens.icon.row))
+    button.replaceChildren(icon(glyph, tokens.icon.marker))
   }
   setAttr(button, "aria-pressed", String(on))
   // The label names the OUTCOME, not the state: a button that says "Locked"
@@ -140,12 +141,12 @@ export function installLayersPanel(context: EditorContext): void {
      * differently is the kind of thing nobody reports and everybody feels when
      * they switch between them.
      *
-     * The inline side is `space.sm` rather than `md`, so the field's edge lands
+     * The inline side is `space["2xs"]` rather than `md`, so the field's edge lands
      * on the same 4px column the tree rows below it already indent from.
      */
     el(
       "div",
-      { style: `padding:${tokens.space.md}px ${tokens.space.sm}px ${tokens.space.md}px` },
+      { style: `padding:${tokens.space.sm}px ${tokens.space["2xs"]}px ${tokens.space.sm}px` },
       [search]
     ),
     tree,
@@ -282,14 +283,14 @@ export function installLayersPanel(context: EditorContext): void {
     const openState = row.hasChildren ? String(row.open) : null
     // Rows are recycled across renders, so the twisty is toggled by presence
     // rather than rebuilt — a fresh <svg> per frame would churn the whole tree.
-    if (row.hasChildren && twisty.childElementCount === 0) twisty.append(icon("ChevronRight", tokens.icon.row))
+    if (row.hasChildren && twisty.childElementCount === 0) twisty.append(icon("ChevronRight", tokens.icon.marker))
     else if (!row.hasChildren && twisty.childElementCount > 0) twisty.replaceChildren()
     // Same reason the mark is remembered on the node: it can only change when
     // the element does, and redrawing it is another whole <svg>.
     const mark = glyphFor(row.element, row.meta.promoted)
     if (glyph.dataset.glyph !== mark) {
       glyph.dataset.glyph = mark
-      glyph.replaceChildren(icon(mark, tokens.icon.row))
+      glyph.replaceChildren(icon(mark, tokens.icon.marker))
     }
     /*
      * The name, and a way to read the half of it the panel cut off.
@@ -336,7 +337,7 @@ export function installLayersPanel(context: EditorContext): void {
       saved,
       "aria-label",
       savedCount > 0
-        ? `${savedCount} saved style${savedCount === 1 ? "" : "s"} on ${row.meta.name}`
+        ? `${plural(savedCount, "saved style")} on ${row.meta.name}`
         : null
     )
     setAttr(saved, "title", savedCount > 0 ? "Saved styles. Select this layer to use them." : null)
@@ -354,7 +355,7 @@ export function installLayersPanel(context: EditorContext): void {
     // announce delete as a toggle that is currently off.
     if (remove.dataset.glyph !== "Trash") {
       remove.dataset.glyph = "Trash"
-      remove.replaceChildren(icon("Trash", tokens.icon.row))
+      remove.replaceChildren(icon("Trash", tokens.icon.marker))
     }
     setAttr(remove, "aria-label", `Delete ${row.meta.name}`)
     setAttr(remove, "title", `Delete ${row.meta.name}`)
@@ -430,7 +431,7 @@ export function installLayersPanel(context: EditorContext): void {
     const sentence = visible.length
       ? ""
       : query
-        ? `Nothing matches “${query}”.`
+        ? `No layers match “${query}”. Try another name.`
         : "No layers yet. Use the page, or select an element on it."
     if (sentence === emptyShowing) return
     emptyShowing = sentence

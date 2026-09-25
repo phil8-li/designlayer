@@ -1,6 +1,7 @@
 /** The floating button the editor collapses into, and how it arrives. */
 
 import { tokens as t } from "../tokens"
+import { FOCUS_OUTLINE, PRESS } from "./panels"
 import { TOOLBAR_HEIGHT } from "./toolbar"
 
 /**
@@ -44,17 +45,17 @@ export const LAUNCHER_CLEARANCE = INSET + SIZE
 /**
  * The disc's half of standing down — the other half is in \`css/toolbar.ts\`.
  *
- * ${t.duration.base} against the bar's ${t.duration.fast}, and the order is the point: the thing the
+ * ${t.duration.reveal} against the bar's ${t.duration.hover}, and the order is the point: the thing the
  * system takes away goes faster than the thing it hands you back, so the bar is
  * gone before the disc has finished settling rather than the two dissolving
  * through each other in the middle.
  *
- * The ${ARRIVE_DELAY} wait is half the bar's exit. Start at 0 and there are two things
+ * The ${ARRIVE_DELAY} wait is well inside the bar's ${t.duration.hover} exit. Start at 0 and there are two things
  * at full opacity in two different places, which reads as a swap; wait for the
  * bar to finish and it reads as a slideshow. Halfway is where a handover is —
  * the bar is faint and still going as the disc starts to show up.
  */
-const ARRIVE = t.duration.base
+const ARRIVE = t.duration.reveal
 const ARRIVE_DELAY = "60ms"
 
 /**
@@ -94,7 +95,7 @@ export const launcherCss = `/* ---------- launcher ---------- */
   padding: 0;
   /*
    * No \`border\`. \`shadow.float\` carries its own hairline now — a
-   * \`0 0 0 0.5px\` ring, the same one \`popover\` uses — and a real border on top
+   * \`0 0 0 1px\` ring, the same one \`popover\` uses — and a real border on top
    * of it is two edges drawn a half pixel apart on a ${SIZE}px circle, which is the
    * shape that shows that worst: a \`border-radius: 50%\` border has to be
    * rasterised around the whole circumference and picks up a stair-step the
@@ -111,8 +112,12 @@ export const launcherCss = `/* ---------- launcher ---------- */
   /* The drag is pointer-driven; without this, a touch drag scrolls the app. */
   touch-action: none;
 }
-.de-launcher:hover { background: ${t.color.bgHover}; }
-.de-launcher:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-launcher:hover { background: ${t.color.bgHover}; }
+}
+/* The kit's ring, drawn beside the float rather than instead of it: the ring
+   is an outline, so the cast and the halo shadow are listed together. */
+.de-launcher:focus-visible { ${FOCUS_OUTLINE} box-shadow: ${t.shadow.float}, 0 0 0 3px color-mix(in srgb, ${t.color.accent} 30%, transparent); }
 /*
  * \`pointer\` at rest, not \`grab\`, and this is the one place the two floating
  * surfaces deliberately disagree.
@@ -144,15 +149,15 @@ export const launcherCss = `/* ---------- launcher ---------- */
   opacity: 0;
   transform: scale(${ARRIVE_SCALE});
   transition:
-    opacity ${t.duration.fast} ${t.ease},
-    transform ${t.duration.fast} ${t.ease},
-    background ${t.duration.fast} ${t.ease},
-    visibility 0s linear ${t.duration.fast};
+    opacity ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease},
+    background-color ${t.duration.hover} ${t.ease},
+    visibility 0s linear ${t.duration.hover};
 }
 /*
  * Showing up, in the corner, as the bar finishes leaving.
  *
- * ON \`easeSpring\`, AND THIS IS THE ONLY RULE IN THE CHROME THAT TAKES IT.
+ * ON \`easeSpring\`, WHICH THE KIT RESERVES FOR A PAYOFF LIKE THIS ONE.
  *
  * This used to be \`tokens.ease\`, argued as "three surfaces moving at once on
  * three curves is three events". That argument is about the surfaces LEAVING,
@@ -162,12 +167,8 @@ export const launcherCss = `/* ---------- launcher ---------- */
  * are already going (\`${ARRIVE_DELAY}\`), and it is a ${SIZE}px object landing in an
  * empty corner rather than a value settling into place.
  *
- * Which is verbatim what \`tokens.ts\` says \`easeSpring\` is for: "the one thing
- * that should feel like an object arriving rather than a value changing: the
- * launcher popping in". For as long as this rule said \`ease\`, that comment
- * described a call site that did not exist and the token had none anywhere in
- * the codebase. One of the two had to move, and the token's reasoning is the
- * better one.
+ * Which is what \`tokens.ts\` says \`easeSpring\` is for: "a direct-manipulation
+ * PAYOFF only — a drop, a reorder, the launcher landing".
  *
  * The SCALE takes the spring and nothing else does. \`opacity\` stays on \`ease\`
  * because an overshooting curve on a value that clamps at 1 buys a flat hold
@@ -189,13 +190,14 @@ html.designlayer-chrome-hidden .de-launcher {
   transition:
     opacity ${ARRIVE} ${t.ease} ${ARRIVE_DELAY},
     transform ${ARRIVE} ${t.easeSpring} ${ARRIVE_DELAY},
-    background ${t.duration.fast} ${t.ease},
+    background-color ${t.duration.hover} ${t.ease},
     visibility 0s linear ${ARRIVE_DELAY};
 }
-/* Press feedback has to beat the state rule that owns \`transform\` above. */
+/* The kit's 0.98 press, which has to beat the state rule that owns
+   \`transform\` above. */
 html.designlayer-chrome-hidden .de-launcher:active {
-  transform: scale(0.96);
-  transition: transform ${t.duration.fast} ${t.ease};
+  ${PRESS}
+  transition: transform ${t.duration.hover} ${t.ease};
 }
 /*
  * Nothing eases while you are dragging it.
@@ -222,10 +224,8 @@ html.designlayer-chrome-hidden .de-launcher--dragging { transition: none; }
  * hole that reopens silently is worse than a line that costs nothing. So they
  * are neutralised by name.
  *
- * It lives beside the disc rather than in \`css/toolbar.ts\` because that file
- * must not carry a reduced-motion block at all — the obvious one there would
- * zero \`transition-property\` on the tooltips and take their 400ms delay with
- * it, flashing a label at every glyph the pointer crosses.
+ * It lives beside the disc so every reduced-motion rule for the two floating
+ * surfaces is in one place; \`css/toolbar.ts\` carries none.
  */
 @media (prefers-reduced-motion: reduce) {
   .de-toolbar { scale: none !important; translate: none !important; }

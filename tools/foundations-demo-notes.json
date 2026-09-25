@@ -1,0 +1,164 @@
+{
+  "_summary": [
+    "Palette: the kit's cool neutrals and near-white ladder in light, its chrome washes over #171717 in dark; Figma blue replaced by the kit's indigo for selection, focus and primary fills",
+    "Shape: the kit's radius ladder with squircle corners; 14px text buttons, 16/6/10 concentric menus, 18px dialogs; circles and pills opt out to true round",
+    "Density kept (12px text, 24px rows); spacing snapped to the kit's 4px grid, no 10/14/18px steps; one 12px caption size replaces 11px",
+    "Interaction: zero-delay inverse tooltips, instant menus with 150ms exits, dialogs scale 0.96→1, 2% press, hover only on fine pointers, indigo focus edge + halo on keyboard only",
+    "Icons: 24 kit glyphs, one flat 2-unit stroke, six size roles (12–24); copy tightened to the kit's content rules"
+  ],
+  "overview": {
+    "title": "Editor overview",
+    "changes": [
+      "Selected tool and selection handles move from Figma blue to kit indigo",
+      "Panels sit on the kit's white / #171717 card ground with cool neutral controls",
+      "Selected layer row is an indigo tint, not a grey",
+      "Fields are filled wells with an 8px squircle corner"
+    ]
+  },
+  "inspector-design": {
+    "title": "Inspector: Design tab",
+    "changes": [
+      "Fields, selects and pads share one filled well with an 8px squircle",
+      "Chosen segment is a darker fill: no white chip, no shadow, no outline",
+      "Icon buttons wear full ink; 'on' is an indigo tint",
+      "Section captions use the 12px caption role instead of 11px",
+      "Keyboard focus: indigo edge + 3px halo; mouse clicks draw no ring"
+    ]
+  },
+  "inspector-changes": {
+    "title": "Inspector: Changes tab",
+    "changes": [
+      "Note rows are 16px kit cards, concentric with their 8px mini buttons",
+      "Row actions also show on keyboard focus and on touch",
+      "Switches and fields take the kit focus ring and 2% press",
+      "Delete hovers to a red wash, not a solid red block"
+    ]
+  },
+  "code": {
+    "title": "Code tab",
+    "changes": [
+      "Syntax colors come from the kit's decorative hues (blue, violet, green, coral)",
+      "Code sits on the kit control surface with relaxed code leading"
+    ]
+  },
+  "left-controls": {
+    "title": "Left panel: Controls tab",
+    "changes": [
+      "Tab pill is the kit's selected-tab fill and slides in 150ms",
+      "Rows and fields follow the inspector's well, corner and focus treatment"
+    ]
+  },
+  "design-system": {
+    "title": "Inspector: Design system tab",
+    "changes": [
+      "Info mark in full ink; hovers only with a real pointer",
+      "Empty and loading states use the kit's reading leading and loaded geometry"
+    ]
+  },
+  "toolbar": {
+    "title": "Toolbar with tooltip",
+    "changes": [
+      "Selected tool is an indigo fill; other icons wear full ink at rest",
+      "Tooltip appears instantly as an inverse ink chip (12px, 6×12 padding)",
+      "Moving along the bar slides the tooltip; closing fades in 150ms",
+      "Bar uses the kit's floating elevation: wide soft cast, 1px hairline, dark rim light"
+    ]
+  },
+  "layer-menu": {
+    "title": "Layer context menu",
+    "changes": [
+      "Kit menu geometry: 16px corner, 6px padding, 10px concentric rows",
+      "Opens instantly in place; neutral highlight on the hovered row"
+    ]
+  },
+  "toasts": {
+    "title": "Toasts",
+    "changes": [
+      "Floating card: 16px corner, overlay shadow and hairline",
+      "Scales into place instead of sliding up; exits in 150ms",
+      "Close ✕ in full ink; Undo uses the shared 14px button"
+    ]
+  },
+  "annotation-composer": {
+    "title": "Annotation composer",
+    "changes": [
+      "Composer card at 22px, concentric with its 14px buttons",
+      "Opens with no entrance travel; 150ms exit",
+      "Primary button is kit indigo"
+    ]
+  },
+  "saved-styles": {
+    "title": "Saved styles panel",
+    "changes": [
+      "Selected style is a fill with no outline",
+      "Rename and delete wear full ink; delete hovers to a red wash",
+      "Filter and value fields share one corner, well and focus edge",
+      "Type eyebrows use 10px caps with the kit's 0.08em tracking"
+    ]
+  },
+  "token-picker": {
+    "title": "Token picker",
+    "changes": [
+      "Opens instantly as a 16px card with one hairline (was two)",
+      "Rows are 10px highlights inset 6px, concentric with the card",
+      "Closed field is a filled well that stays lit while its list is open"
+    ]
+  },
+  "app-chooser": {
+    "title": "App chooser",
+    "changes": [
+      "Menu opens instantly and fades out in 150ms",
+      "16px card, 6px padding, 10px rows, concentric",
+      "Current app is an indigo fill instead of a side stripe",
+      "One hairline instead of a double border"
+    ]
+  },
+  "start-screen": {
+    "title": "Start screen",
+    "changes": [
+      "Kit field (filled, 16px corner) and 14px buttons with a 2% press",
+      "Squircle corners and kit type sizes; dark only"
+    ]
+  },
+  "shortcut-sheet": {
+    "title": "Keyboard shortcut sheet",
+    "changes": [
+      "A kit dialog: 18px corner, 70% static scrim",
+      "Scales in from 96% instead of drifting down",
+      "Close button sits concentric in the corner (10px)",
+      "Title uses the kit heading weight 650"
+    ]
+  },
+  "libraries": {
+    "title": "Design system tab: library added",
+    "changes": [
+      "Library cards are kit cards: 16px corner, hairline edge, no shadow",
+      "Buttons in the file drawer readable in light"
+    ]
+  },
+  "library-signin": {
+    "title": "Library sign-in dialog",
+    "changes": [
+      "Kit dialog: 18px corner, 24px inset, modal elevation, static scrim",
+      "Scales in from 96%, out to 98%",
+      "Secondary buttons readable in light; heading at weight 650"
+    ]
+  },
+  "lint": {
+    "title": "Audit findings and canvas markers",
+    "changes": [
+      "Findings keep hue + shape: red errors, amber warnings in the kit's status-text colors",
+      "Badges hover on the shared 150ms timing, only on fine pointers",
+      "Keyboard focus draws the kit ring on every row"
+    ]
+  },
+  "layers-states": {
+    "title": "Layers: hover and selection",
+    "changes": [
+      "Selected row is an indigo tint (kit 'unseen' hue), not a grey",
+      "Names in full ink, no wrapping",
+      "Row actions reveal on hover, keyboard focus or touch, and can't be clicked while hidden",
+      "Filter is a filled field; its border only appears on focus"
+    ]
+  }
+}

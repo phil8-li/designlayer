@@ -25,6 +25,7 @@
  */
 
 import { config } from "./config"
+import { plural } from "./format"
 
 /** What the server answers, narrowed to the part a warning needs. */
 interface UsageAnswer {
@@ -109,7 +110,7 @@ export function sharedComponentWarning(name: string): string {
   if (!answer || answer.refused) return ""
   if (answer.count <= 1) return ""
   const others = answer.count - 1
-  const places = others === 1 ? "1 other place" : `${others} other places`
+  const places = plural(others, "other place")
   // "at least" only when the walk stopped early, so the ordinary sentence is
   // not hedged for a limit nobody hit.
   const qualifier = answer.truncated ? "at least " : ""

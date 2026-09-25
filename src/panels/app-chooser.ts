@@ -98,10 +98,11 @@ import { config } from "../core/config"
 import { el } from "../core/dom"
 import { focusControl } from "../core/focus"
 import { icon } from "../core/icons"
-import { arriveFrom } from "../core/motion"
+import { arriveFrom, prefersReducedMotion } from "../core/motion"
 import { tokens } from "../core/tokens"
 import { tip } from "../core/tooltip"
 import type { EditorContext } from "../core/context"
+import { plural } from "../core/format"
 
 /**
  * One row of the chooser, and there are two kinds of them.
@@ -259,7 +260,7 @@ function appLabel(app: RunningApp, folder: string | null): string {
 
 /** How much is at stake, for the sentence on an armed row. */
 function changeWord(count: number): string {
-  return `${count} unapplied change${count === 1 ? "" : "s"}`
+  return plural(count, "unapplied change")
 }
 
 /**
@@ -289,6 +290,46 @@ function isCurrentApp(app: RunningApp, currentUrl: string | null): boolean {
   } catch {
     return false
   }
+}
+
+
+/** The kit's menu dismissal, parsed once from the ramp it is written on. */
+const EXIT_MS = Number.parseFloat(tokens.duration.exit)
+
+/**
+ * Plays the menu's 150ms exit on an inert COPY of the card.
+ *
+ * The card itself has to be gone the instant it is dismissed: still in the
+ * document it would absorb the next Escape, keep its rows in the tab order and
+ * answer a click aimed at whatever is under it. The kit still wants a bounded
+ * fade so the card does not vanish in the same frame as the click that closed
+ * it — so the fade plays on a clone that is `inert`, `aria-hidden`, id-less and
+ * pointer-dead (`.de-app-menu--leaving`), placed where the card was and removed
+ * when its animation ends. "Closed" and "still painted" stop being one question.
+ *
+ * The timer is the backstop for an `animationend` that never comes (jsdom, a
+ * tab in the background), and it is skipped under reduced motion along with
+ * the clone, because the base blanket takes the fade to nothing anyway.
+ */
+function playExit(card: HTMLElement): void {
+  if (card.style.display === "none" || prefersReducedMotion()) return
+  const ghost = card.cloneNode(true) as HTMLElement
+  ghost.removeAttribute("id")
+  ghost.removeAttribute("role")
+  ghost.removeAttribute("aria-label")
+  for (const node of ghost.querySelectorAll("[id]")) node.removeAttribute("id")
+  ghost.setAttribute("aria-hidden", "true")
+  ghost.inert = true
+  ghost.classList.add("de-app-menu--leaving")
+  card.after(ghost)
+  let gone = false
+  const remove = (): void => {
+    if (gone) return
+    gone = true
+    ghost.remove()
+  }
+  ghost.addEventListener("animationend", remove, { once: true })
+  window.setTimeout(remove, EXIT_MS + 50)
 }
 
 export function installAppChooser(context: EditorContext): {
@@ -343,7 +384,7 @@ export function installAppChooser(context: EditorContext): {
         ? `Editing ${current.name}. Choose a different app`
         : CHOOSER.empty,
     },
-    [nameNode, icon("ChevronDown", tokens.icon.row)]
+    [nameNode, icon("ChevronDown", tokens.icon.marker)]
   )
 
   const menu = el("div", {
@@ -599,10 +640,11 @@ export function installAppChooser(context: EditorContext): {
     isOpen = false
     focusFirstOnLoad = false
     disarm()
-    // It arrives but it does not linger. A card left in the document to play an
+    // Closed at once, faded on a copy. A card left in the document to play an
     // exit is a card that still absorbs the next Escape, and this one is
-    // dismissed by Escape more than by anything else.
-    menu.classList.remove("de-arrive")
+    // dismissed by Escape more than by anything else — so the real card goes
+    // now and an inert clone plays the kit's 150ms dismissal. See `playExit`.
+    playExit(menu)
     menu.style.display = "none"
     menu.replaceChildren()
     shownSignature = null
@@ -678,7 +720,7 @@ export function installAppChooser(context: EditorContext): {
         ? `Go to ${label}, which already has an editor running`
         : placed
           ? `Switch to ${label}`
-          : `${label} — project folder not found, cannot open from here`
+          : `${label}. Project folder not found, so it cannot open from here`
 
     /*
      * The name wraps here, and carries no `title`, which is the opposite of
@@ -731,7 +773,7 @@ export function installAppChooser(context: EditorContext): {
         "aria-current": isCurrent ? "true" : undefined,
         "aria-label": ariaLabel,
       },
-      target ? [nameLine, metaLine, icon("ArrowRight", tokens.icon.row)] : [nameLine, metaLine]
+      target ? [nameLine, metaLine, icon("ArrowRight", tokens.icon.marker)] : [nameLine, metaLine]
     )
     /*
      * `aria-disabled`, and the guard in the handler below is what actually
@@ -1029,7 +1071,7 @@ export function installAppChooser(context: EditorContext): {
     switching = false
     setRowsDisabled(false)
     if (!isOpen) return
-    const gone = `${label} is no longer running.`
+    const gone = `${label} is no longer running. Start it again, or choose another app.`
     showNote(gone)
     context.toast(gone, "error")
     shownSignature = null
@@ -1390,16 +1432,11 @@ export function installAppChooser(context: EditorContext): {
     }
     position()
     /*
-     * The chrome's shared entrance, added AFTER the placement and for the
-     * ordering reason the layer menu gives: the lines above paint this card at
-     * `0,0`, measure it and move it, and an animation touching `left`/`top`
-     * would make that measuring pass visible as a slide out of the corner.
-     * `de-arrive` animates opacity and scale only, so it is armed once the card
-     * is where it belongs. `close()` removes it, which is what re-arms it for
-     * the next open — a CSS animation runs when the class lands, so a card that
-     * kept it would animate once a session and then appear instantly.
+     * No entrance. The kit opens a menu instantly, in its final geometry: it is
+     * opened dozens of times an hour, and an entrance is a tax on every read.
+     * The card used to wear the chrome's shared `de-arrive` here; the only
+     * motion it has now is the 150ms dismissal `playExit` plays on the way out.
      */
-    menu.classList.add("de-arrive")
     void load()
   }
 

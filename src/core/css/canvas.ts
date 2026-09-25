@@ -55,8 +55,7 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
  *
  * So the cost is having a list AT ALL, not \`display\` or \`allow-discrete\`
  * specifically — which is exactly what the flat \`transition: none\` this
- * replaced was protecting, and the note at \`tokens.ts\` ("high-frequency
- * selection chrome stays instant") was right about.
+ * replaced was protecting.
  *
  * It is kept because of the other half of the measurement: the whole painter
  * frame — eight \`getBoundingClientRect\` reads plus all sixteen writes — costs
@@ -69,7 +68,7 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
  * directions. Without it the browser tears the node out of the box tree on the
  * first frame of the exit and the fade plays to nobody; with it the used value
  * is held back until the transition finishes, while \`style.display\` still reads
- * as the value the painter wrote. \`snap\` is the rung: fast enough that a
+ * as the value the painter wrote. \`exit\` is the rung: fast enough that a
  * selection still feels like it lands on the click, slow enough not to be a
  * flicker.
  */
@@ -93,7 +92,7 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
    * no previous state.
    */
   opacity: 1;
-  transition: opacity ${t.duration.snap} ${t.ease}, display ${t.duration.snap} ${t.ease} allow-discrete;
+  transition: opacity ${t.duration.exit} ${t.ease}, display ${t.duration.exit} ${t.ease} allow-discrete;
   animation: none;
 }
 @starting-style { .de-outline { opacity: 0; } }
@@ -112,7 +111,7 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
  * \`width\` and \`height\` EVERY animation frame, so the geometry cannot be
  * transitioned at any price — only \`opacity\` can. So the outline dips to zero,
  * is moved while there is nothing on screen to see it move, and comes back:
- * two \`snap\` fades around a reposition that is still instantaneous.
+ * two \`exit\` fades around a reposition that is still instantaneous.
  *
  * A CLASS rather than an inline \`opacity: 0\`, because the frame loop clears
  * this node's inline opacity on every frame it paints — \`setShown\` writes the
@@ -148,18 +147,18 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
  */
 .de-handle-hit {
   opacity: 1;
-  transition: opacity ${t.duration.snap} ${t.ease}, display ${t.duration.snap} ${t.ease} allow-discrete;
+  transition: opacity ${t.duration.exit} ${t.ease}, display ${t.duration.exit} ${t.ease} allow-discrete;
 }
 @starting-style { .de-handle-hit { opacity: 0; } }
 /*
  * STANDING DOWN IS A DIFFERENT DEPARTURE FROM BEING DESELECTED, AND THE TIMING
  * IS THE ONLY THING THAT SAYS SO.
  *
- * \`snap\` above is right for the reason it is argued there: a frame that is
+ * \`exit\` above is right for the reason it is argued there: a frame that is
  * gone because the thing it outlined is no longer selected should be gone on
  * the click. Hiding the whole editor is not that gesture. The panels leave over
- * \`drawer\` after waiting ${STAND_DOWN_DELAY} (see \`css/panels.ts\`) and the toolbar fades
- * over \`fast\`, so a selection frame leaving at \`snap\` had vanished before the
+ * \`resize\` after waiting ${STAND_DOWN_DELAY} (see \`css/panels.ts\`) and the toolbar fades
+ * over \`hover\`, so a selection frame leaving at \`exit\` had vanished before the
  * panels had even started moving — two halves of one gesture disagreeing about
  * whether anything was happening at all.
  *
@@ -173,14 +172,14 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
  * the panels and the bar stay exactly where they are — and the mode's whole
  * claim is that the editor is not standing between the pointer and the app,
  * which an outline lingering over a page the user is already clicking through
- * is the one thing that would disprove. That exit keeps \`snap\`.
+ * is the one thing that would disprove. That exit keeps \`exit\`.
  *
  * \`opacity\` and \`display\` only, and that is not relaxed by the longer duration
  * — it is made stricter by it. \`canvas/selection.ts\` rewrites \`transform\`,
  * \`width\` and \`height\` on every one of these nodes EVERY animation frame, so
  * any of those in a transition makes the overlay trail the element it outlines
  * by the whole length of the transition, which here would be the delay plus
- * \`drawer\`. \`display\` carries the same delay so the node is held in the box
+ * \`resize\`. \`display\` carries the same delay so the node is held in the box
  * tree for the entire fade rather than being torn out while it is still
  * running, and the sum matches the \`visibility\` flip the panels wait for.
  *
@@ -192,8 +191,8 @@ export const canvasCss = `/* ---------- canvas chrome ---------- */
 html.designlayer-chrome-hidden .de-outline,
 html.designlayer-chrome-hidden .de-handle-hit {
   transition:
-    opacity ${t.duration.drawer} ${t.ease} ${STAND_DOWN_DELAY},
-    display ${t.duration.drawer} ${t.ease} ${STAND_DOWN_DELAY} allow-discrete;
+    opacity ${t.duration.resize} ${t.ease} ${STAND_DOWN_DELAY},
+    display ${t.duration.resize} ${t.ease} ${STAND_DOWN_DELAY} allow-discrete;
 }
 .de-handle {
   position: absolute;
@@ -201,12 +200,15 @@ html.designlayer-chrome-hidden .de-handle-hit {
   margin: -4px 0 0 -4px;
   border: ${t.size.hairline}px solid ${t.color.accent};
   border-radius: 0;
-  background: ${t.color.text};
+  /* White in both themes: a handle is drawn over the PRODUCT, where the chrome's
+     theme says nothing about what is behind it. \`text\` turned it near-black
+     in the light theme — a dark square on the accent frame. */
+  background: ${t.color.onAccent};
   pointer-events: auto;
   /* Nothing writes this node's transform — the frame loop places the hit box
      around it — so \`transform\` is free here, and it is the only way to grow the
      mark without moving the box its \`-4px\` margin centres. */
-  transition: transform ${t.duration.snap} ${t.ease}, background ${t.duration.snap} ${t.ease};
+  transition: transform ${t.duration.exit} ${t.ease}, background ${t.duration.exit} ${t.ease};
   animation: none;
 }
 /*
@@ -229,7 +231,7 @@ html.designlayer-chrome-hidden .de-handle-hit {
  * different state.
  */
 /*
- * Behind \`hover: hover\`, and this is the strongest of the three cases for it.
+ * Behind the kit's fine-pointer hover query, and this is the strongest of the three cases for it.
  *
  * A stuck tint is invisible; a handle stuck at 160% AND filled with the accent
  * is a resize grip that claims to be under the pointer when the pointer is
@@ -237,7 +239,7 @@ html.designlayer-chrome-hidden .de-handle-hit {
  * where it will act. 1.6 is also the largest of the three scales, so it is the
  * one a tap leaves most visibly wrong.
  */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .de-handle-hit:hover > .de-handle { transform: scale(1.6); background: ${t.color.accent}; }
 }
 /*
@@ -248,32 +250,25 @@ html.designlayer-chrome-hidden .de-handle-hit {
  * boundary used to strobe. Arriving is news and is worth a frame or two;
  * leaving is not, and a guide that lingers is a guide that lies about where the
  * element is now. So \`display\` takes 0s — the exit is immediate — while opacity
- * still has \`snap\` to come up in.
+ * still has \`exit\` to come up in.
  */
 .de-guide {
   position: absolute;
   background: ${t.color.guide};
   pointer-events: none;
   opacity: 1;
-  transition: opacity ${t.duration.snap} ${t.ease}, display 0s allow-discrete;
+  transition: opacity ${t.duration.exit} ${t.ease}, display 0s allow-discrete;
 }
 @starting-style { .de-guide { opacity: 0; } }
 /*
- * Fixed-dark ink on the PINK, and white on the blue — and the split is the
- * point, because this comment used to describe one answer for both.
+ * White on the indigo, and \`onSemantic\` on the red — and the split is the
+ * point, because \`onAccent\` is white in both themes and the measurement red is
+ * a light fill in dark, where white on it is 3.71:1, on the one mark in the
+ * chrome carrying a number a designer reads mid-drag.
  *
- * It said: "both grounds a badge paints on are light, so white numerals measure
- * 1.9:1 and 2.6:1; \`onAccent\` is the ink tokens.ts ships for this pairing:
- * 10.1:1 and 7.1:1." That was true when \`onAccent\` was near-black. The move to
- * Figma's blues made the accent fill DARK and took \`onAccent\` white in both
- * themes with it — correct for the blue, and it silently took the snapping pink
- * along: this badge went from the 7.1:1 the comment claims to a measured
- * **2.68:1**, on the one mark in the chrome carrying a number a designer reads
- * mid-drag.
- *
- * So the default keeps \`accentFillText\` (white on the dark blue, 5.4:1) and the
- * measure variant takes \`onSemantic\` — the role split back out of \`onAccent\`
- * for exactly this: a pale fill that needs dark ink in the dark theme. 6.5:1.
+ * So the default keeps \`accentFillText\` (white on indigo, 4.97:1 dark and
+ * 6.70:1 light) and the measure variant takes \`onSemantic\` — near-black in
+ * dark, white in light: 5.14:1 and 4.75:1.
  *
  * The lesson is the one the retune already learned elsewhere: an ink token and
  * a fill token that are only correct together must move together, or one of
@@ -313,9 +308,9 @@ html.designlayer-chrome-hidden .de-handle-hit {
 .de-badge {
   position: absolute;
   opacity: 1;
-  transition: opacity ${t.duration.snap} ${t.ease}, display ${t.duration.snap} ${t.ease} allow-discrete;
-  padding: 0 4px;
-  border-radius: ${t.radius.sm};
+  transition: opacity ${t.duration.exit} ${t.ease}, display ${t.duration.exit} ${t.ease} allow-discrete;
+  padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.xs};
   ${accentFillText}
   font-family: ${t.font.ui};
   font-size: ${t.type.body};
@@ -336,7 +331,7 @@ html.designlayer-chrome-hidden .de-handle-hit {
  * THE FILL IS \`selectionSurface\`, NOT \`accentSoft\`, AND THE SWAP IS A FIX.
  *
  * \`accentSoft\` was deliberately made OPAQUE, and \`tokens.ts\` argues it at
- * length: it is Figma's \`bg-selected\`, the band under a selected layer row, and
+ * length: it is the kit's indigo container, the band under a selected layer row, and
  * "a tint that composites against whatever is behind it is a different colour
  * on the panel than it is on a hovered row". That is exactly right for a row
  * inside a panel, and exactly inverted here. This rect is drawn over the
@@ -345,8 +340,8 @@ html.designlayer-chrome-hidden .de-handle-hit {
  * for the whole duration of the gesture that picks it.
  *
  * \`selectionSurface\` is the token that already exists for this, and its own
- * comment names the job: "the canvas overlay's wash", an 18% mix in dark and
- * 14% on paper, lighter there because the accent under it is four times darker.
+ * comment names the job: "the canvas overlay's wash", an 18% mix of the accent
+ * in dark and 12% on paper.
  * It had no canvas call site at all — the one surface it was split out for was
  * still pointing at the row token it was split FROM.
  */
@@ -356,7 +351,7 @@ html.designlayer-chrome-hidden .de-handle-hit {
   background: ${t.color.selectionSurface};
   pointer-events: none;
   opacity: 1;
-  transition: opacity ${t.duration.snap} ${t.ease}, display 0s allow-discrete;
+  transition: opacity ${t.duration.exit} ${t.ease}, display 0s allow-discrete;
 }
 @starting-style { .de-marquee { opacity: 0; } }
 `

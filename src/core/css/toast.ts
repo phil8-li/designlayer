@@ -47,11 +47,27 @@ import { sonnerCss } from "./sonner-css"
 const LAYER = 2147483646
 
 /**
- * `shadow.popover` without its second layer, the `0 0 0 0.5px` ring. The ring
- * is an outline drawn as a shadow, and the toast has none: the cast alone lifts
- * it off the page.
+ * The keyboard focus ring, the kit's recipe: the edge takes the accent and a
+ * 3px halo of the accent at 30% sits outside it (MICRO-INTERACTIONS § 3).
+ *
+ * Built from the accent token rather than written as a colour; it resolves to
+ * the same colour as \`accentHalo\`.
  */
-const CAST = t.shadow.popover.slice(0, t.shadow.popover.lastIndexOf(", 0 0 0"))
+const HALO = `color-mix(in srgb, ${t.color.accent} 30%, transparent)`
+const FOCUS_RING = `inset 0 0 0 1px ${t.color.accent}, 0 0 0 3px ${HALO}`
+
+/**
+ * The close button's corner, concentric with the card's.
+ *
+ * The card is \`radius["3xl"]\` (16) and pads the close button's edge by
+ * \`space.sm\` (8) on the top, right and bottom, so the button sits 8px inside a
+ * 16px curve and draws 16 − 8 = 8, \`radius.sm\` — which is also the rung every
+ * icon-only mini button takes. Written out rather than as a \`nest()\` because
+ * this sheet lives in a shadow root, outside \`shellCss\`, where the concentric
+ * suite cannot read it back.
+ */
+const CARD_RADIUS = t.radius["3xl"]
+const CLOSE_RADIUS = t.radius.sm
 
 const overrides = `
 /*
@@ -100,46 +116,89 @@ const overrides = `
 [data-sonner-toaster] {
   z-index: ${LAYER};
   font-family: ${t.font.ui};
-  --border-radius: ${t.radius.md};
+  /* A toast is a floating card, so it takes the card rung (kit § 12). */
+  --border-radius: ${CARD_RADIUS};
   /* The stack's own reflow, when a second card pushes the first back. Sonner
-     runs this at 400ms; see the note on the card below for why that is the one
-     number in the vendor sheet this file cannot leave alone. */
-  transition: transform ${t.duration.drawer} ${t.ease};
+     runs this at 400ms on a bare \`ease\`; it is a surface settling, so it takes
+     the reveal tween. */
+  transition: transform ${t.duration.reveal} ${t.easeReveal};
 }
 
 /*
- * THE TOAST ON THE HOUSE CLOCK.
+ * THE TOAST ON THE KIT'S CLOCK: it settles in, and it leaves quickly.
  *
- * This file overrides every colour, radius, shadow and type size Sonner ships
- * and, until now, not one duration or curve — so the most frequent notification
- * in the product entered over 400ms on a bare \`ease\` while the panel beside it
- * left over 240 on \`tokens.ease\`. 400 is 1.7x the longest rung this chrome has,
- * and \`drawer\` is documented as the rung for "a whole surface crossing the
- * screen edge", which is exactly what a toast sliding up from the corner is.
+ * Sonner enters over 400ms on a bare \`ease\` and exits over the same 400ms.
+ * The kit's grammar is asymmetric on purpose — a surface arrives on the reveal
+ * tween (250ms, \`easeReveal\`) and a bounded receipt is dismissed in 150ms on
+ * the same curve, because dismissal hands control back (ADOPTION-GUIDE § 8).
  *
  * Restated as the full shorthand rather than a \`transition-duration\`, because
- * the vendor's declaration (\`sonner-css.ts:102\`) names four properties with
- * three timings and a partial override would leave the rest on the old clock —
- * the same trap \`css/app-chooser.ts\` fell into by naming \`background\` and
- * changing \`color\`. \`height\` is in the list because Sonner animates the card's
- * measured height when the stack expands; \`box-shadow\` keeps the shorter rung
- * it already had, since a cast is not a surface arriving.
- *
- * The exit is left to the vendor. It has three variants keyed off swipe
- * direction and front-of-stack state, all of them keyframes rather than
- * transitions, and pinning those from here means restating machinery this file
- * does not own — where the enter is one declaration that the whole stack obeys.
+ * the vendor's declaration names four properties with three timings and a
+ * partial override would leave the rest on the old clock. \`height\` is in the
+ * list because Sonner animates the card's measured height when the stack
+ * expands; \`box-shadow\` is the focus ring arriving, so it takes the hover rung.
  */
 [data-sonner-toast] {
   transition:
-    transform ${t.duration.drawer} ${t.ease},
-    opacity ${t.duration.drawer} ${t.ease},
-    height ${t.duration.drawer} ${t.ease},
-    box-shadow ${t.duration.fast} ${t.ease};
+    transform ${t.duration.reveal} ${t.easeReveal},
+    opacity ${t.duration.reveal} ${t.easeReveal},
+    height ${t.duration.reveal} ${t.easeReveal},
+    box-shadow ${t.duration.hover} ${t.ease};
 }
 /* Sonner fades the card's contents in as the stack expands, on its own 400ms.
    Same argument, same rung. */
-[data-sonner-toast] > * { transition: opacity ${t.duration.drawer} ${t.ease}; }
+[data-sonner-toast] > * { transition: opacity ${t.duration.reveal} ${t.easeReveal}; }
+
+/*
+ * THE ENTRANCE SCALES IN PLACE; IT DOES NOT SLIDE UP FROM THE EDGE.
+ *
+ * Sonner parks an unmounted card at \`translateY(100%)\` — a full card-height
+ * below its slot — and slides it up. The kit says nothing slides in: a slide
+ * implies a place the surface came from, and a toast came from nowhere. So the
+ * card starts in its own slot at 0.96 and transparent, and settles to 1 on the
+ * reveal tween, the same entrance the kit gives a dialog.
+ *
+ * (0,3,0) against the vendor's (0,2,0) \`[data-y-position]\` rule, and scoped to
+ * \`data-mounted='false'\` so the stacked and expanded positions Sonner computes
+ * for a mounted card are untouched.
+ */
+[data-sonner-toast][data-mounted='false'][data-y-position] {
+  --y: scale(0.96);
+}
+
+/*
+ * THE EXIT FADES TO 0.99 OVER 150MS, the kit's \`surface-exit\`, where Sonner
+ * lifts the card a full height away over 400ms.
+ *
+ * Three rules because the vendor has three removal states — the front card, a
+ * card behind it in an expanded stack, and one behind it in a collapsed stack —
+ * and each is restated at the vendor's own specificity so this one wins by
+ * coming second. Each keeps the position the card already had and only fades
+ * it: a dismissed card leaves where it is, it does not travel. Sonner unmounts
+ * 200ms after removal, so the 150ms fade finishes first.
+ */
+[data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
+  --y: scale(0.99);
+  opacity: 0;
+  transition: transform ${t.duration.exit} ${t.easeReveal}, opacity ${t.duration.exit} ${t.easeReveal};
+}
+[data-sonner-toast][data-removed='true'][data-front='false'][data-swipe-out='false'][data-expanded='true'] {
+  --y: translateY(calc(var(--lift) * var(--offset))) scale(0.99);
+  opacity: 0;
+  transition: transform ${t.duration.exit} ${t.easeReveal}, opacity ${t.duration.exit} ${t.easeReveal};
+}
+[data-sonner-toast][data-removed='true'][data-front='false'][data-swipe-out='false'][data-expanded='false'] {
+  --y: translateY(calc(var(--lift-amount) * var(--toasts-before))) scale(calc(-1 * var(--scale)));
+  opacity: 0;
+  transition: transform ${t.duration.exit} ${t.easeReveal}, opacity ${t.duration.exit} ${t.easeReveal};
+}
+/* A swipe is the reader's own gesture, so its follow-through keeps the
+   vendor's direction and only takes the exit rung (the vendor runs 200ms). */
+[data-sonner-toast][data-swipe-out='true'][data-y-position='bottom'],
+[data-sonner-toast][data-swipe-out='true'][data-y-position='top'] {
+  animation-duration: ${t.duration.exit};
+  animation-timing-function: ${t.easeReveal};
+}
 
 /*
  * The palette, in place of both of Sonner's built-in themes.
@@ -164,10 +223,13 @@ const overrides = `
  * the inspector rows it appears beside, not the marketing site it was designed
  * on.
  *
- * NO OUTLINE AND NO TINT. Every kind is the same plain card; the cast alone
- * lifts it off the app, and the glyph alone says what kind it is. The right
- * padding is the small step because the close button sits on that edge and
- * carries its own hit area.
+ * NO BORDER AND NO TINT. Every kind is the same plain card, and it wears the
+ * kit's floating-card elevation whole: \`shadow.popover\` is the overlay cast,
+ * the one card-family hairline (drawn as a shadow layer, so it costs no
+ * layout) and, in dark, the top rim light. The glyph alone says what kind a
+ * card is. The right padding is \`space.sm\`, the same as the top and bottom,
+ * so the close button sits concentric in the card's corner (see
+ * \`CLOSE_RADIUS\`).
  *
  * THE LEADING IS A ROLE NOW, AND THE DESCRIPTION'S WAS UNDER THE FLOOR.
  *
@@ -185,12 +247,12 @@ const overrides = `
  * reader reads as a sentence rather than as a label.
  */
 [data-sonner-toast][data-styled='true'] {
-  padding: ${t.space.md}px ${t.space.sm}px ${t.space.md}px ${t.space.lg}px;
-  gap: ${t.space.md}px;
+  padding: ${t.space.sm}px ${t.space.sm}px ${t.space.sm}px ${t.space.md}px;
+  gap: ${t.space.sm}px;
   border: none;
   font-size: ${t.type.body};
   line-height: ${t.type.leadingRow};
-  box-shadow: ${CAST};
+  box-shadow: ${t.shadow.popover};
 }
 
 [data-sonner-toast][data-styled='true'] [data-title] {
@@ -219,49 +281,59 @@ const overrides = `
  * words stay in the chrome's own ink.
  */
 [data-sonner-toast][data-styled='true'] [data-icon] {
-  height: 14px;
-  width: 14px;
+  height: ${t.icon.inline}px;
+  width: ${t.icon.inline}px;
 }
 [data-sonner-toast][data-type='error'] [data-icon] { color: ${t.color.danger}; }
 [data-sonner-toast][data-type='success'] [data-icon] { color: ${t.color.success}; }
 [data-sonner-toast][data-type='warning'] [data-icon] { color: ${t.color.lintWarning}; }
 [data-sonner-toast][data-type='info'] [data-icon] { color: ${t.color.accent}; }
 [data-sonner-toast][data-styled='true'] [data-icon] > svg {
-  height: 14px;
-  width: 14px;
+  height: ${t.icon.inline}px;
+  width: ${t.icon.inline}px;
 }
 
 /*
  * The action ("Undo"): a text button in the accent ink, no fill. A filled pill
  * on a card this small outweighs the sentence it belongs to. \`accentText\` is
  * the accent rung measured for text on a panel ground.
+ *
+ * \`radius["2xl"]\`, the one corner every action button in the kit shares, and
+ * the ghost hover lands on \`bgRaisedHover\` because the card is \`bgRaised\` —
+ * \`bgHover\` is the same rung as the card in dark and would paint nothing.
+ * Hover paint only on a real pointer; press is the kit's 2% dip.
  */
 [data-sonner-toast][data-styled='true'] [data-button] {
   height: ${t.size.rowHeight}px;
-  padding: 0 ${t.space.md}px;
+  padding: 0 ${t.space.sm}px;
   margin: 0;
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius["2xl"]};
   font-size: ${t.type.body};
   font-weight: ${t.type.weightValue};
   background: transparent;
   color: ${t.color.accentText};
-  transition: background ${t.duration.fast} ${t.ease};
-}
-[data-sonner-toast][data-styled='true'] [data-button]:hover {
-  background: ${t.color.bgHover};
+  transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
 [data-sonner-toast][data-styled='true'] [data-cancel] {
   background: ${t.color.field};
   color: ${t.color.text};
 }
-[data-sonner-toast][data-styled='true'] [data-cancel]:hover {
-  background: ${t.color.fieldHover};
+@media (hover: hover) and (pointer: fine) {
+  [data-sonner-toast][data-styled='true'] [data-button]:hover {
+    background: ${t.color.bgRaisedHover};
+  }
+  [data-sonner-toast][data-styled='true'] [data-cancel]:hover {
+    background: ${t.color.fieldHover};
+  }
 }
+[data-sonner-toast][data-styled='true'] [data-button]:active { transform: scale(0.98); }
 
 /*
  * The close button, moved from Sonner's floating corner badge into the card as
- * its trailing control: after the action, a quiet ✕ that only takes a plate on
- * hover.
+ * its trailing control: after the action, a ✕ that only takes a plate on
+ * hover. It is an icon-only action, so its glyph is its whole label and it
+ * wears full ink in every state — a muted ✕ reads as disabled (kit § 5).
  *
  * Sonner renders it FIRST in the card's DOM, so \`order\` is what puts it last in
  * the flex row. Spelled at (0,5,0) to beat both of the vendor's themed rules for
@@ -276,14 +348,20 @@ const overrides = `
   height: ${t.size.rowHeight}px;
   width: ${t.size.rowHeight}px;
   border: none;
-  border-radius: ${t.radius.sm};
+  border-radius: ${CLOSE_RADIUS};
   background: transparent;
-  color: ${t.color.textMuted};
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
-}
-[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
-  background: ${t.color.bgHover};
   color: ${t.color.text};
+  transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
+}
+@media (hover: hover) and (pointer: fine) {
+  [data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+    background: ${t.color.bgRaisedHover};
+    color: ${t.color.text};
+  }
+}
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button]:active {
+  transform: scale(0.98);
 }
 
 /*
@@ -300,9 +378,12 @@ const overrides = `
  * one of the two themes, and it was invisible for the same reason the vendor's
  * black one is invisible in the other. \`accent\` is the ring every other
  * focusable thing in this chrome wears, and it is legible on both grounds.
+ *
+ * The shape is the kit's: the card's edge takes the accent (a 1px layer over
+ * the hairline) and a 3px halo of the accent at 30% sits outside it.
  */
 [data-sonner-toast]:focus-visible {
-  box-shadow: ${CAST}, 0 0 0 2px ${t.color.accent};
+  box-shadow: 0 0 0 1px ${t.color.accent}, 0 0 0 4px ${HALO}, ${t.shadow.popover};
 }
 
 /*
@@ -315,7 +396,7 @@ const overrides = `
  * overriding \`--normal-*\` cannot reach.
  *
  * \`rgba(0,0,0,0.2)\` and \`rgba(0,0,0,0.4)\` are black halos, and the card under
- * them is \`bgRaised\` — \`#4a4a4a\` in dark, \`#ffffff\` on paper. Composited
+ * them is \`bgRaised\` — \`#333333\` in dark, \`#ffffff\` on paper. Composited
  * against the card they come to well under the 3:1 WCAG 1.4.11 asks of a focus
  * indicator, and unlike a colour that is merely off-brand a focus ring nobody
  * can see is the difference between a keyboard user knowing where they are and
@@ -326,37 +407,38 @@ const overrides = `
  */
 [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible,
 [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
-  box-shadow: 0 0 0 2px ${t.color.accent};
+  box-shadow: ${FOCUS_RING};
 }
 `
 
 /** Sonner's stylesheet, then ours. The order is the mechanism — see above. */
 export const toasterCss = `${sonnerCss}\n${overrides}
 /*
- * REDUCED MOTION, AND THE SELECTOR SONNER'S OWN QUERY MISSES.
+ * REDUCED MOTION: THE TRAVEL GOES, THE FADE STAYS.
  *
- * The vendor ships a reduced-motion block, and it names \`[data-sonner-toast]\`,
- * its children and the loading bar — not \`[data-sonner-toaster]\`, the list. That
- * was harmless while this file overrode no timings. It is not harmless now: the
- * stack's reflow transition above hangs off exactly the selector the vendor's
- * query omits, so a reader who asked for no motion would have got the one piece
- * of toast movement this file added and none of the rest.
+ * The vendor ships a reduced-motion block that takes every transition and
+ * animation off \`[data-sonner-toast]\` — so a card simply appears and vanishes
+ * — and it misses \`[data-sonner-toaster]\`, the list, whose reflow transition
+ * this file sets. The kit asks for the opposite trade on both counts: remove
+ * spatial travel, keep state feedback (MICRO-INTERACTIONS § 20). So the stack's
+ * reflow and every transform stop, and the card keeps a short opacity fade in
+ * and out, which is feedback rather than movement.
  *
- * It cannot be fixed from \`css/base.ts\` either — all of this lives inside a
- * shadow root, and a document stylesheet does not cross that boundary. The
- * blanket has to be restated on this side of it, which is the same reason every
- * colour in this file is restated rather than inherited.
- *
- * \`transition: none\` rather than the chrome's 0.01ms clamp, to match the
- * convention already in force three rules above it in the same shadow root.
- * Two answers inside one stylesheet would be worse than the wrong one.
+ * Restated inside the shadow root because a document stylesheet does not cross
+ * that boundary. \`!important\` because the vendor's block it answers carries one.
  */
 @media (prefers-reduced-motion: reduce) {
-  [data-sonner-toaster],
+  [data-sonner-toaster] { transition: none !important; }
   [data-sonner-toast],
   [data-sonner-toast] > * {
-    transition: none !important;
+    transition: opacity ${t.duration.exit} linear !important;
     animation: none !important;
   }
+  [data-sonner-toast][data-mounted='false'][data-y-position],
+  [data-sonner-toast][data-removed='true'][data-front='true'][data-swipe-out='false'] {
+    --y: none;
+  }
+  [data-sonner-toast] [data-button]:active,
+  [data-sonner-toaster] [data-sonner-toast] [data-close-button]:active { transform: none !important; }
 }
 `

@@ -56,12 +56,13 @@ import {
 import type { LevaControl, LevaFolder } from "../options/inventory"
 import type { LeftPanelTab } from "./left"
 import { tokens } from "../core/tokens"
+import { plural } from "../core/format"
 
 /** Why a control cannot be deleted from here. Shown verbatim. */
 const WHY_NOT = {
   control:
-    "Not from here. A control is app code — its schema, default and every use change " +
-    "together. You can remove its saved default.",
+    "Not from here. A control is app code: its schema, default and every use change " +
+    "together. You can delete its saved default.",
   choice:
     "A choice is app code, not a saved value. Removing it means editing its options, " +
     "defaults and every place that uses it.",
@@ -208,7 +209,7 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
   const remove = el(
     "button",
     { class: "de-button de-button--danger", type: "button" },
-    ["Remove default"]
+    ["Delete saved default"]
   )
 
   const setState = (exists: boolean) => {
@@ -261,10 +262,10 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
       const response = await fetch(url, { method: "DELETE" })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       setState(false)
-      editor.toast(`Removed source default for ${control.label}`)
+      editor.toast(`Deleted the saved default for ${control.label}`)
     } catch {
       editor.toast(
-        `Could not remove the default for ${control.label}. Try again, or delete it in the source file.`,
+        `Could not delete the saved default for ${control.label}. Try again, or delete it in the source file.`,
         "error"
       )
     }
@@ -334,7 +335,7 @@ function folderNode(
   expand: boolean
 ): HTMLElement {
   const summary = el("summary", { class: "de-opt-summary" }, [
-    el("span", { class: "de-opt-twisty", "aria-hidden": "true" }, [icon("ChevronRight", tokens.icon.row)]),
+    el("span", { class: "de-opt-twisty", "aria-hidden": "true" }, [icon("ChevronRight", tokens.icon.marker)]),
     // The whole name in `title`. `.de-opt-folder-name` is the shrinkable cell on
     // this row — see its note in `css/options.ts` — and the names it holds are
     // often source paths, which is the one shape of string an end ellipsis
@@ -342,8 +343,8 @@ function folderNode(
     // above it did not.
     el("span", { class: "de-opt-folder-name", title: folder.name }, [folder.name]),
     el("span", { class: "de-opt-count" }, [
-      `${folder.controlCount} control${folder.controlCount === 1 ? "" : "s"}` +
-        (folder.variantCount ? ` · ${folder.variantCount} choices` : ""),
+      plural(folder.controlCount, "control") +
+        (folder.variantCount ? ` · ${plural(folder.variantCount, "choice")}` : ""),
     ]),
     folder.hasSaveDefault
       ? el("span", { class: "de-opt-tag de-opt-tag--saved", title: "Values here can be saved as defaults" }, ["default"])
@@ -401,7 +402,7 @@ export function controlsTab(editor: EditorContext): LeftPanelTab {
   const filter = el("input", {
     class: "de-opt-filter",
     type: "search",
-    placeholder: "Filter by name, path or value…",
+    placeholder: "Filter by name, path or value",
     "aria-label": "Filter controls",
   }) as HTMLInputElement
 
@@ -537,14 +538,14 @@ export function controlsTab(editor: EditorContext): LeftPanelTab {
       // itself. An instruction describing work the product does not need is how
       // a reader learns to stop trusting the copy.
       note(
-        `${inventory.controlCount} controls, ${inventory.variantCount} choices. Changes apply to the running app instantly.`
+        `${plural(inventory.controlCount, "control")}, ${plural(inventory.variantCount, "choice")}. Changes apply to the running app instantly.`
       ),
       ...(sections.length
         ? sections.map((section) => folderNode(section, editor, 0, query.trim().length > 0))
         : [
             emptyState(
               null,
-              `No controls match “${query}”.`,
+              `No controls match “${query}”. Try another name, path or value.`,
               el(
                 "button",
                 {
@@ -564,7 +565,7 @@ export function controlsTab(editor: EditorContext): LeftPanelTab {
               )
             ),
           ]),
-      explainer("Why can’t I delete a named choice?", WHY_NOT.choice)
+      explainer("Why named choices cannot be deleted", WHY_NOT.choice)
     )
   }
 

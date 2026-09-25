@@ -120,13 +120,13 @@ ${themeRegistrations()}
  * control. It has to name the ROLES — the registered properties — rather than
  * \`background\` or \`color\`, because those are already being transitioned all
  * over this chrome at their own durations for their own reasons, and re-timing
- * them here would make every hover in the editor 180ms slow for the sake of a
+ * them here would make every hover in the editor 250ms slow for the sake of a
  * button pressed twice a session.
  *
  * On \`:root\`, where the roles are declared and from where they inherit, so a
  * popover mounted on \`<body>\` fades with everything else.
  *
- * \`base\` is the rung: long enough that a whole-surface colour change reads as a
+ * \`reveal\` is the rung: long enough that a whole-surface colour change reads as a
  * dissolve rather than a cut, short enough that the chrome is not visibly
  * mid-flip while the reader is already looking at it.
  *
@@ -137,7 +137,7 @@ ${themeRegistrations()}
  */
 :root {
   transition: ${themeProperties()
-    .map((property) => `${property} ${t.duration.base} ${t.ease}`)
+    .map((property) => `${property} ${t.duration.reveal} ${t.ease}`)
     .join(",\n    ")};
 }
 
@@ -155,7 +155,7 @@ export const baseCss = `${paletteCss}
 /*
  * THE HALF OF THE CHROME THE PALETTE CANNOT REACH.
  *
- * Forty-six custom properties say what the editor paints. They say nothing
+ * Fifty-six custom properties say what the editor paints. They say nothing
  * about what the USER AGENT paints inside it, and the chrome has more of that
  * than it looks: every \`<select>\`'s drop-down list, every checkbox, the colour
  * input's native picker, the caret and the selection highlight in a text field,
@@ -286,18 +286,29 @@ html.designlayer-inspecting svg {
    * The palette's crossfade above is declared on \`:root\` — that is \`<html>\`,
    * which carries \`data-de-theme\` but NOT \`data-designlayer\`, so neither
    * selector below reached it. Custom properties inherit, so the whole chrome
-   * dissolved over 180ms for a reader who had asked for none: every
+   * dissolved over 250ms for a reader who had asked for none: every
    * descendant's own transition was dutifully clamped while the VALUES they
    * read were still interpolating at the root above them.
    *
    * Worth stating plainly, because the comment on that rule claimed it was
    * covered. A blanket is only as good as the roots it names.
    */
+  /*
+   * The kit's backstop (\`css/base.css\`): transitions at ZERO duration and zero
+   * delay, animations at 0.01ms run once. A tiny nonzero transition duration is
+   * not "almost off" — it is a real transition on every property that changes,
+   * which defers the used value a frame and breaks any script measuring a
+   * before/after rectangle. Nothing in the chrome listens for \`transitionend\`
+   * (\`core/leave.ts\` uses a timer for exactly this reason), so a zero duration
+   * that never fires the event costs nothing.
+   */
   :root,
   [data-designlayer],
   [data-designlayer] *, [data-designlayer] *::before, [data-designlayer] *::after {
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
   /*
    * Reduced motion is FEWER and GENTLER, not none.
@@ -321,7 +332,7 @@ html.designlayer-inspecting svg {
    * because the panels' \`transform: none\` beside it must not reach the bar.
    */
   .de-panel, .de-toolbar, .de-launcher {
-    transition: opacity ${t.duration.fast} linear, visibility 0s !important;
+    transition: opacity ${t.duration.hover} linear, visibility 0s !important;
   }
   .de-panel, .de-launcher { transform: none !important; }
   .de-toolbar { transform: translateX(-50%) !important; }
@@ -329,7 +340,7 @@ html.designlayer-inspecting svg {
   html.designlayer-chrome-hidden .de-panel,
   html.designlayer-chrome-hidden .de-toolbar {
     opacity: 0;
-    transition: opacity ${t.duration.fast} linear, visibility 0s linear ${t.duration.fast} !important;
+    transition: opacity ${t.duration.hover} linear, visibility 0s linear ${t.duration.hover} !important;
   }
   html.designlayer-chrome-hidden .de-launcher { opacity: 1; }
 }
@@ -394,7 +405,7 @@ html.designlayer-inspecting svg {
  * So the alternative to one inherited declaration is thirty, added one at a
  * time by whoever next notices an orphan. It costs nothing where it does not
  * apply: a single-line label has no final line to fix, and a rule that sets
- * \`white-space: nowrap\` or \`pre\` beats the inherited wrap mode outright.
+ * \`white-space: nowrap\` or \`pre\` keeps its mode (see the note on the rule).
  * Headings that want \`balance\` instead say so locally — \`.de-empty\` below is
  * the one place in the chrome that does.
  */
@@ -404,7 +415,12 @@ html.designlayer-inspecting svg {
   font-size: ${t.type.body};
   line-height: ${t.type.leadingRow};
   font-variant-numeric: tabular-nums;
-  text-wrap: pretty;
+  /* The STYLE longhand, never the \`text-wrap\` shorthand. \`el()\` stamps this
+     attribute on every node, so the shorthand's \`text-wrap-mode: wrap\` was
+     DECLARED on each of them — beating the \`nowrap\` their parents set, since a
+     declaration beats an inherited value. Layer names and button labels wrapped
+     onto two lines. \`text-wrap-style\` leaves the mode alone. */
+  text-wrap-style: pretty;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -513,7 +529,7 @@ html.designlayer-inspecting svg {
  * and each time for the same reason — it is maintained by hand against a rule
  * that a machine could check. The severity dot and the lint disc are plain
  * \`50%\` circles that were rendering as rounded squares; \`.de-opt-chip\` is a
- * pill at \`radius.xl\` on a 20px box, which is the clamp case the paragraph
+ * pill at \`radius["3xl"]\` on a 20px box, which is the clamp case the paragraph
  * above describes.
  *
  * That sweep now exists — \`test/concentric-cases.mjs\`, "every circle in the
@@ -529,14 +545,20 @@ html.designlayer-inspecting svg {
 .de-opt-chip,
 .de-pad-cell::before,
 .de-ann-hint,
-.de-layer-drop {
+.de-layer-drop,
+/* The insert line: a 2px rule under a 4px radius is a pill. Its outline
+   variant is a box around an empty container, and keeps the squircle. */
+.de-insert-indicator:not(.de-insert-indicator--outline),
+/* The shared text button: \`radius["2xl"]\` on a 24px row is past half its
+   height, so it is a pill (see \`css/toolbar.ts\`). */
+.de-button {
   corner-shape: round;
 }
 /*
  * \`.de-lib-status[data-de-busy]::after\` STOOD HERE and no longer needs to.
  *
  * It is the travelling sweep under the project scan's status line, and it was
- * listed because a \`radius.sm\` on a two-pixel-high bar is a circle by this
+ * listed because a \`radius.xs\` on a two-pixel-high bar is a circle by this
  * audit's arithmetic. That radius has gone — see \`css/libraries.ts\`, where the
  * reasoning lives: the caps it drew sat where the gradient had already faded to
  * transparent, so it rounded nothing visible. With no radius the rule is not a
@@ -593,6 +615,54 @@ html.designlayer-inspecting svg {
 [data-designlayer] svg { pointer-events: none; display: block; flex: none; }
 
 /*
+ * POINTER FOCUS PAINTS NOTHING (MICRO-INTERACTIONS § 3).
+ *
+ * Every ring in the chrome is keyed on \`:focus-visible\`, and \`core/focus.ts\`
+ * hands each script focus the modality it came from. This is the backstop for
+ * what neither of those reaches: the UA's own \`:focus\` outline on a control
+ * that never declared a ring, which a click would otherwise leave drawn beside
+ * that control's hover and selected paint. Keyboard focus is untouched.
+ */
+:where([data-designlayer]):focus:not(:focus-visible) { outline: none; }
+
+/*
+ * AUTO-HIDING SCROLLBARS (MICRO-INTERACTIONS § 13), as the chrome-wide default.
+ *
+ * The track is always reserved, so a thumb appearing reflows nothing. The thumb
+ * is a 12px track with a 3px transparent border — a slim floating pill — clear
+ * at rest, inked while its scroller is scrolling (\`data-scrolling\`, written by
+ * \`shell/shell.ts\`), and — darker — while the pointer is on the bar itself.
+ * Pointing at the panel does not ink it: a bar that lights whenever the cursor
+ * is anywhere in a panel is furniture again. A pill, so it opts out of the
+ * squircle.
+ *
+ * \`:where()\` so a surface that draws its own scrollbar (the panel body, the tab
+ * pane) still wins with a plain class. \`-webkit-\` only, deliberately: in
+ * Chromium, setting the standard \`scrollbar-width\` / \`scrollbar-color\` on an
+ * element switches its \`::-webkit-scrollbar\` rules off, so declaring them here
+ * at zero specificity would silently erase every per-surface scrollbar in the
+ * chrome. Firefox keeps its native overlay bar, which already auto-hides.
+ */
+:where([data-designlayer], [data-designlayer] *)::-webkit-scrollbar { width: 12px; height: 12px; }
+:where([data-designlayer], [data-designlayer] *)::-webkit-scrollbar-track,
+:where([data-designlayer], [data-designlayer] *)::-webkit-scrollbar-corner { background: transparent; }
+:where([data-designlayer], [data-designlayer] *)::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  /* \`radius.sm\` on the 12px box leaves 5px inside the 3px border, past half the
+     6px thumb, so the ends are fully round without leaving the ramp. */
+  border-radius: ${t.radius.sm};
+  corner-shape: round;
+}
+:where([data-designlayer][data-scrolling], [data-designlayer] [data-scrolling])::-webkit-scrollbar-thumb {
+  background-color: ${t.color.scrollbarThumb};
+}
+:where([data-designlayer], [data-designlayer] *)::-webkit-scrollbar-thumb:hover {
+  background-color: ${t.color.scrollbarThumbHover};
+}
+
+/*
  * A ROW LEAVING A LIST, stated once for every list in the chrome.
  *
  * Resolving a note, deleting one, removing a library: three surfaces, one
@@ -618,60 +688,32 @@ html.designlayer-inspecting svg {
  * on the next frame rather than waiting out a duration nothing is using.
  */
 /*
- * A SURFACE ARRIVING, stated once for every popover in the chrome.
+ * A DIALOG ARRIVING (MICRO-INTERACTIONS § 8), stated once for the chrome.
  *
- * Five cards used to appear at full size and full shadow: the token picker, the
- * options window, the layer context menu, the shortcuts sheet, the app
- * chooser's menu. A surface that materialises at its final appearance reads as
- * a paste rather than as something that opened — and one of them, the
- * annotation composer, already had an entrance of its own, which made the other
- * four look like an oversight rather than a decision.
+ * The kit's modal entrance: scale 0.96 -> 1 over \`reveal\` on \`easeReveal\`,
+ * in place. It never slides — a slide claims a place the card came from — so
+ * the old \`translateY(--de-arrive-rise)\` is gone and the variable is ignored,
+ * and it never springs: \`easeSpring\` is kept for drops, reorders and the
+ * launcher landing. Opacity rides the same keyframe rather than the kit's
+ * separate 180ms linear fade: \`easeReveal\` has most of the opacity up inside
+ * the first 100ms anyway, and one keyframe keeps the motion budget flat.
  *
- * \`easeSpring\` is the curve \`tokens.ts\` reserves for "an object arriving rather
- * than a value changing", which is what a card over the page is. It stays a
- * SMALL arrival — three pixels and three percent — because these open under the
- * pointer that asked for them, and a card that has to travel is a card the eye
- * has to chase back to where it already was.
+ * \`--de-arrive-origin\` still aims the scale when a placer writes it
+ * (\`arriveFrom\` in \`core/motion.ts\`); a modal leaves it at the centre.
  *
- * The exit is shorter and flatter. Leaving is not news: it wants to be out of
- * the way by the time the reader has looked elsewhere, and a spring on the way
- * out would be a card bouncing as it stopped existing. \`forwards\` holds the
- * end state so the surface does not flash back to full opacity in the frame
- * between the animation finishing and \`core/leave.ts\` hiding it.
- */
-/*
- * AND IT GROWS OUT OF THE CONTROL THAT OPENED IT, NOT OUT OF ITSELF.
- *
- * This keyframe used to carry no \`transform-origin\`, which means \`center\` —
- * every card expanded from its own middle — and a fixed \`translateY(-3px)\`,
- * which means every card also drifted DOWN into place. That is right for a card
- * that opens below its trigger and exactly backwards for one that opens above
- * it, and three of the four surfaces using it flip above the trigger whenever
- * dropping down would overrun the viewport: the app chooser's menu, the token
- * picker's popover and the annotation composer each compute that branch
- * already. In the flipped case the card entered travelling AWAY from the
- * control that produced it — which is precisely the "card the eye has to chase"
- * the note above says this animation exists to avoid.
- *
- * Both halves are variables now, and the placer writes them from the branch it
- * has already taken. The default pair is the old behaviour — open below, grow
- * from the top edge, settle downward — so a surface that never flips and never
- * writes anything is unchanged.
- *
- * The precedent is in the repo and this is it generalised: \`css/tooltip.ts\`
- * reads \`--de-tip-origin\` and \`--de-tip-rise-y\`, and \`core/tooltip.ts\`'s
- * \`applySide\` writes the pair off the same above/below decision. One popover
- * had solved this; the other five had not.
+ * WHO SHOULD WEAR IT. Dialogs: the shortcuts sheet and the sign-in dialog. The
+ * kit opens MENUS AND POPOVERS INSTANTLY, in final geometry, so the layer
+ * menu, the app chooser's menu and the token popover do not wear it.
  */
 @keyframes de-arrive {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(var(--de-arrive-rise, -3px));
+    transform: scale(0.96);
   }
 }
 .de-arrive {
-  animation: de-arrive ${t.duration.base} ${t.easeSpring};
-  transform-origin: var(--de-arrive-origin, center top);
+  animation: de-arrive ${t.duration.reveal} ${t.easeReveal};
+  transform-origin: var(--de-arrive-origin, center);
 }
 /*
  * THERE IS NO MATCHING EXIT, AND THAT IS A FINDING RATHER THAN AN OMISSION.
@@ -709,7 +751,7 @@ html.designlayer-inspecting svg {
  * measured and written by \`core/leave.ts\`; this is only the curve.
  */
 .de-entering {
-  transition: height ${t.duration.base} ${t.ease}, opacity ${t.duration.fast} ${t.ease};
+  transition: height ${t.duration.reveal} ${t.ease}, opacity ${t.duration.hover} ${t.ease};
 }
 
 .de-leaving {
@@ -733,11 +775,11 @@ html.designlayer-inspecting svg {
   margin-block: 0 calc(-1 * var(--de-leave-gap, 0px)) !important;
   pointer-events: none;
   transition:
-    height ${t.duration.base} ${t.ease},
-    opacity ${t.duration.fast} ${t.ease},
-    padding ${t.duration.base} ${t.ease},
-    border-width ${t.duration.base} ${t.ease},
-    margin ${t.duration.base} ${t.ease};
+    height ${t.duration.reveal} ${t.ease},
+    opacity ${t.duration.hover} ${t.ease},
+    padding ${t.duration.reveal} ${t.ease},
+    border-width ${t.duration.reveal} ${t.ease},
+    margin ${t.duration.reveal} ${t.ease};
 }
 
 /*
@@ -806,8 +848,9 @@ html.designlayer-inspecting svg {
 }
 .de-escape:focus {
   width: auto; height: auto;
-  padding: ${t.space.md}px ${t.space.lg}px;
-  transform: translate(-50%, ${t.space.md}px);
+  padding: ${t.space.sm}px ${t.space.md}px;
+  transform: translate(-50%, ${t.space.sm}px);
+  /* The kit's skip link: a \`radius.md\` card, ringed 2px out in the accent. */
   border-radius: ${t.radius.md};
   box-shadow: ${t.shadow.float};
   clip-path: none;

@@ -323,7 +323,7 @@ check("the row keeps its motionless chrome and its rounded band", () => {
   // to 4/8/12/16 and a hardcoded 4 here would have gone on passing while the
   // row it describes had visibly changed shape.
   assert.ok(
-    layersCss.includes(`border-radius: ${tokens.radius.md};`),
+    layersCss.includes(`border-radius: ${tokens.radius.sm};`),
     "the row no longer takes its corner from the control radius"
   )
   assert.match(layersCss, /\.de-layer \{[^}]*gap: 4px;/s)
@@ -400,9 +400,18 @@ check("the strip is reserved, not mounted on hover — only opacity moves", () =
   // difference between a row that holds still and one that jumps under the
   // cursor at the moment it is being aimed at.
   assert.ok(!/\.de-layer-actions \{[^}]*display: none/s.test(layersCss))
-  assert.match(layersCss, /\.de-layer:hover \.de-layer-actions,/)
+  // The kit's reveal (MICRO-INTERACTIONS § 4): hover only under a fine pointer,
+  // keyboard focus and a drag always, a coarse pointer permanently, and the
+  // hidden cluster inert so it cannot take a click.
+  assert.match(layersCss, /\.de-layer-actions \{[^}]*pointer-events: none;[^}]*\}/s)
+  assert.match(
+    layersCss,
+    /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.de-layer:hover \.de-layer-actions \{ opacity: 1; pointer-events: auto; \}/
+  )
+  assert.match(layersCss, /\.de-layer:is\(:focus-visible, :has\(:focus-visible\)\) \.de-layer-actions,/)
   assert.match(layersCss, /\.de-layer\[aria-selected="true"\] \.de-layer-actions,/)
-  assert.match(layersCss, /\.de-layer--hidden \.de-layer-actions \{ opacity: 1; \}/)
+  assert.match(layersCss, /\.de-layer--hidden \.de-layer-actions \{ opacity: 1; pointer-events: auto; \}/)
+  assert.match(layersCss, /@media \(pointer: coarse\) \{\s*\.de-layer-actions \{ opacity: 1; pointer-events: auto; \}/)
 })
 
 check("pressing an action never reaches the row, so the selection holds", () => {

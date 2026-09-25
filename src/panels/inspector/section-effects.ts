@@ -120,7 +120,7 @@ export const effectsSection: InspectorSection = (context) => {
 
   const add = miniButton({
     label: "Add effect",
-    glyph: icon("Plus", tokens.icon.row),
+    glyph: icon("Plus", tokens.icon.marker),
     onClick: () => commit([...rows, { shadow: DEFAULT_SHADOW, hidden: false }], "Add effect"),
   })
 
@@ -211,7 +211,7 @@ export const effectsSection: InspectorSection = (context) => {
         }),
         miniButton({
           label: "Remove effect",
-          glyph: icon("Minus", tokens.icon.row),
+          glyph: icon("Minus", tokens.icon.marker),
           danger: true,
           onClick: (event: Event) => {
             // The whole CARD leaves, not just its first row: an effect is four
@@ -251,7 +251,7 @@ export const effectsSection: InspectorSection = (context) => {
     shadowBinding,
     cards.length
       ? el("div", { class: "de-stack" }, cards)
-      : el("div", { class: "de-hint" }, ["No effects."]),
+      : el("div", { class: "de-hint" }, ["No effects"]),
     motionBinding,
   ])
 

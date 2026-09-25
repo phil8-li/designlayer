@@ -19,11 +19,21 @@
 import { tokens as t, accentFillText } from "../tokens"
 import { CONTROL_RADIUS } from "./panels"
 
+/**
+ * The keyboard focus ring, the kit's recipe (MICRO-INTERACTIONS § 3): the edge
+ * takes the accent and a 3px halo of the accent at 30% sits outside it. Built
+ * from the accent token; it resolves to the same colour as \`accentHalo\`.
+ */
+const HALO = `color-mix(in srgb, ${t.color.accent} 30%, transparent)`
+const FOCUS_RING = `0 0 0 1px ${t.color.accent}, 0 0 0 4px ${HALO}`
+/** The same ring drawn inside the box, for a band flush with the panel edge. */
+const FOCUS_RING_INSET = `inset 0 0 0 1px ${t.color.accent}, inset 0 0 0 4px ${HALO}`
+
 export const optionsCss = `/* ---------- options / variants ---------- */
-/* \`space.md\` between the name and the two action plates, so their four-sided
-   24px pads do not overlap. At \`space.xs\` the rename and delete targets were
+/* \`space.sm\` between the name and the two action plates, so their four-sided
+   24px pads do not overlap. At \`space["3xs"]\` the rename and delete targets were
    20px apart and 24px wide, so the gap between them armed one of the two. */
-.de-option-row { display: flex; align-items: center; gap: ${t.space.md}px; }
+.de-option-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
 /*
  * Two jobs, two rungs. The gap is the run between the mark and the name, so it
  * takes the workhorse step; the side padding sits inside a 24px row in a 260px
@@ -33,23 +43,32 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  */
 .de-option {
   flex: 1; min-width: 0;
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
-  border-radius: ${t.radius.md};
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.sm};
   cursor: pointer;
+  transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease};
 }
 /*
- * Hover is the quiet rung, and it has to be: checked is an \`accentSoft\` wash
- * at 1.40:1 off the panel, and \`bgHover\` is 1.44:1. Pointing at an unchosen
- * option lit it brighter than the chosen one — the control told you the wrong
- * answer for exactly as long as your hand was on it. \`bgHoverQuiet\` at 1.19:1
- * leaves selection on top, which is the ordering the states have to keep.
+ * Hover is the quiet rung, and it has to be: checked is \`accentSoft\` at
+ * 1.33:1 off the dark panel, and \`bgHover\` is 1.42:1. Pointing at an unchosen
+ * option would light it brighter than the chosen one — the control telling you
+ * the wrong answer for exactly as long as your hand was on it. \`bgHoverQuiet\`
+ * (1.32:1 dark, 1.05:1 light) leaves selection on top, and the indigo hue
+ * carries the rest.
+ *
+ * Checked is the fill alone. It also drew a 1px accent hairline, and the kit's
+ * rule is that selection is a fill — no hairline, no shadow — because the hue
+ * already says "this one" and an edge only makes it read as focused.
  */
-.de-option:hover { background: ${t.color.bgHoverQuiet}; }
-.de-option[aria-checked="true"] { background: ${t.color.accentSoft}; box-shadow: inset 0 0 0 1px ${t.color.accent}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-option:hover { background: ${t.color.bgHoverQuiet}; }
+}
+.de-option[aria-checked="true"] { background: ${t.color.accentSoft}; }
 /* It is \`tabindex="0"\` and a \`role="radio"\`, and it had no focus state at all —
-   arrowing through saved options moved a cursor nothing on screen drew. */
-.de-option:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
+   arrowing through saved options moved a cursor nothing on screen drew. The
+   kit's ring: accent edge, 3px halo. */
+.de-option:focus-visible { outline: none; box-shadow: ${FOCUS_RING}; }
 .de-option-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 /*
  * Rename, drawn like Delete because it is the other half of the same strip.
@@ -59,16 +78,21 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  * options dialog carried is what this restores.
  *
  * Every declaration is shared with \`.de-option-delete\` below except the hover,
- * which is the quiet plate rather than the destructive fill — a rename is not a
+ * which is the quiet plate rather than the destructive wash — a rename is not a
  * thing to warn anybody about.
+ *
+ * Both are icon-only actions, so both wear FULL ink at rest and in every state:
+ * the glyph is the whole label, and a dim glyph reads as disabled (kit § 5).
+ * \`radius.sm\` is the rung for an icon-only mini button.
  */
 .de-option-rename,
 .de-option-delete {
   position: relative;
   width: ${t.size.miniSize}px; height: ${t.size.miniSize}px; flex: none;
   border: none; border-radius: ${t.radius.sm};
-  background: transparent; color: ${t.color.textDim}; cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+  background: transparent; color: ${t.color.text}; cursor: pointer;
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease};
 }
 /*
  * The pad grows on all FOUR sides, and it grew on two.
@@ -76,7 +100,7 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  * \`inset: -3px 0\` took the 18px plate to 24px tall and left it 18px wide, so
  * these cleared the pointer floor in one axis only. The layers strip already
  * pads four-sided and the two are the same control; the horizontal half is
- * affordable now that the strip's own gap is \`space.md\` rather than \`xs\`,
+ * affordable now that the strip's own gap is \`space.sm\` rather than \`xs\`,
  * which is what used to make a four-sided pad overlap its neighbour.
  */
 .de-option-rename::after,
@@ -84,86 +108,83 @@ export const optionsCss = `/* ---------- options / variants ---------- */
   content: ""; position: absolute;
   inset: -${(t.size.rowHeight - t.size.miniSize) / 2}px;
 }
-.de-option-rename:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
-.de-option-rename:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-option-rename:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
+}
+.de-option-rename:focus-visible,
+.de-option-delete:focus-visible { outline: none; box-shadow: ${FOCUS_RING}; }
+.de-option-rename:active:not([aria-disabled="true"]),
+.de-option-delete:active { transform: scale(0.98); }
 /*
  * Visible at rest. It used to be \`opacity: 0\` until hover, which meant the one
  * verb this panel actually supports was invisible to anyone reading the screen.
  *
- * The hit pad is the same one \`.de-mini\` and \`.de-layer-action\` carry: an 18px
- * plate in a 24px row, with the target taking the row's full height and none of
- * its neighbour's width.
- *
- * The bleed is derived from those two sizes rather than written as 3px or
- * rounded onto the spacing scale. It is not rhythm — it is half of what the row
- * has over the plate — and the nearest step, 4, would hang a 26px target in a
- * 24px row, so pointing at the gap between two rows would arm one of them.
+ * The hit pad is the four-sided one the shared rule above gives both buttons:
+ * an 18px plate in a 24px row. A second \`.de-option-delete\` block used to sit
+ * here restating every declaration and then cutting the pad back to vertical
+ * only, which quietly undid the four-sided pad the note above describes for
+ * one of the two buttons. It is gone; the bleed is still derived from the two
+ * sizes rather than rounded onto the spacing scale, because it is half of what
+ * the row has over the plate, not rhythm.
  */
-.de-option-delete {
-  position: relative;
-  width: ${t.size.miniSize}px; height: ${t.size.miniSize}px; flex: none;
-  border: none; border-radius: ${t.radius.sm};
-  background: transparent; color: ${t.color.textDim}; cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
-}
-.de-option-delete::after {
-  content: ""; position: absolute;
-  inset: -${(t.size.rowHeight - t.size.miniSize) / 2}px 0;
-}
 /*
+ * A WASH OF THE DANGER HUE, where it was a filled coral plate.
+ *
+ * The kit's destructive ghost: transparent at rest, the destructive hue at 10%
+ * under the pointer, and the glyph taking the destructive ink. A filled plate
+ * on an 18px button was the loudest thing in the row for as long as the pointer
+ * crossed it; a wash says "this one removes" without shouting it. The note
+ * below records why the ink on the old fill had to be \`onSemantic\`, which is
+ * still the rule for anything that does sit on a filled danger plate.
+ *
  * Dark ink on the coral, never white — and focus is a ring, not the fill.
  *
- * This was the live case of the pairing trap \`accentFill\` exists to close, and
- * the one the report about labels the same colour as their button was pointing
- * at: \`danger\` is a LIGHT coral on this chrome, so the white X measured 2.31:1
- * and the button you press to destroy a saved option was an empty coral square
- * for the whole of the hover.
+ * This was the live case of the pairing trap \`accentFill\` exists to close:
+ * \`danger\` is a LIGHT coral in dark, so a white X on it was an empty coral
+ * square for the whole of the hover. \`onAccent\` is white in both themes, so it
+ * cannot be the ink here.
  *
- * The ink is \`onSemantic\`, where this line used to say \`onAccent\`. Same fix,
- * and it came undone without anyone touching this file: \`onAccent\` was the
- * flipping ink until the accent moved to Figma's blues, which are dark fills in
- * both themes, so it correctly became white in both — and every semantic fill
- * borrowing it went straight back to the ratio its own comment named as the
- * bug. This one measured 2.31:1 again, to the hundredth.
- *
- * \`onSemantic\` is that flipping ink, split into a role of its own so the next
- * accent decision cannot reach it. 7.52:1 on this coral.
+ * \`onSemantic\` is the flipping ink — the kit's \`--on-hue\` — in a role of its
+ * own so no accent decision can reach it. 6.61:1 on the dark coral, 6.07:1
+ * (white) on the light theme's red.
  *
  * Focus taking the destructive fill was its own defect: tabbing THROUGH a list
  * of saved options armed each delete in turn, which is a promise the key press
  * does not keep. An accent ring says "focused" and leaves "about to destroy
  * this" to the pointer that is actually on it.
  */
-.de-option-delete:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
-.de-option-delete:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-option-delete:hover { background: ${t.color.dangerWash}; color: ${t.color.danger}; }
+}
 
 /* ---------- scoped styles, inside a design section ---------- */
 /* The header strip when a section carries both the styles toggle and a \`+\`:
    \`section()\` takes one actions element, so the pair shares this wrapper. Same
    gap as \`.de-section-actions\` so the two 24px hit pads do not overlap. */
-.de-style-actions { display: inline-flex; align-items: center; gap: ${t.space.md}px; }
+.de-style-actions { display: inline-flex; align-items: center; gap: ${t.space.sm}px; }
 /* The toggle is accent-inked while the element matches a style, so a closed
    section still says a style is in play from its header. */
 .de-style-toggle--applied { color: ${t.color.accent}; }
+/* The open panel HOLDS the toggle's hover paint, so it reads as "this one". */
 .de-style-toggle[aria-expanded="true"] { background: ${t.color.bgHover}; color: ${t.color.text}; }
-.de-style-block { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-style-block { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 .de-style-block[hidden],
 .de-style-panel[hidden],
 .de-style-applied[hidden] { display: none; }
 /* The applied style, always visible while the panel is shut: the glyph and the
    name, with the kind trailing in the secondary ink. */
 .de-style-applied {
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
-  border-radius: ${t.radius.md};
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.sm};
   background: ${t.color.bgSunken}; color: ${t.color.text};
 }
 .de-style-applied > svg,
 .de-option > svg { flex: none; color: ${t.color.textDim}; }
 .de-style-applied-kind { flex: none; color: ${t.color.textDim}; font-size: ${t.type.body}; }
 .de-style-panel {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding-bottom: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding-bottom: ${t.space.sm}px;
   border-bottom: 1px solid ${t.color.border};
 }
 .de-style-list { display: flex; flex-direction: column; }
@@ -210,8 +231,8 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  */
 .de-opt-scope {
   flex: none;
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding: 0 ${t.space.md}px ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding: 0 ${t.space.sm}px ${t.space.sm}px;
 }
 /*
  * The unavailable chip is \`aria-disabled\`, never \`disabled\`, so it keeps its
@@ -250,7 +271,7 @@ export const optionsCss = `/* ---------- options / variants ---------- */
    dim prose; this is the one line in it that has to read as a statement of what
    is going on, so it takes the text rung and the section weight. */
 .de-empty-title {
-  margin-bottom: ${t.space.sm}px;
+  margin-bottom: ${t.space["2xs"]}px;
   color: ${t.color.text};
   font-weight: ${t.type.weightSection};
 }
@@ -260,23 +281,28 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  * control you can act on, and not \`border\`, which is the rung it ships for a
  * divider between two things you cannot.
  *
- * On the mid-slate the difference was academic. Here \`border\` measures 1.55:1
- * against the window behind it — under the 3:1 WCAG 1.4.11 asks of a control's
- * own boundary, and visibly so: the filter, the number input and the token
- * field all read as text floating on the surface rather than as places to type.
- * \`borderInteractive\` is 2.90:1 on this ground, which is the best the rung set
- * has; it is documented as 3.2:1, measured on the slate it was cut against, and
- * the token owner should either re-cut it or re-word the comment.
+ * \`border\` measures 1.32:1 dark and 1.18:1 light against the panel — under
+ * the 3:1 WCAG 1.4.11 asks of a control's own boundary, and visibly so: the
+ * filter, the number input and the token field would read as text floating on
+ * the surface rather than as places to type. \`borderInteractive\` is 3.23:1
+ * dark and 3.36:1 light on the panel, and still clears 3:1 on the field well.
  */
 .de-opt-filter {
-  margin: ${t.space.md}px; padding: 0 ${t.space.md}px;
+  margin: ${t.space.sm}px; padding: 0 ${t.space.sm}px;
   height: ${t.size.rowHeight}px;
   border: 1px solid ${t.color.borderInteractive}; border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken}; color: ${t.color.text};
+  background: ${t.color.field}; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body};
   outline: none;
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease};
 }
-.de-opt-filter:focus { border-color: ${t.color.accent}; }
+/* The kit's field: the well lifts one rung under the pointer, and keyboard
+   focus is the border taking the accent. \`CONTROL_RADIUS\` is \`radius.sm\`, the
+   dense-row adaptation — a 16px card corner on a 24px field would be a pill. */
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-filter:hover { background: ${t.color.fieldHover}; }
+}
+.de-opt-filter:focus-visible { border-color: ${t.color.accent}; }
 /*
  * The clear button is the user agent's drawing, and it is now TOLD which theme
  * it is in rather than being inverted after the fact.
@@ -293,11 +319,11 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 /* The trailing gutter is a rung above the sides on purpose — it was 10 against
    8 — so rounding it down to match them would close the only air under the last
    row of a scroller. */
-.de-opt-body { display: flex; flex-direction: column; padding: 0 ${t.space.md}px ${t.space.lg}px; }
+.de-opt-body { display: flex; flex-direction: column; padding: 0 ${t.space.sm}px ${t.space.md}px; }
 .de-opt-note {
-  margin: 0 0 ${t.space.md}px; padding: ${t.space.md}px;
+  margin: 0 0 ${t.space.sm}px; padding: ${t.space.sm}px;
   max-width: ${t.type.measure};
-  border-left: 2px solid ${t.color.borderStrong}; border-radius: ${t.radius.sm};
+  border-left: 2px solid ${t.color.borderStrong}; border-radius: ${t.radius.xs};
   background: ${t.color.bgSunken};
   color: ${t.color.textMuted}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody};
 }
@@ -306,12 +332,15 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 /* \`sectionHeader\`: a fold target, and the token exists because a fold target
    wants to be taller than the rows it folds. 28 was neither that nor a row. */
 .de-opt-summary {
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  height: ${t.size.sectionHeader}px; padding: 0 ${t.space.sm}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  height: ${t.size.sectionHeader}px; padding: 0 ${t.space["2xs"]}px;
   cursor: pointer; list-style: none;
   font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
+  transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease};
 }
-.de-opt-summary:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
+/* Inside the band, because the band is full-bleed and an outward halo would be
+   drawn off the panel. */
+.de-opt-summary:focus-visible { outline: none; box-shadow: ${FOCUS_RING_INSET}; }
 .de-opt-summary::-webkit-details-marker { display: none; }
 /* A real glyph from the vendored set rather than a \`content\` character, so the
    disclosure marks in this panel, the inspector and the layer tree are one
@@ -320,18 +349,24 @@ export const optionsCss = `/* ---------- options / variants ---------- */
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   color: ${t.color.textDim};
-  transition: transform ${t.duration.fast} ${t.ease};
+  transition: transform ${t.duration.hover} ${t.ease};
 }
 .de-opt-folder[open] > .de-opt-summary > .de-opt-twisty { transform: rotate(90deg); }
 /* A full-bleed band, so the quiet rung — see the hover rule in panels.ts. */
-.de-opt-summary:hover { background: ${t.color.bgHoverQuiet}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-summary:hover { background: ${t.color.bgHoverQuiet}; }
+}
 /* Shrinkable, with an ellipsis. \`flex: none\` let a folder named after a long
    source path push the count off the end of the row and out of the window. */
 .de-opt-folder-name {
   flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.de-opt-count { flex: 1; color: ${t.color.textDim}; font-size: ${t.type.body}; font-weight: ${t.type.weightBody}; }
+/* A number that changes as the filter narrows. Its digits keep one width from
+   the chrome root's tabular figures (css/base.ts). */
+.de-opt-count {
+  flex: 1; color: ${t.color.textDim}; font-size: ${t.type.body}; font-weight: ${t.type.weightBody};
+}
 /* 16 rather than 14: one indent step, the same one the layer tree uses, and on
    the step set. 14 was a number that happened to look about right. */
 /*
@@ -349,7 +384,7 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  * attribute rather than tracked in parallel. Shut, the body measures 0. Opened,
  * Chrome renders it and resolves the new row in ONE recalculation, so there is
  * no clean starting value for the \`fr\` to interpolate from: the first frame
- * lands at 77.6 of an eventual 110.4px and the remaining 30% eases over ~150ms.
+ * lands at 77.6 of an eventual 110.4px and only the remaining 30% eases in.
  *
  * That is a real improvement on the hard cut it replaces and it is not the full
  * fold the other three get. Closing it properly means driving the height from
@@ -365,23 +400,23 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 .de-opt-folder > /*
  * The gap BETWEEN rows is larger than the gap inside one, and it was smaller.
  *
- * This stacked at \`space.xs\` (2) rows whose own children sit at \`space.sm\`
+ * This stacked at \`space["3xs"]\` (2) rows whose own children sit at \`space["2xs"]\`
  * (4) — a ratio of 0.5 where the grouping rule wants at least 2. Read literally
  * that says a control's label is further from its own field than it is from the
  * next control entirely, and a reader scanning the fold has nothing to bind a
- * label to but proximity. \`space.md\` (8) against the row's 4 is exactly 2x.
+ * label to but proximity. \`space.sm\` (8) against the row's 4 is exactly 2x.
  */
 .de-opt-folder-body {
   display: grid;
   grid-template-rows: minmax(0, 0fr);
-  transition: grid-template-rows ${t.duration.base} ${t.ease};
+  transition: grid-template-rows ${t.duration.reveal} ${t.easeReveal};
 }
 .de-opt-folder[open] > .de-opt-folder-body {
   grid-template-rows: minmax(0, 1fr);
 }
 .de-opt-folder-body {
-  padding: 0 0 ${t.space.md}px ${t.space["2xl"]}px;
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
+  padding: 0 0 ${t.space.sm}px ${t.space.lg}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
 }
 /* The inner track is what actually clips while the row closes. */
 .de-opt-folder > .de-opt-folder-body > * { min-height: 0; }
@@ -411,37 +446,46 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  * straight off the mono \`.de-opt-path\`, which breaks mid-word to fit as it is.
  */
 .de-opt-row {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding: ${t.space.md}px ${t.space.sm}px;
-  border-radius: ${t.radius.md};
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding: ${t.space.sm}px ${t.space["2xs"]}px;
+  border-radius: ${t.radius.sm};
+  transition: background-color ${t.duration.hover} ${t.ease};
 }
 /*
- * Hover goes UP, not down. This lifted the row to \`bgSunken\` — a 1.10:1 step
- * in the wrong direction, the faintest state change in the chrome, and the only
- * hover anywhere that made a surface darker than the thing it sits on.
+ * Hover is the row hover every other list uses. This lifted the row to
+ * \`bgSunken\` — the control surface, not a hover — which made it the only row
+ * in the chrome that answered the pointer with a different rung.
  */
-.de-opt-row:hover { background: ${t.color.bgHoverQuiet}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-row:hover { background: ${t.color.bgHoverQuiet}; }
+}
 /*
- * A hidden row is dimmed ONCE. At 0.55 the fade compounded with ink that was
- * already \`textDim\` — the type, the path and the count landed at 2.89:1, so a
- * row you had hidden lost the very labels that say what it was. 0.7 holds the
- * secondary ink at 3.86:1 and the label at 8.78:1, and the row is still plainly
- * the quiet one beside a live neighbour at 16.8:1.
+ * A hidden row says so with INK, not opacity. A fade compounds with ink that is
+ * already \`textDim\` and put the secondary text at 3.06:1 in light; naming the
+ * ink instead holds every word at \`textDisabled\`, which clears 4.5:1 on every
+ * ground, and the row is still plainly the quiet one beside a live neighbour.
  */
-.de-opt-row[data-hidden] { opacity: 0.7; }
-.de-opt-head { display: flex; align-items: baseline; gap: ${t.space.md}px; }
+.de-opt-row[data-hidden] :is(.de-opt-label, .de-opt-type, .de-opt-path, .de-opt-value) {
+  color: ${t.color.textDisabled};
+}
+.de-opt-head { display: flex; align-items: baseline; gap: ${t.space.sm}px; }
 .de-opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /*
- * The eyebrow and the two tags were the last \`micro\` call sites in the chrome:
- * 9px, which is three quarters of the 12px floor and the size at which an
- * uppercase word stops being read and starts being recognised by shape. They
- * are on \`body\` now and keep their rank the way everything else does — the
- * eyebrow by ink and case, the tag by its plate.
+ * The eyebrow is the kit's: the \`micro\` (badge, 10px) role, uppercase, on the
+ * eyebrow tracking. It was 9px once — below any rung — and then 12px with a
+ * hand-picked 0.04em, which made a type tag as loud as the label it sits
+ * beside. Casing is a treatment, not a size, and the tracking is the kit's
+ * 0.08em that opens an uppercase run enough to read at 10px. The tags stay on
+ * \`body\` and keep their rank by their plate.
  */
-.de-opt-type { color: ${t.color.textDim}; font-size: ${t.type.body}; text-transform: uppercase; letter-spacing: 0.04em; }
+.de-opt-type {
+  color: ${t.color.textDim};
+  font-size: ${t.type.micro}; font-weight: ${t.type.weightValue};
+  text-transform: uppercase; letter-spacing: ${t.type.trackingEyebrow};
+}
 .de-opt-tag {
-  padding: 0 ${t.space.sm}px;
-  border-radius: ${t.radius.sm};
+  padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.xs};
   background: ${t.color.bgHover}; color: ${t.color.textMuted};
   font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
 }
@@ -451,37 +495,49 @@ export const optionsCss = `/* ---------- options / variants ---------- */
   color: ${t.color.textDim}; word-break: break-all;
 }
 .de-opt-value { color: ${t.color.text}; font-family: ${t.font.mono}; font-size: ${t.type.body}; }
-.de-opt-check { display: inline-flex; align-items: center; gap: ${t.space.md}px; color: ${t.color.textMuted}; cursor: pointer; }
+.de-opt-check { display: inline-flex; align-items: center; gap: ${t.space.sm}px; color: ${t.color.textMuted}; cursor: pointer; }
 /* Row height and the interactive boundary, so it lines up with the filter above
    it instead of sitting 4px shorter in the same column of controls. */
 .de-opt-input {
-  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.sm};
-  background: ${t.color.bgSunken}; color: ${t.color.text};
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space["2xs"]}px;
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${CONTROL_RADIUS};
+  background: ${t.color.field}; color: ${t.color.text};
   font-family: ${t.font.mono}; font-size: ${t.type.body};
   outline: none;
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease};
 }
-.de-opt-input:focus { border-color: ${t.color.accent}; }
+/* Same field as the filter: its corner (it drew \`radius.xs\` beside a filter at
+   \`radius.sm\` in one column), its hover well and its focus border. */
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-input:hover { background: ${t.color.fieldHover}; }
+}
+.de-opt-input:focus-visible { border-color: ${t.color.accent}; }
 
 /* The variant list is the answer to "what options do we have?" — always shown. */
-.de-opt-chips { display: flex; flex-wrap: wrap; gap: ${t.space.sm}px; }
+.de-opt-chips { display: flex; flex-wrap: wrap; gap: ${t.space["2xs"]}px; }
 /*
  * \`borderInteractive\`, for the reason \`.de-opt-filter\` gives, and here it is
- * the whole edge: the chip's \`bgRaised\` fill is 1.19:1 off the panel, so a
- * 1.55:1 hairline was the only thing saying where the button stopped. Padding
- * is \`xs\`/\`md\` rather than the 1/7 it was, the two nearest steps on the set.
+ * the whole edge: the chip's \`bgRaised\` fill is 1.42:1 off the dark panel and
+ * white on white in light, so the hairline is the only thing saying where the
+ * button stops. Padding is \`3xs\`/\`sm\` rather than the 1/7 it was, the two
+ * nearest steps on the set.
  */
 .de-opt-chip {
-  padding: ${t.space.xs}px ${t.space.md}px;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.xl};
+  padding: ${t.space["3xs"]}px ${t.space.sm}px;
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius["3xl"]};
   background: ${t.color.bgRaised}; color: ${t.color.textMuted};
   font-family: inherit; font-size: ${t.type.body}; cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    border-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
 /* The chip rests on \`bgRaised\`, so it lifts to \`bgRaisedHover\`. \`bgHover\` is
-   a rung BELOW the card here, which made pointing at a chip darken it — the
-   fifth instance of the bug class that token was added to close. */
-.de-opt-chip:hover { background: ${t.color.bgRaisedHover}; color: ${t.color.text}; }
+   no lift over the card — equal to it in dark, a rung below it in light — so
+   pointing at a chip would do nothing or darken it. */
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-chip:hover { background: ${t.color.bgRaisedHover}; color: ${t.color.text}; }
+}
+.de-opt-chip:active:not([aria-disabled="true"]) { transform: scale(0.98); }
 /*
  * Two attributes, one treatment, and they are not interchangeable upstream.
  *
@@ -496,9 +552,9 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 .de-opt-chip[aria-checked="true"] {
   ${accentFillText} border-color: ${t.color.accent};
 }
-.de-opt-chip:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-opt-chip:focus-visible { outline: none; box-shadow: ${FOCUS_RING}; }
 
-.de-opt-actions { display: flex; flex-wrap: wrap; gap: ${t.space.sm}px; padding-top: ${t.space.xs}px; }
+.de-opt-actions { display: flex; flex-wrap: wrap; gap: ${t.space["2xs"]}px; padding-top: ${t.space["3xs"]}px; }
 /*
  * A verb that cannot run, drawn as one, without the attribute that would hide
  * its own explanation.
@@ -545,8 +601,8 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 .de-opt-whywrap {
   display: grid;
   grid-template-rows: min-content minmax(0, 0fr);
-  gap: ${t.space.sm}px;
-  transition: grid-template-rows ${t.duration.base} ${t.ease};
+  gap: ${t.space["2xs"]}px;
+  transition: grid-template-rows ${t.duration.reveal} ${t.easeReveal};
 }
 .de-opt-whywrap:has(.de-opt-why:not([hidden])) {
   grid-template-rows: min-content minmax(0, 1fr);
@@ -573,10 +629,12 @@ export const optionsCss = `/* ---------- options / variants ---------- */
   text-decoration-skip-ink: auto;
   text-underline-offset: 2px; cursor: pointer;
 }
-.de-opt-link:hover { color: ${t.color.text}; }
-.de-opt-link:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-opt-link:hover { color: ${t.color.text}; }
+}
+.de-opt-link:focus-visible { outline: none; border-radius: ${t.radius.xs}; box-shadow: ${FOCUS_RING}; }
 .de-opt-why {
-  margin: 0; padding: ${t.space.md}px;
+  margin: 0; padding: ${t.space.sm}px;
   max-width: ${t.type.measure};
   border-radius: ${t.radius.sm};
   background: ${t.color.bgSunken}; color: ${t.color.textMuted};
@@ -595,7 +653,7 @@ export const optionsCss = `/* ---------- options / variants ---------- */
 .de-opt-why[hidden] {
   display: block;
   visibility: hidden;
-  transition: visibility 0s linear ${t.duration.base};
+  transition: visibility 0s linear ${t.duration.reveal};
 }
 
 `

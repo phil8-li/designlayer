@@ -221,7 +221,7 @@ async function failure(response: Response): Promise<Error> {
     // A body that is not JSON has nothing in it a person can act on.
   }
   if (isStaleServer(stated)) return new Error(STALE_SERVER)
-  const said = stated || `HTTP ${response.status}`
+  const said = stated || `The designlayer server answered ${response.status}. Check its terminal, then try again.`
   return challenge ? new LibraryAuthError(said, challenge) : new Error(said)
 }
 

@@ -60,7 +60,7 @@ function choiceFor(variant: IconVariant): TokenChoice {
     name: variant.name,
     // 16px on the 24 grid: the same size the row's other previews occupy, and
     // the size the app draws most of these at.
-    preview: { kind: "glyph", draw: () => drawHostIcon(variant, tokens.icon.control) },
+    preview: { kind: "glyph", draw: () => drawHostIcon(variant, tokens.icon.action) },
     detail: "",
     disabled: false,
   }

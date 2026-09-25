@@ -13,6 +13,7 @@
  */
 
 import { accentFillText, tokens as t } from "../tokens"
+import { FOCUS_OUTLINE } from "./panels"
 
 export const inspectorCss = `/* ---------- inspector tabs ---------- */
 .de-panel--right .de-panel-body {
@@ -22,8 +23,8 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
 }
 
 /*
- * A SEGMENTED STRIP OF PILLS, NOT AN UNDERLINED RAIL — the treatment Figma's
- * own right panel uses, and the reason the icons are gone.
+ * A SEGMENTED STRIP OF PILLS, NOT AN UNDERLINED RAIL — the kit's tab-pill
+ * treatment, and the reason the icons are gone.
  *
  * The strip was four icon+label tabs under an accent underline. Both halves of
  * that were paying for a problem this panel no longer has. The underline is a
@@ -52,15 +53,15 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
    * container with a seam in it, which is the wrong object, and at 2px the
    * labels ran together as one phrase.
    */
-  display: flex; align-items: center; gap: ${t.space.sm}px;
+  display: flex; align-items: center; gap: ${t.space["2xs"]}px;
   height: ${t.size.tabBar}px;
   /*
-   * The \`lg\` step, so the strip has air at both ends rather than a pill
+   * The \`md\` step, so the strip has air at both ends rather than a pill
    * pressed against the panel edge. It is the same inset the app chooser
    * above gives its name, so the selected pill's edge and the app name share
    * one left line; the label sits 8px further in, inside the pill.
    */
-  padding: 0 ${t.space.lg}px;
+  padding: 0 ${t.space.md}px;
   border-bottom: 1px solid ${t.color.border};
   /*
    * THE STRIP STILL SCROLLS RATHER THAN SHRINKS, though it now has room.
@@ -76,7 +77,7 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
    * the height of a landmark, and clipping silently leaves a tab unreachable.
    *
    * The scrollbar is hidden in both engines — it is 15px of furniture across a
-   * 34px landmark, and the thing it would report is already reported by a tab
+   * 40px landmark, and the thing it would report is already reported by a tab
    * half-cut at the edge. Reachability comes from \`activate()\` instead, which
    * scrolls the selected tab into view, so the keyboard path never depends on
    * the pointer finding a bar that is not drawn.
@@ -103,10 +104,14 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
  * is also what makes it cheap: \`transform\` and \`width\` on one absolutely
  * positioned element, no layout on the tabs, nothing per-tab to keep in sync.
  *
- * \`snap\` is the rung. The travel is 60-80px, but this is a control pressed
- * constantly and the token set is explicit that at this length "the eye reads
- * 'it went' rather than 'it is going'" — which is the correct sentence for a
- * tab strip. \`fast\` here felt like the pill was being dragged.
+ * The kit's 150ms tween, the same one the segmented chip travels on. This is
+ * a control pressed constantly, so the pill has to arrive while the eye is
+ * still on the label it was sent to.
+ *
+ * THE FILL IS \`tabSelected\`, the kit's \`--tab-pill-selected\`. A segmented
+ * control's \`segmentSelected\` is one rung darker because it sits on a
+ * track; this strip has no track, and the darker rung on the bare panel reads
+ * as a pressed button rather than a chosen tab.
  *
  * Behind the labels, never over them: \`.de-tab\` takes a stacking index below,
  * and the pill is \`pointer-events: none\` so it cannot eat a click meant for the
@@ -123,14 +128,14 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   width: var(--de-pill-w, 0px);
   height: ${t.size.rowHeight}px;
   transform: translate(var(--de-pill-x, 0px), -50%);
-  border-radius: ${t.radius.md};
-  background: ${t.color.bgHover};
+  border-radius: ${t.radius.sm};
+  background: ${t.color.tabSelected};
   opacity: 0;
   pointer-events: none;
   transition:
-    transform ${t.duration.snap} ${t.ease},
-    width ${t.duration.snap} ${t.ease},
-    opacity ${t.duration.snap} ${t.ease};
+    transform ${t.duration.hover} ${t.ease},
+    width ${t.duration.hover} ${t.ease},
+    opacity ${t.duration.hover} ${t.ease};
 }
 .de-tabs[data-de-pill] .de-tab-pill { opacity: 1; }
 /*
@@ -138,17 +143,18 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
  * ladder at the top of panels.ts), not the secondary one. At \`textDim\` the
  * unselected tabs sat at the same rank as the hint text inside the pane they
  * switch to — the landmark reading quieter than the body it leads.
- * \`textMuted\` puts them at 9.95:1, a step under the selected tab's white.
+ * \`textMuted\` puts them at 10.4:1 dark and 10.5:1 light, a step under the
+ * selected tab's full ink.
  *
  * ONE WEIGHT FOR EVERY TAB, and it is the value rung rather than the section
  * one the selected tab used to take. A weight that changes with selection
  * changes the label's WIDTH with it, so every switch shoved the tabs beside it
  * sideways — on a strip that is also a scroller, that is a landmark that moves
- * when you use it. The pill and the white ink say which one is taken; they do
+ * when you use it. The pill and the full ink say which one is taken; they do
  * not need a third voice that costs layout.
  *
- * The box is a \`rowHeight\` box on the \`md\` corner with the workhorse step
- * inside it. Being shorter than the 34px strip is the point — a pill that
+ * The box is a \`rowHeight\` box on the \`sm\` corner with the workhorse step
+ * inside it. Being shorter than the 40px strip is the point — a pill that
  * filled the strip would be a filled header, not a control sitting in one.
  *
  * This used to be justified by matching \`.de-opt-tab\`, the two-button
@@ -170,8 +176,8 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   flex: none;
   display: inline-flex; align-items: center;
   height: ${t.size.rowHeight}px;
-  padding: 0 ${t.space.md}px;
-  border: none; border-radius: ${t.radius.md};
+  padding: 0 ${t.space.sm}px;
+  border: none; border-radius: ${t.radius.sm};
   background: transparent;
   color: ${t.color.textMuted};
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
@@ -184,14 +190,14 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
   /* The ink crossfades with the pill it is handing over to. Colour only — a
      background here would be the second answer to "which one am I on" that the
      hover note below spends five paragraphs refusing. */
-  transition: color ${t.duration.snap} ${t.ease};
+  transition: color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease};
 }
 /*
  * HOVER BRIGHTENS THE INK AND DRAWS NO SURFACE, so the pill means one thing.
  *
  * The obvious build gives hover \`bgHoverQuiet\` and selection \`bgHover\`, and
- * it was tried: on the dark ground those are \`lift(6)\` and \`lift(12)\`, two
- * greys six percent apart, and the hovered tab also takes the white ink the
+ * it was tried: on the dark ground those are \`lift(10)\` and \`lift(12)\`, two
+ * greys two percent apart, and the hovered tab also takes the full ink the
  * selected one has. Screenshotted, a hovered neighbour and the selected tab
  * were a pair of pills you had to compare to tell apart — for as long as the
  * pointer rested there, the strip had two answers to "which one am I on".
@@ -202,19 +208,20 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
  * full ink, which is unmistakably a different KIND of change from growing a
  * background, and therefore never mistaken for one.
  */
-.de-tab:hover { color: ${t.color.text}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-tab:hover { color: ${t.color.text}; }
+}
 .de-tab[aria-selected="true"] {
-  background: ${t.color.bgHover};
+  background: ${t.color.tabSelected};
   color: ${t.color.text};
 }
 /* Once the pill is real, it owns the surface and the tab stops drawing one —
    two grounds at the same value, one of them travelling, would read as a
    smear. Scoped to the measured state so an unmeasured strip is unchanged. */
 .de-tabs[data-de-pill] .de-tab[aria-selected="true"] { background: transparent; }
-/* Outside the pill, not inset into it. At the \`-3px\` the underlined tab used,
-   the ring landed inside the surface and read as a second border on the pill
-   rather than as a ring around it. */
-.de-tab:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+/* The kit's button focus: an accent edge on the pill's own outline plus a 3px
+   halo around it. No press: a tab's feedback is the pill travelling to it. */
+.de-tab:focus-visible { ${FOCUS_OUTLINE} }
 
 /*
  * HOW MUCH IS OWED, ON THE CHANGES TAB.
@@ -266,10 +273,10 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
 .de-tab[data-de-count]::after {
   content: attr(data-de-count);
   display: inline-flex; align-items: center; justify-content: center;
-  margin-left: ${t.space.sm}px;
-  min-width: ${t.space["2xl"]}px; height: ${t.space["2xl"]}px;
-  padding: 0 ${t.space.sm}px;
-  border-radius: ${t.space["2xl"]}px;
+  margin-left: ${t.space["2xs"]}px;
+  min-width: ${t.space.lg}px; height: ${t.space.lg}px;
+  padding: 0 ${t.space["2xs"]}px;
+  border-radius: 999px;
   corner-shape: round;
   background: ${t.color.bgHover};
   color: ${t.color.textMuted};
@@ -287,21 +294,22 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
    * separate the two events: the strip makes room, and a beat later something
    * lands in it.
    *
-   * \`easeSpring\` on a \`snap\` is the smallest arrival in the chrome, and a count
-   * chip is the smallest object in it. It is only ever seen once per change, so
-   * it can afford a curve the rest of the strip cannot.
+   * The kit reserves its overshoot for drops and reorders, so the badge
+   * settles on the reveal curve at the 150ms tween, from the kit's modal
+   * starting scale: an arrival in place, not a pop.
    */
-  animation: de-tab-count-in ${t.duration.snap} ${t.easeSpring};
+  animation: de-tab-count-in ${t.duration.hover} ${t.easeReveal};
 }
-@keyframes de-tab-count-in { from { transform: scale(0.4); opacity: 0; } }
+@keyframes de-tab-count-in { from { transform: scale(0.96); opacity: 0; } }
 /*
  * Chosen, the badge takes the accent.
  *
  * The selected tab already wears a neutral surface, so a neutral chip on top of
- * it is a plate on a plate — about 1.2:1 apart, which loses the count at
- * exactly the moment the user is looking at the list it counts. \`accentFill\`
- * rather than a bare background because this chrome's accent is light in one
- * theme and dark in the other, and the ink has to flip with it.
+ * it is a plate on a plate — 1.16:1 apart in dark and the same colour in
+ * light, which loses the count at exactly the moment the user is looking at
+ * the list it counts. \`accentFillText\` rather than a bare background because
+ * the indigo fill and its white ink are one decision: 4.97:1 dark, 6.70:1
+ * light.
  */
 .de-tab[aria-selected="true"][data-de-count]::after { ${accentFillText} }
 
@@ -312,12 +320,5 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
 }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. */
 .de-tabpanel[hidden] { display: none; }
-.de-tabpanel::-webkit-scrollbar { width: 8px; }
-.de-tabpanel::-webkit-scrollbar-thumb {
-  background: transparent; border-radius: ${t.radius.md};
-  border: 2px solid transparent; background-clip: content-box;
-}
-.de-tabpanel:hover::-webkit-scrollbar-thumb {
-  background: ${t.color.borderStrong}; background-clip: content-box;
-}
+/* No scrollbar skin of its own: the kit's auto-hiding bar in css/base.ts. */
 `

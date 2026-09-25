@@ -34,7 +34,8 @@
  *  - **Explanatory prose takes the panel's note rank.** The `NO_FIX` sentence
  *    and the four empty states are the same kind of writing as
  *    `.de-variant-note` on the Design tab — a caption explaining a control,
- *    not a control — so they read at `caption`/`textDim`/1.4 here rather than
+ *    not a control — so they read at `caption`/`textDim` and the kit's reading
+ *    leading (`leadingBody`) here rather than
  *    at the weights they wore when this surface owned a whole rail.
  *
  * `de-button` is borrowed rather than restated: Fix, Ignore and Unignore are
@@ -48,24 +49,26 @@ import { tokens as t, accentFillText, nest } from "../tokens"
  * The restored-finding row, and the button parked in its right-hand corner.
  *
  * This one was backwards, which is the failure the offset rule makes impossible
- * to argue with: the row drew `radius.sm` and the `.de-button` inside it drew
- * `radius.md`, four pixels from the corner — a CHILD rounder than the container
+ * to argue with: the row drew `radius.xs` and the `.de-button` inside it drew
+ * `radius.sm`, four pixels from the corner — a CHILD rounder than the container
  * holding it. On a row with a filled ground that reads as the button having
  * escaped the corner rather than as two shapes nested.
  *
  * Fixed from the outside in, because the button is shared furniture and the row
- * is not. `radius.lg` on the row leaves exactly the `radius.md` the button
- * already wears, so nothing had to reach into `.de-button` from a file that has
- * no business doing it.
+ * is not. The button now wears the kit's one action-button corner,
+ * `radius['2xl']` (14), so the row takes `radius['5xl']`: 18 − 4 = 14. At 32px
+ * tall both corners clamp to half their height, so on screen this is a pill
+ * holding a pill 4px in — still concentric, and nothing had to reach into
+ * `.de-button` from a file that has no business doing it.
  */
-const IGNORED = nest({ of: ".de-lint-ignored-row", outer: t.radius.lg, inset: t.space.sm })
+const IGNORED = nest({ of: ".de-lint-ignored-row", outer: t.radius["5xl"], inset: t.space["2xs"] })
 
 /**
  * The severity dot, in CSS pixels, and deliberately not a step on the spacing
  * scale.
  *
  * A spacing step is the gap between two things; this is the size of a mark, and
- * the ramp for those is `tokens.icon`, whose floor is 10 — a disc that size
+ * the ramp for those is `tokens.icon`, whose floor is 12 — a disc that size
  * beside 12px text reads as a bullet the row is indented by rather than as a
  * severity. Eight is the largest dot that still sits optically inside the cap
  * height of the first line of the message.
@@ -83,6 +86,23 @@ const DOT = 8
  */
 const HELP = 14
 
+/**
+ * Keyboard focus, as the kit draws it on an action: the edge takes the accent
+ * and a 3px halo of it at 30% sits outside. `outline` carries the edge so the
+ * borderless controls in this sheet get one too; every call site is
+ * `:focus-visible`, so pointer focus paints nothing.
+ */
+const FOCUS_RING = `outline: 1px solid ${t.color.accent}; outline-offset: 0; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.color.accent} 30%, transparent);`
+
+/** Hover paint only on a real pointer (kit interaction rule 1). */
+const HOVER = "@media (hover: hover) and (pointer: fine)"
+
+/**
+ * One line of row text: the body size at the row leading (12/16), rounded to
+ * the device pixel the dot has to centre on.
+ */
+const LINE = Math.round(Number.parseFloat(t.type.body) * t.type.leadingRow)
+
 export const lintCss = `/* ---------- design system audit ---------- */
 /*
  * A plain column at the section body's own gap.
@@ -93,7 +113,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * tab puts between two fields, and the two sections on this tab read as one
  * panel instead of as two surfaces that were built apart.
  */
-.de-lint { display: flex; flex-direction: column; gap: ${t.space.md}px; }
+.de-lint { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
 
 /*
  * ONE BUTTON GROUP, WITH TWO SHAPES.
@@ -110,7 +130,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * rather than the reverse, which put a 110px "Hide markers" beside a squeezed
  * "Fix all (12)" and read as the toggle being the important one.
  */
-.de-lint-controls { display: flex; flex-wrap: wrap; gap: ${t.space.sm}px; }
+.de-lint-controls { display: flex; flex-wrap: wrap; gap: ${t.space["2xs"]}px; }
 .de-lint-run { flex: 1 1 auto; justify-content: center; }
 
 /*
@@ -126,7 +146,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  *
  * Same glyph too, and for the same reason: \`InfoMark\`, which is Lucide's
  * \`Info\` with its ring dropped, because THIS disc is the circle. The ringed
- * drawing at ${t.icon.row}px in a ${HELP}px disc is two circles 1.4px apart with an
+ * drawing at ${t.icon.marker}px in a ${HELP}px disc is two circles 1.4px apart with an
  * illegible \`i\` between them — the note on \`.de-ann-help\` carries the
  * measurements. The badges in \`css/lint-markers.ts\` keep the ringed \`Info\`: a
  * rounded square plate over the app has no circle of its own to lend.
@@ -138,12 +158,14 @@ export const lintCss = `/* ---------- design system audit ---------- */
   padding: 0;
   border: none; border-radius: 50%;
   background: ${t.color.field};
-  color: ${t.color.textDim};
+  /* Full ink in every state: an icon-only action's glyph is its whole label,
+     and a dim one reads as disabled (kit, icon-only action ink). */
+  color: ${t.color.text};
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease};
 }
-.de-lint-info:hover, .de-lint-info:focus-visible { background: ${t.color.fieldHover}; color: ${t.color.text}; }
-.de-lint-info:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+${HOVER} { .de-lint-info:hover { background: ${t.color.fieldHover}; } }
+.de-lint-info:focus-visible { background: ${t.color.fieldHover}; ${FOCUS_RING} }
 
 /* The line the whole feature is judged by. \`text\` rather than \`textDim\`: it is
    a count, not a caption, and the reader checks it against the canvas. */
@@ -159,8 +181,8 @@ export const lintCss = `/* ---------- design system audit ---------- */
    skimmable — "this rule fired eleven times" is the shape of the problem. */
 .de-lint-group { border-top: 1px solid ${t.color.border}; }
 .de-lint-group-head {
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space["2xs"]}px;
   color: ${t.color.textDim}; font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
 }
 /*
@@ -208,19 +230,20 @@ export const lintCss = `/* ---------- design system audit ---------- */
   position: relative;
   display: grid;
   grid-template-columns: ${t.size.miniSize}px 1fr;
-  gap: ${t.space.sm}px ${t.space.sm}px;
-  padding: ${t.space.md}px ${t.space.sm}px;
+  gap: ${t.space["2xs"]}px ${t.space["2xs"]}px;
+  padding: ${t.space.sm}px ${t.space["2xs"]}px;
   /*
-   * \`lg\`, not \`md\`, and the four extra pixels are load-bearing.
+   * \`5xl\`, and the extra pixels are load-bearing.
    *
-   * Floating the actions put a \`.de-button\` — radius \`md\`, 8 — into this row's
-   * bottom-right corner at an inset of 4 on both sides. Concentric then fixes
-   * the container: 8 + 4 = 12. At \`md\` the row drew an 8px corner around an 8px
-   * button sitting 4px inside it, which is a child ROUNDER than the curve
-   * holding it, and on a filled row that reads as the button having escaped the
-   * corner rather than as two shapes nested. \`tools/concentric-audit.mjs\`
-   * reported it as \`.de-lint-row > .de-button.de-lint-action br outer 8 inset 4
-   * got 8 want 4\`.
+   * Floating the actions put a \`.de-button\` — the kit's action-button corner,
+   * \`2xl\`, 14 — into this row's bottom-right corner at an inset of 4 on both
+   * sides. Concentric then fixes the container: 14 + 4 = 18. At the row
+   * highlight's \`lg\` the row drew a 12px corner around a 14px button sitting
+   * 4px inside it, which is a child ROUNDER than the curve holding it, and on a
+   * filled row that reads as the button having escaped the corner rather than
+   * as two shapes nested. \`tools/concentric-audit.mjs\` reported the same
+   * collision at the old sizes as \`.de-lint-row > .de-button.de-lint-action br
+   * outer 8 inset 4 got 8 want 4\`.
    *
    * Fixed from the outside in, which is the call \`IGNORED\` above makes for the
    * same collision and the same reason: \`.de-button\` is shared furniture and
@@ -230,7 +253,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
    * browser audit is the only thing that catches it, which is exactly the half
    * of the check that tool exists for.
    */
-  border-radius: ${t.radius.lg};
+  border-radius: ${t.radius["5xl"]};
   cursor: pointer;
   /*
    * The row's own ground, as a variable, because something else has to paint
@@ -247,23 +270,20 @@ export const lintCss = `/* ---------- design system audit ---------- */
   /*
    * BOTH ENDS OF THE CORRESPONDENCE MOVE, AND AT THE SAME SPEED.
    *
-   * Hovering this row grows its badge on the page over \`snap\`
+   * Hovering this row grows its badge on the page over \`hover\`
    * (\`css/lint-markers.ts\`); hovering the badge used to light this row between
    * two frames. That is one statement — "these two are the same finding" — said
    * in two motion languages depending on which end you touch, and the instant
    * end reads as a glitch beside the eased one.
    *
-   * \`snap\` on both ends. The marker's side used to be a literal 100ms — one of
-   * two numbers borrowed from agentation when the plates were drawn — and this
-   * matched the literal rather than the ramp, on the reasoning that a pair has
-   * to agree with its other half before it agrees with the scale. That was the
-   * right order to fix them in: the marker is on \`snap\` now, so this is too,
-   * and the pair agrees on a rung instead of on a number.
+   * The kit's \`hover\` tween on both ends — 150ms, the one duration every hover
+   * wash and colour change in the chrome takes — so the pair agrees on a rung
+   * instead of on a number.
    *
    * \`background-color\` rides along so the quiet-hover and ticked fills the row
    * already switches between stop being the last untweened thing on it.
    */
-  transition: box-shadow ${t.duration.snap} ${t.ease}, background-color ${t.duration.snap} ${t.ease};
+  transition: box-shadow ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
 /*
  * The ROW owns its severity tone and the dot spends it.
@@ -278,7 +298,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
 .de-lint-row--warning { --de-lint-tone: ${t.color.lintWarning}; }
 /* The quiet rung. The row is a click target, and the loud hover is spoken for
    by selection below — see the ordering argument in \`css/options.ts\`. */
-.de-lint-row:hover { --de-lint-bg: ${t.color.bgHoverQuiet}; }
+${HOVER} { .de-lint-row:hover { --de-lint-bg: ${t.color.bgHoverQuiet}; } }
 /* Ticked outranks hovered, because a tick is a decision and a hover is a
    pointer resting. */
 .de-lint-row--checked { --de-lint-bg: ${t.color.accentSoft}; }
@@ -302,7 +322,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
    the right hit behaviour, the right keyboard handling and the platform's own
    tick, and all it wants from the chrome is the chrome's colour. */
 .de-lint-check-input { margin: 0; accent-color: ${t.color.accent}; cursor: pointer; }
-.de-lint-check-input:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-lint-check-input:focus-visible { ${FOCUS_RING} }
 
 /*
  * The text is a button, and it has to stop looking like one.
@@ -321,13 +341,14 @@ export const lintCss = `/* ---------- design system audit ---------- */
 .de-lint-select {
   grid-column: 2; grid-row: 1;
   display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start;
-  column-gap: ${t.space.md}px; row-gap: ${t.space.xs}px;
+  column-gap: ${t.space.sm}px; row-gap: ${t.space["3xs"]}px;
   min-width: 0;
   padding: 0; border: none; background: transparent;
   color: inherit; font-family: inherit; font-size: ${t.type.body};
   text-align: left; cursor: pointer;
 }
-.de-lint-select:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-lint-select { border-radius: ${t.radius.xs}; }
+.de-lint-select:focus-visible { ${FOCUS_RING} }
 /*
  * Severity as a mark in a fixed column — the first thing on the row, always the
  * same size, always in the same place.
@@ -347,8 +368,8 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * its own sibling's rule about its own data.
  *
  * The corners cannot be borrowed literally, and the reason is arithmetic rather
- * than taste: the badge is 20px, where \`radius.sm\` (4) and \`radius.md\` (8) are
- * visibly different corners — but this mark is 8px, where \`radius.sm\` IS 50%.
+ * than taste: the badge is 20px, where \`radius.xs\` (4) and \`radius.sm\` (8) are
+ * visibly different corners — but this mark is 8px, where \`radius.xs\` IS 50%.
  * Every step on the ramp collapses to the same disc at this size.
  *
  * So the pair is the two ENDPOINTS instead: a square for the error, a disc for
@@ -364,7 +385,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-dot {
   grid-column: 1; grid-row: 1;
-  width: ${DOT}px; height: ${DOT}px; margin-top: ${(16 - DOT) / 2}px;
+  width: ${DOT}px; height: ${DOT}px; margin-top: ${(LINE - DOT) / 2}px;
   border-radius: 50%;
   background: var(--de-lint-tone, ${t.color.lintWarning});
 }
@@ -385,8 +406,10 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-headline {
   grid-column: 2; grid-row: 1;
-  display: flex; flex-wrap: wrap; align-items: center; gap: ${t.space.sm}px;
-  min-width: 0; line-height: ${t.type.leadingBody};
+  display: flex; flex-wrap: wrap; align-items: center; gap: ${t.space["2xs"]}px;
+  /* Row leading, not reading leading: this is the line the dot centres on, and
+     the dot's offset is computed from the same 12/16 box. */
+  min-width: 0; line-height: ${t.type.leadingRow};
 }
 /*
  * A value, with the colour it actually is.
@@ -400,7 +423,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * \`min-width: 0\` for the ellipsis below to have anything to shorten.
  */
 .de-lint-literal {
-  display: inline-flex; align-items: center; gap: ${t.space.sm}px;
+  display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px;
   min-width: 0; max-width: 100%;
   font-family: ${t.font.mono}; font-size: ${t.type.caption};
 }
@@ -419,8 +442,8 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-swatch {
   flex: none;
-  width: ${t.icon.mark}px; height: ${t.icon.mark}px;
-  border-radius: ${t.radius.sm};
+  width: ${t.icon.marker}px; height: ${t.icon.marker}px;
+  border-radius: ${t.radius.xs};
   box-shadow: inset 0 0 0 1px ${t.color.borderStrong};
 }
 /* Dim, and \`flex: none\` so it is never the thing that wraps to its own line —
@@ -460,6 +483,9 @@ export const lintCss = `/* ---------- design system audit ---------- */
   display: flex; align-items: center;
   min-width: 0;
   color: ${t.color.textDim}; font-family: ${t.font.mono}; font-size: ${t.type.caption};
+  /* Pinned rather than left to the mono face's own line box, so a finding row
+     has one known height and the loading skeleton below can stand in it. */
+  line-height: ${t.type.leadingRow};
 }
 /*
  * The name gives way; the line number never does.
@@ -499,9 +525,9 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-offpage {
   flex: none;
-  margin-left: ${t.space.md}px;
-  padding: 0 ${t.space.sm}px;
-  border-radius: ${t.radius.sm};
+  margin-left: ${t.space.sm}px;
+  padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.xs};
   background: ${t.color.bgHover}; color: ${t.color.textMuted};
   font-family: ${t.font.ui};
 }
@@ -538,16 +564,18 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-actions {
   position: absolute;
-  bottom: ${t.space.sm}px; right: ${t.space.sm}px;
-  display: flex; gap: ${t.space.sm}px;
-  padding-left: ${t.space.xl}px;
-  background: linear-gradient(to right, transparent, var(--de-lint-bg) ${t.space.lg}px);
+  bottom: ${t.space["2xs"]}px; right: ${t.space["2xs"]}px;
+  display: flex; gap: ${t.space["2xs"]}px;
+  padding-left: ${t.space.md}px;
+  background: linear-gradient(to right, transparent, var(--de-lint-bg) ${t.space.md}px);
   opacity: 0; pointer-events: none;
-  transition: opacity ${t.duration.fast} ${t.ease};
+  transition: opacity ${t.duration.hover} ${t.ease};
 }
-.de-lint-row:hover .de-lint-actions,
+${HOVER} { .de-lint-row:hover .de-lint-actions { opacity: 1; pointer-events: auto; } }
 .de-lint-row:focus-within .de-lint-actions,
 .de-lint-row--checked .de-lint-actions { opacity: 1; pointer-events: auto; }
+/* A touch has no hover to reveal them with, so they are simply always there. */
+@media (pointer: coarse) { .de-lint-actions { opacity: 1; pointer-events: auto; } }
 /* No fade for anyone who asked not to see one. The reveal is a state change the
    reader triggered, so it must still HAPPEN — instantly, not never. */
 @media (prefers-reduced-motion: reduce) {
@@ -555,7 +583,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
 }
 /* A panel button at panel scale: the row is already padded, so the pill inside
    it gives back the side padding a standalone one needs. */
-.de-lint-action { height: ${t.size.rowHeight}px; padding: 0 ${t.space.md}px; }
+.de-lint-action { height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px; }
 
 /*
  * The four empty states, scoped rather than restyled.
@@ -568,18 +596,18 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * the empty state of every other panel in the editor.
  */
 .de-lint .de-empty {
-  padding: ${t.space.sm}px 0;
+  padding: ${t.space["2xs"]}px 0;
   text-align: left;
   color: ${t.color.textDim};
-  font-size: ${t.type.caption}; line-height: ${t.type.leadingRow};
+  font-size: ${t.type.caption}; line-height: ${t.type.leadingBody};
 }
 
 /* A run that failed is a sentence from the server, in the danger tone, where
    the list would have been. Not a toast: a toast is gone in four seconds and
    this is the state the section is now in. */
 .de-lint-error {
-  margin: 0; padding: ${t.space.sm}px 0;
-  color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow};
+  margin: 0; padding: ${t.space["2xs"]}px 0;
+  color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody};
 }
 
 /*
@@ -592,8 +620,8 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * across the bottom of the section for no reason.
  */
 .de-lint-footer {
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
-  padding-top: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
+  padding-top: ${t.space.sm}px;
   border-top: 1px solid ${t.color.border};
 }
 .de-lint-footer:empty { display: none; }
@@ -604,7 +632,7 @@ export const lintCss = `/* ---------- design system audit ---------- */
    action it just performed. */
 .de-lint-toggle[aria-pressed="true"] { ${accentFillText} }
 
-.de-lint-ignored { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lint-ignored { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 /*
  * A quiet disclosure, deliberately not a button-looking button.
  *
@@ -614,25 +642,27 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * \`.de-opt-link\` in the options browser.
  */
 .de-lint-ignored-summary {
-  display: inline-flex; align-items: center; gap: ${t.space.sm}px;
+  display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px;
   align-self: flex-start;
   padding: 0; border: none; background: transparent;
   color: ${t.color.textDim};
   font-family: inherit; font-size: ${t.type.caption}; cursor: pointer;
 }
-.de-lint-ignored-summary:hover { color: ${t.color.text}; }
-.de-lint-ignored-summary:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-lint-ignored-summary { border-radius: ${t.radius.xs}; transition: color ${t.duration.hover} ${t.ease}; }
+${HOVER} { .de-lint-ignored-summary:hover { color: ${t.color.text}; } }
+.de-lint-ignored-summary[aria-expanded="true"] { color: ${t.color.text}; }
+.de-lint-ignored-summary:focus-visible { ${FOCUS_RING} }
 /* A real glyph rather than a \`content\` character, so this twisty, the options
    browser's and the layer tree's are one drawing at one weight. */
 .de-lint-twisty {
   display: inline-flex; align-items: center; justify-content: center;
-  transition: transform ${t.duration.fast} ${t.ease};
+  transition: transform ${t.duration.hover} ${t.ease};
 }
 .de-lint-ignored-summary[aria-expanded="true"] .de-lint-twisty { transform: rotate(90deg); }
-.de-lint-ignored-body { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lint-ignored-body { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 .de-lint-ignored-body[hidden] { display: none; }
 .de-lint-ignored-row {
-  display: flex; align-items: center; gap: ${t.space.md}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
   padding: ${IGNORED.padding};
   border-radius: ${IGNORED.outer};
   background: ${t.color.bgSunken};
@@ -645,6 +675,11 @@ export const lintCss = `/* ---------- design system audit ---------- */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: ${t.color.textDim}; font-size: ${t.type.body};
 }
+/* A button laid in a well: the shared pill's fill is the well's own rung in
+   light (both are the kit's \`--secondary\`), so it takes the panel ground
+   instead and lifts off the well in both themes. */
+.de-lint-ignored-row > .de-button:not(.de-button--primary) { background: ${t.color.bg}; }
+${HOVER} { .de-lint-ignored-row > .de-button:not(.de-button--primary):hover { background: ${t.color.bgRaisedHover}; } }
 
 
 /*
@@ -667,10 +702,10 @@ export const lintCss = `/* ---------- design system audit ---------- */
  * alpha rather than a colour of its own — a progress indicator that introduces
  * a new hue reads as a state change, which is the one thing this is not.
  *
- * SIX BASE RUNGS, not a number of its own: an indeterminate loop has no
- * duration to be correct about, so it takes the ramp's slowest step multiplied
- * rather than a literal, and stays in agreement with everything else if the
- * ramp ever moves. Fast enough to read as activity, slow enough not to nag.
+ * SIX REVEAL RUNGS, not a number of its own: an indeterminate loop has no
+ * duration to be correct about, so it takes \`reveal\` multiplied rather than a
+ * literal, and stays in agreement with everything else if the ramp ever
+ * moves. Fast enough to read as activity, slow enough not to nag.
  *
  * Reduced motion keeps both statements and drops the movement — the sweep
  * becomes a still wash and the rows a flat tint, so the surface still says "not
@@ -681,28 +716,33 @@ export const lintCss = `/* ---------- design system audit ---------- */
   content: "";
   position: absolute; inset: 0;
   background: linear-gradient(90deg, transparent, ${t.color.borderStrong}, transparent);
-  animation: de-lint-sweep calc(${t.duration.base} * 6) linear infinite;
+  animation: de-lint-sweep calc(${t.duration.reveal} * 6) linear infinite;
   pointer-events: none;
 }
 @keyframes de-lint-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
-/* \`space.sm\`, matching \`.de-lib-scan\`. Two loading skeletons in adjacent
+/* Each rest is a finding row's exact box — 8px pad, the value line, the 4px
+   row gap, the \`file:line\` line, 8px pad — so the list lands where the rests
+   were and nothing moves (kit: skeletons in the loaded geometry).
+
+   \`space["2xs"]\`, matching \`.de-lib-scan\`. Two loading skeletons in adjacent
    sections of one panel were running at two rhythms — 2px here against 4px
    there — so the same "we are fetching" idea read as two different treatments
    depending on which section you were looking at. Row HEIGHT can legitimately
    differ (a lint row is one line, a library candidate is four); the pulse
    cadence and the gap are the vocabulary and should not. */
-.de-lint-skeleton { display: flex; flex-direction: column; gap: ${t.space.sm}px; padding: ${t.space.sm}px 0; }
+.de-lint-skeleton { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; padding: ${t.space["2xs"]}px 0; }
 .de-lint-skeleton-row {
-  height: ${t.size.sectionHeader}px;
-  border-radius: ${t.radius.lg};
+  height: ${2 * t.space.sm + 2 * LINE + t.space["2xs"]}px;
+  /* The row's own corner: a loader takes the radius of what it stands in for. */
+  border-radius: ${t.radius["5xl"]};
   background: ${t.color.bgHoverQuiet};
-  animation: de-lint-breathe calc(${t.duration.base} * 6) ${t.ease} infinite;
+  animation: de-lint-breathe calc(${t.duration.reveal} * 6) ${t.ease} infinite;
 }
 /* Staggered by a third of the loop each, so the three read as one group
    waiting rather than three rows blinking in time. */
-.de-lint-skeleton-row:nth-child(2) { animation-delay: calc(${t.duration.base} * -2); }
-.de-lint-skeleton-row:nth-child(3) { animation-delay: calc(${t.duration.base} * -4); }
+.de-lint-skeleton-row:nth-child(2) { animation-delay: calc(${t.duration.reveal} * -2); }
+.de-lint-skeleton-row:nth-child(3) { animation-delay: calc(${t.duration.reveal} * -4); }
 @keyframes de-lint-breathe { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.35; } }
 
 @media (prefers-reduced-motion: reduce) {

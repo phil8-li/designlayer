@@ -1,6 +1,7 @@
 /** Floating bottom toolbar, drawn as one pill, plus its controls and tooltips. */
 
 import { tokens as t, accentFill, accentFillHover, accentFillText, accentFillTextHover, nest } from "../tokens"
+import { FOCUS_OUTLINE, PRESS } from "./panels"
 
 /*
  * The strip's geometry, written here rather than added to the token file.
@@ -25,11 +26,11 @@ const TOOL = 32
  * It was a bare `2` — on the scale by coincidence, and nothing said so. The row
  * was measurably tight at that step: ten glyphs 2px apart read as one continuous
  * strip of ink rather than as ten targets, and the cluster breaks had to do all
- * the parting on their own. `space.sm` is one rung up and the same rung the
+ * the parting on their own. `space["2xs"]` is one rung up and the same rung the
  * pill's own inset sits on, so the air around a square now matches the air
  * between two of them.
  */
-const GAP = t.space.sm
+const GAP = t.space["2xs"]
 
 /**
  * The pill's hairline, named because the nest below has to count it.
@@ -38,23 +39,12 @@ const GAP = t.space.sm
  * pill's curve and the squares' — see `nest` in tokens.ts, which was written
  * after this bar spent its whole life one pixel out of true.
  *
- * Its COLOUR is `tokens.color.border`, and the retune left it alone on purpose.
- * The obvious worry was that a hairline tuned against a near-black ground would
- * disappear against `#2c2c2c`, and it does not: `border` is `rule(14)`, a mix
- * with the ground rather than a fixed grey, so the step is re-cut whenever the
- * ground moves. Measured 1.54:1 against the old `#1c1d21` and 1.56:1 against
- * the new ground — the same line. What actually improved is the thing the line
- * is there to help with: this pill floats over an app of unknown colour, and
- * against a dark page its ground went from 1.01:1 (invisible) to 1.19:1. The
- * 3:1 of WCAG 1.4.11 is not the floor here — the pill is a container, its
- * controls are the components, and what identifies it is an opaque ground plus
- * `shadow.float`, not this rule.
- *
- * (Both app-page numbers are against `#1e1e1e`, which is the ground a dark app
- * is most likely to be sitting at; against pure black it is 1.25:1 then and
- * 1.50:1 now. The retune made the pill easier to find over a dark page and
- * slightly harder over a white one — 16.84:1 to 13.97:1, which is nowhere near
- * anything that matters.)
+ * Its COLOUR is `tokens.color.border`, the kit's structural divider: paper at
+ * 10% in dark, a mix rather than a fixed grey, so the step is re-cut whenever
+ * the ground moves; `#e9edf0` in light. 1.32:1 and 1.18:1 against the bar's
+ * ground. The 3:1 of WCAG 1.4.11 is not the floor here — the pill is a
+ * container, its controls are the components, and what identifies it over an
+ * app of unknown colour is an opaque ground plus `shadow.float`, not this rule.
  */
 const HAIRLINE = 1
 
@@ -62,13 +52,13 @@ const HAIRLINE = 1
  * The pill, its padding, and the radius every square inside it wears — one
  * decision, because they are not separable.
  *
- * `radius.xl` outside and a `space.sm` gap to the squares leaves `radius.lg`
+ * `radius["3xl"]` outside and a `space["2xs"]` gap to the squares leaves `radius.lg`
  * inside: a step on the ramp, and the radius the squares already wore. What
  * moved is the PADDING. It now reads one pixel under the spacing step because
  * the border takes that pixel, so the distance between the two CURVES is the 4
  * the scale asked for rather than the 5 the box model was quietly using.
  */
-const BAR = nest({ of: ".de-toolbar", outer: t.radius.xl, inset: t.space.sm, hairline: HAIRLINE })
+const BAR = nest({ of: ".de-toolbar", outer: t.radius["3xl"], inset: t.space["2xs"], hairline: HAIRLINE })
 
 /**
  * The bar's height, stated once because something else now has to match it.
@@ -93,21 +83,21 @@ const LIFT = t.shadow.float
 /**
  * How long the bar takes to stand down, and it is only a fade.
  *
- * ${t.duration.fast}. The editor collapses by getting out of the way, not by going anywhere:
+ * ${t.duration.hover}. The editor collapses by getting out of the way, not by going anywhere:
  * the bar fades out where it stands, the panels slide off their own edges, and
  * the disc appears in its corner. Nothing travels and nothing changes shape, so
  * there is nothing for a longer duration to describe — at this length the eye
  * reads "it went" rather than "it is going", which is the correct report for a
  * control pressed many times a session.
  *
- * This was briefly a 240ms morph: the pill contracting to a 44px disc and
+ * This was briefly a morph: the pill contracting to a 44px disc and
  * carrying itself to wherever the launcher was parked. It read as one
  * continuous object, and it cost the two surfaces their independence — they had
  * to share a position for the morph to have somewhere to land, so dragging
  * either moved both. Two surfaces you can park separately is worth more than a
  * quarter-second of continuity on a control this ordinary.
  */
-const DEPART = t.duration.fast
+const DEPART = t.duration.hover
 
 export const toolbarCss = `/* ---------- toolbar ---------- */
 /*
@@ -222,7 +212,7 @@ export const toolbarCss = `/* ---------- toolbar ---------- */
  *    theirs. Three surfaces exiting by three different edges is one motion too
  *    many for a toggle pressed this often.
  *  - A morph: the pill contracting to a 44px disc and carrying itself to
- *    wherever the launcher was parked, over ${t.duration.drawer}. It genuinely read as one
+ *    wherever the launcher was parked, over ${t.duration.resize}. It genuinely read as one
  *    continuous object, and the price was that the bar and the disc had to
  *    SHARE a position for the morph to have somewhere to land — so dragging
  *    either moved both, and neither could be parked on its own. Two surfaces
@@ -271,7 +261,7 @@ html.designlayer-chrome-hidden .de-toolbar {
  * withdrawn for the same reason. First a hairline, on the condition that a break
  * marked a change in STAKES — screen on one side, disk on the other — which
  * stopped being true when the last control that wrote to a file left. Then air
- * alone, ${GAP}px inside a cluster against ${t.space.lg} between, which parts squares from
+ * alone, ${GAP}px inside a cluster against ${t.space.md} between, which parts squares from
  * squares but cannot say which of the breaks means more than the others.
  *
  * Every control here is a 32px square and there are eight of them. A run that
@@ -291,22 +281,36 @@ html.designlayer-chrome-hidden .de-toolbar {
  * ${t.size.toolSize} is already the largest square that fits a row. So this rule stays as
  * the panels need it and the bar's own version is the override below.
  */
+/*
+ * FULL INK AT REST (MICRO-INTERACTIONS § 5). An icon-only control's glyph is its
+ * whole label, so it wears \`text\` in every state; the old \`textMuted\` resting
+ * ink read as disabled next to a real disabled square. Hover is the surface
+ * alone now, which is the kit's ghost wash, and the only thing the pointer
+ * changes. The property list is explicit, never \`all\`, so a layout change
+ * cannot animate by accident.
+ */
 .de-tool {
   width: ${t.size.toolSize}px; height: ${t.size.toolSize}px;
   display: inline-flex; align-items: center; justify-content: center;
-  border: none; border-radius: ${t.radius.md};
-  background: transparent; color: ${t.color.textMuted};
+  border: none; border-radius: ${t.radius.sm};
+  background: transparent; color: ${t.color.text};
   cursor: pointer;
+  transition:
+    background-color ${t.duration.hover} ${t.ease},
+    color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
-/* The quiet rung, and it survived the ground moving. \`bgHoverQuiet\` is a mix
-   WITH the ground, so the step is cut fresh whenever the ground is: it measured
-   1.30:1 against the old near-black and measures 1.33:1 against \`#2c2c2c\` — the
-   same tint, not a tint that faded. Figma's own hover is \`#444444\`, one rung up
-   at \`bgHover\` (1.46:1); moving to it would have to move the pressed-toggle
-   hover below in the same breath, since a toggle that hovers differently from
-   its neighbours reads as a different kind of control, and that pair is shared
-   with every \`iconButton\` in the panels. */
-.de-tool:hover { background: ${t.color.bgHoverQuiet}; color: ${t.color.text}; }
+/* The quiet rung: the kit's row hover (\`--chrome-hover\` in dark, \`--muted\` in
+   light). \`bgHover\` is one rung up; moving to it would have to move the
+   pressed-toggle hover below in the same breath, since a toggle that hovers
+   differently from its neighbours reads as a different kind of control, and
+   that pair is shared with every \`iconButton\` in the panels. */
+@media (hover: hover) and (pointer: fine) {
+  .de-tool:hover { background: ${t.color.bgHoverQuiet}; }
+}
+/* An open menu holds its trigger's hover paint, so the trigger reads as "this one". */
+.de-tool:is([aria-expanded="true"], [data-state="open"]) { background: ${t.color.bgHoverQuiet}; }
 /*
  * ON for a square in neither the bar nor a panel — the fallback both of those
  * override, and the last rule here still drawing with the canvas's paint.
@@ -315,37 +319,38 @@ html.designlayer-chrome-hidden .de-toolbar {
  * the overlay drawn ON TOP of a selected element, where the page under review
  * has to show through. Nothing shows through a button, and a wash resolves to a
  * different colour on every ground it lands on — the exact failure \`accentSoft\`
- * was made opaque to end. Over the bar's ground the wash comes out \`#3a4751\`
- * against \`accentSoft\`'s \`#4a5878\`: a desaturated teal-grey beside Figma's
- * violet-grey selection tint, near enough to read as a mistake and far enough
- * to read as a second colour.
+ * was made opaque to end.
  *
  * So the fallback now says what the two rules that actually get reached say.
- * \`.de-panel .de-tool[aria-pressed="true"]\` is already this pairing — a tinted
- * plate under accent ink, Figma's treatment for a standalone on/off — and the
- * bar's own override below is the solid fill, which a ${TOOL}px square in a row of
- * eight has the room to carry. The mark measures 3.76:1 on the plate in dark
- * and 3.77:1 in light, against the 3:1 a glyph is owed — the two themes land on
- * the same ratio because both pairings are now Figma's own published
- * \`icon-brand\` on its own \`bg-selected\`.
+ * \`.de-panel .de-tool[aria-pressed="true"]\` is already this pairing — the kit's
+ * indigo container under accent ink — and the bar's own override below is the
+ * solid fill, which a ${TOOL}px square in a row of eight has the room to carry.
+ * The mark measures 3.53:1 on the plate in dark and 5.92:1 in light, against
+ * the 3:1 a glyph is owed.
  */
 .de-tool[aria-pressed="true"] { background: ${t.color.accentSoft}; color: ${t.color.accent}; }
-.de-tool:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+/* The kit's keyboard ring: the edge in the accent plus a 3px accent halo. */
+.de-tool:focus-visible { ${FOCUS_OUTLINE} }
+/*
+ * THE PRESS (MICRO-INTERACTIONS § 1): a 2% dip, on every square in the chrome
+ * rather than on the bar's alone. Not on a disabled control, which must not
+ * answer a press it will not honour, and not on a menu trigger, whose menu
+ * opening IS the feedback.
+ */
+.de-tool:active:not([disabled]):not([aria-haspopup]) { ${PRESS} }
 /* Ink, not opacity — see \`textDisabled\`. A fade takes the glyph and the square
    under it down together, so what survives depends on whatever is behind the
-   button; naming the ink leaves the fill where the theme put it. Remeasured on
-   the retuned ground, because the number that stood here was read off the old
-   near-black one: 6.35:1 on the bar's \`#2c2c2c\` and 4.88:1 on paper. That
-   clears both floors the one role has to serve — 3:1 for a mark, and the 4.5:1
+   button; naming the ink leaves the fill where the theme put it. 7.44:1 on the
+   dark ground and 5.77:1 on paper. That clears both floors the one role has to serve — 3:1 for a mark, and the 4.5:1
    owed to the disabled LABEL it also draws on \`.de-button\` below. */
 .de-tool[disabled] { color: ${t.color.textDisabled}; cursor: default; }
 
 /*
  * The same button in the bar, where it has room and no row to line up with.
  *
- * Three ink tiers, and no two of them step in the same currency: resting is
- * muted ink on the bar's own ground, hover adds a surface AND takes the ink to
- * full, and ON is the accent as a fill. A state told apart from its neighbour by
+ * Three tiers, and no two of them step in the same currency: resting is full
+ * ink on the bar's own ground, hover adds a surface under the same ink, and ON
+ * is the accent as a fill. A state told apart from its neighbour by
  * hue alone would be no state at all at a glance, so every step changes
  * something that does not require holding two swatches side by side.
  *
@@ -354,21 +359,15 @@ html.designlayer-chrome-hidden .de-toolbar {
  * wash was paying for a transparency nobody needed and reading as a hover that
  * had got stuck.
  *
- * WHAT THE FILL IS, AND WHY IT IS NOT PALE ANY MORE
+ * WHAT THE FILL IS
  *
- * \`accentSurface\` is \`#0c8ce9\`, Figma's published \`bg-brand\` — the fill under
- * its own selected tool — under a WHITE mark. Both halves of that pair moved together and
- * both had to: the fill was the design system's light indigo \`#a1bbff\` beneath
- * near-black ink, which is a pale plate with a dark glyph on it — the washed-out
- * chip this bar was reported for, and the reason \`onAccent\` is now white in
- * both themes rather than flipping with the theme the way this note used to say.
+ * \`accentSurface\` is the kit's indigo — \`#4a5df9\` (\`--hue-indigo\`) in dark,
+ * \`#3849da\` (\`--ring\`) in light — under a WHITE mark, in both themes. A pale
+ * plate under dark ink is the washed-out chip this bar was reported for.
  *
- * Measured: the plate stands 3.95:1 clear of the bar's ground in dark and
- * 4.23:1 clear of paper, past the 3:1 WCAG 1.4.11 asks of a state you have to
- * be able to see. The mark on it is 3.53:1 dark and 4.23:1 light — past the 3:1
- * a glyph is owed, and deliberately short of the 4.5:1 a WORD is owed, which is
- * why a fill carrying a label takes \`accentFillText\` instead and this one never
- * gets a label put on it.
+ * Measured: the plate stands 3.61:1 clear of the bar's ground in dark and
+ * 6.70:1 clear of paper, past the 3:1 WCAG 1.4.11 asks of a state you have to
+ * be able to see. The mark on it is 4.97:1 dark and 6.70:1 light.
  *
  * Still emitted as a pair. A rule that sets one half is a rule that can leave
  * the other behind — see \`accentFill\` and the \`onAccent\` row in tokens.ts, and
@@ -380,13 +379,11 @@ html.designlayer-chrome-hidden .de-toolbar {
 .de-toolbar .de-tool {
   width: ${TOOL}px; height: ${TOOL}px;
   border-radius: ${BAR.radius};
-  transition:
-    background ${t.duration.fast} ${t.ease},
-    color ${t.duration.fast} ${t.ease},
-    transform ${t.duration.snap} ${t.ease};
 }
 .de-toolbar .de-tool[aria-pressed="true"] { ${accentFill} }
-.de-toolbar .de-tool[aria-pressed="true"]:hover { ${accentFillHover} }
+@media (hover: hover) and (pointer: fine) {
+  .de-toolbar .de-tool[aria-pressed="true"]:hover { ${accentFillHover} }
+}
 /*
  * The two panel toggles opt OUT of the chip, and report themselves in the mark.
  *
@@ -410,36 +407,22 @@ html.designlayer-chrome-hidden .de-toolbar {
  * pressed toggle sat permanently at the ink its neighbours only reach under the
  * pointer, and the row read as though two buttons were being hovered at once.
  *
- * Solid-or-hollow needs no reference and no second colour. The ink is the
- * rung's own \`textMuted\` in both states, and hover still takes it to \`text\` in
- * both — so the one thing colour says here is "the pointer is on me", which is
- * the only thing it says anywhere else in the bar.
+ * Solid-or-hollow needs no reference and no second colour. The ink is full
+ * \`text\` in both states, as every icon-only control's is (MICRO-INTERACTIONS
+ * § 5), and hover changes only the surface — so the one thing that moves here
+ * says "the pointer is on me", which is all it says anywhere else in the bar.
  *
  * After the two rules above, not before: same specificity, so this wins only by
  * sitting later in the sheet.
  */
 .de-toolbar .de-tool--quiet[aria-pressed="true"] {
   background: transparent;
-  color: ${t.color.textMuted};
-}
-.de-toolbar .de-tool--quiet[aria-pressed="true"]:hover {
-  background: ${t.color.bgHoverQuiet};
   color: ${t.color.text};
 }
-/*
- * The press, which every control in this bar now needs and none of them had.
- *
- * A row of nine glyphs answers hover with a tint, and a tint is also what a
- * pressed toggle wears — so on the toggles the only feedback for the press
- * ITSELF was the state arriving, which lands a frame or two later and is
- * indistinguishable from a click that missed. 6% at ${TOOL}px is about 2px of
- * travel: below that the press cannot be felt, above it the glyph starts to
- * look like it is being pushed through the bar.
- *
- * Not on a disabled control. A button that cannot act must not answer a press
- * as though it did — that is the one case where the feedback would be a lie.
- */
-.de-toolbar .de-tool:active:not([disabled]) { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .de-toolbar .de-tool--quiet[aria-pressed="true"]:hover { background: ${t.color.bgHoverQuiet}; }
+}
+/* The press lives on \`.de-tool\` above now, at the kit's 0.98, for every square. */
 
 /*
  * The commit, armed: accent as INK, never as a fill.
@@ -454,12 +437,11 @@ html.designlayer-chrome-hidden .de-toolbar {
  * So the difference is carried in the ink, and the thing it reports is not a
  * state but a READINESS: \`textDisabled\` while there is nothing to write,
  * \`accent\` the moment a change is waiting. The pair used to be two opacities —
- * 35% against 75% — which is the technique \`textDisabled\` exists to replace,
- * and the ratios once quoted here were read off the old near-black ground.
- * Remeasured on \`#2c2c2c\`: 6.35:1 for the dead state, 7.41:1 for the armed one.
+ * 35% against 75% — which is the technique \`textDisabled\` exists to replace.
+ * On the dark ground: 7.44:1 for the dead state, 4.68:1 for the armed one.
  *
- * Both of those are comfortably readable and they are close in LUMINANCE, so
- * the thing separating them is hue — a grey mark against a blue one. That is
+ * Both of those are readable and neither is a brighter version of the other,
+ * so the thing separating them is hue — a grey mark against an indigo one. That is
  * weaker than the rest of this bar's steps by design here (the fill is taken,
  * see above), and it is the one place in the toolbar where a reader who cannot
  * sort blue from grey gets no second cue. Nothing renders this rule today: the
@@ -468,117 +450,81 @@ html.designlayer-chrome-hidden .de-toolbar {
  */
 .de-toolbar .de-tool--commit:not([disabled]) { color: ${t.color.accent}; }
 
+/*
+ * THE CHROME'S SHARED TEXT BUTTON, as the kit's secondary action at editor
+ * density: the row's 24px height and 12px type, the kit's xs button geometry
+ * (\`space.md\` sides, a \`space["2xs"]\` glyph gap) and the ACTION BUTTON corner,
+ * \`radius["2xl"]\`, which every text button shares. At 24 tall that corner is
+ * past half the height, so the button is a pill and opts out of the squircle in
+ * \`css/base.ts\` like every other pill.
+ *
+ * The fill is the kit's \`--secondary\`: \`bgHover\` resolves to it in light and to
+ * the same 12% wash \`bgRaised\` was in dark. \`bgRaised\` is white in light, so on
+ * a white panel the old fill was no fill at all.
+ */
 .de-button {
-  /* The row rung, named. It was a bare 24 and would have stopped tracking the
-     scale silently the next time that rung moved. */
   height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.md}px;
-  display: inline-flex; align-items: center; gap: ${t.space.md}px;
-  border: none; border-radius: ${t.radius.md};
-  background: ${t.color.bgRaised}; color: ${t.color.text};
+  display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px;
+  border: none; border-radius: ${t.radius["2xl"]};
+  background: ${t.color.bgHover}; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
+  /* A label on one line, as the kit's action is: a pill that wraps is two. */
+  white-space: nowrap;
   cursor: pointer;
-  transition: transform ${t.duration.snap} ${t.ease}, background ${t.duration.fast} ${t.ease};
+  transition:
+    background-color ${t.duration.hover} ${t.ease},
+    color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
+/* The kit's press, the same 0.98 as \`.de-tool\` and with the same two guards. */
+.de-button:active:not([disabled]):not([aria-haspopup]) { ${PRESS} }
 /*
- * THE PRESS, which this button did not answer at all.
- *
- * \`.de-tool\` above already carries this and already carries the argument: "on
- * the toggles the only feedback for the press ITSELF was the state arriving,
- * which lands a frame or two later and is indistinguishable from a click that
- * missed". \`.de-button\` is the chrome's shared TEXT button — Fix and Ignore in
- * the lint panel, Send and Write in the notes tab, the options actions — so it
- * labels the things that write files and delete rows, and it was the one
- * pressable surface in the editor that looked identical held down and at rest.
- *
- * Same value as the tool, deliberately: 0.96 is inside the sheet's 0.95–0.98
- * band, and two different press depths in one bar would read as two different
- * kinds of control.
- *
- * \`:not([disabled])\` because a disabled button must not answer a press it is
- * not going to honour — the same guard \`.de-tool:active\` uses.
- */
-.de-button:active:not([disabled]) { transform: scale(0.96); }
-/*
- * A GLYPH CARRIES ITS OWN MARGIN, so the padding beside it has to come off.
- *
- * Symmetric padding on an icon+label button reads as MORE air on the icon side:
- * the word starts where its ink starts, while a 12px glyph is drawn inside a
- * 12px box with its own optical clearance already in it. The bar knew this
- * once — the note further down this file records the pill that trimmed its
- * leading pad and says the argument has to be remade by whatever puts a word
- * back in the bar. This is that, generalised.
- *
- * \`:has()\` rather than a modifier class, so no call site has to opt in and a
- * button that gains or loses a glyph cannot forget to change its class.
- *
- * It is a whole STEP down rather than the nudge the rule asks for, and that is
- * the kit's ramp talking rather than a preference: \`space\` goes 2, 4, 8, and
- * the 6px this wants does not exist. \`token-cases.mjs\` rejects it on sight,
- * and it is right to — the alternative is one exempted literal that every later
- * off-scale value gets to point at. So \`sm\`, and the trim reads as deliberate
- * instead of as a rounding error. A 12px glyph carries roughly a pixel of its
- * own clearance inside its box, so 4px of padding still leaves about 5px of
- * apparent air against the word's 8.
+ * A GLYPH CARRIES ITS OWN MARGIN, so the padding beside it comes off by a step:
+ * a 12px glyph is drawn inside its box with its own optical clearance, so
+ * symmetric padding reads as more air on the icon side. \`:has()\` so no call
+ * site has to opt in. \`space.sm\` against the word side's \`space.md\`.
  */
 .de-button:has(> svg[data-de-glyph]:first-child) { padding-left: ${t.space.sm}px; }
-/*
- * A hover has to move AWAY from the surface it lifts off, and in dark this one
- * used to move toward it.
- *
- * The retune put \`bgRaised\` at \`lift(14)\` = \`#4a4a4a\` — a popover sits a clear
- * step above the control layer, which is right — while \`bgHover\` stayed at
- * \`lift(12)\` = \`#454545\`, BELOW it. So a plain pill in the dark chrome got very
- * slightly darker when you pointed at it: 1.08:1, in the wrong direction. Light
- * was unaffected, because paper recesses and \`#ffffff\` to \`#eaeaea\` is already
- * the right way.
- *
- * \`bgRaisedHover\` is the role that was missing — the relationship \`fieldHover\`
- * has to \`field\`, applied one rung up. Borrowing \`fieldHover\` itself would have
- * been two surfaces answering to one name.
- */
-.de-button:hover { background: ${t.color.bgRaisedHover}; }
+/* The hover is the kit's \`--secondary-hover\`, and an open menu holds it. */
+@media (hover: hover) and (pointer: fine) {
+  .de-button:hover { background: ${t.color.secondaryHover}; }
+}
+.de-button:is([aria-expanded="true"], [data-state="open"]) { background: ${t.color.secondaryHover}; }
 /*
  * A filled button takes its ink from the fill's own pair rather than inheriting
- * the shell's, and it takes the DARKER of the two accent fills because it is
- * carrying a word.
+ * the shell's, through the fill role meant for a WORD.
  *
- * \`accentFillText\` is \`#0a6dc2\` dark and \`#0768cf\` light — Figma's published
- * \`bg-brand-hover\` and \`bg-brand-secondary\`, one rung down each theme's brand
- * ramp. Under white they measure 5.28:1 and 5.40:1, clearing the 4.5:1 a 12px
- * label is owed. The fill the squares above wear is 3.53:1 dark and 4.23:1
- * light: right for a glyph, not for a word. Two roles rather than one
- * compromise blue; see \`RAIL_FILL_TEXT\`.
+ * \`accentFillText\` is the kit's indigo — \`#4a5df9\` dark, \`#3849da\` light —
+ * the same rungs the squares above wear, because both already clear the 4.5:1
+ * a 12px label is owed: white on them is 4.97:1 and 6.70:1. The role stays
+ * separate so a word's floor is its own decision.
  *
- * This note used to say the dark pair was a light indigo under near-black ink
- * at 1.9:1. That was true of the palette before the retune and is not true of
- * anything now: both themes put WHITE on a saturated blue.
- *
- * The hover defect this note used to report is fixed. \`accentFillHover\` is
- * derived from the GLYPH fill and is therefore lighter, so using it here walked
- * the label toward the white ink sitting on it and under the floor;
- * \`accentFillTextHover\` takes the same \`color-mix(in srgb, INK 14%, …)\` step
- * from the darker fill instead, and the label ends at 6.35:1 dark and 6.45:1
- * light — further clear of the floor hovered than at rest.
+ * \`accentFillTextHover\` takes a \`color-mix(in srgb, INK 14%, …)\` step down,
+ * and the label ends at 6.10:1 dark and 7.96:1 light — further clear of the
+ * floor hovered than at rest.
  */
 .de-button--primary { ${accentFillText} }
-.de-button--primary:hover { ${accentFillTextHover} }
+@media (hover: hover) and (pointer: fine) {
+  .de-button--primary:hover { ${accentFillTextHover} }
+  .de-button--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
+}
 /*
  * The fill AND the ink, because swapping one without the other is the bug.
  *
- * This declared the background alone, so the label kept \`.de-button\`'s
- * \`color: text\` — white — and \`danger\` is a light coral on this chrome.
- * "Delete" and "Remove default" measured 2.31:1 dark and 2.93:1 light for the
- * whole of the hover: the word vanished at exactly the moment the button became
- * destructive, which is the moment it most needs reading.
+ * Declaring the background alone leaves the label on \`.de-button\`'s
+ * \`color: text\`, and \`danger\` is a light coral in dark and a deep red in
+ * light: "Delete" and "Remove default" would measure 2.77:1 dark and 3.15:1
+ * light for the whole of the hover — the word fading at exactly the moment the
+ * button becomes destructive, which is the moment it most needs reading.
  *
  * \`onSemantic\` is the ink for a semantic fill, and it flips with the theme the
- * way these hues do. 7.52:1 dark, 5.94:1 light. Emitted as a pair rather than
+ * way these hues do. 6.61:1 dark, 6.07:1 light. Emitted as a pair rather than
  * left to inheritance, which is what \`accentFillText\` does two lines up and for
  * the same reason: a fill and its ink are one decision, and a rule that makes
  * half of it hands the other half to whatever happened to be inherited.
  */
-.de-button--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 /*
  * No pressed treatment for the text pill any more.
  *
@@ -605,18 +551,12 @@ html.designlayer-chrome-hidden .de-toolbar {
  * breath. Fill and ink are one decision; every rule that touches one of them
  * alone is a rule that can put unreadable text on screen.
  *
- * \`textDisabled\` on \`bgRaised\` — the role this rule actually names, where the
- * note here used to say \`textDim\` and quote ratios read off the old near-black
- * ground. Remeasured: 4.58:1 in dark and 4.88:1 in light, against the enabled
- * pill's 8.86:1 and 17.40:1. So it still reads as switched off, and it still
- * reads. Dark is the tight one, four hundredths over the floor, and it is tight
- * because \`bgRaised\` climbed to \`#4a4a4a\` in the retune; if that rung moves up
- * again this pairing is the first thing that fails. WCAG would let the whole
- * question go — 1.4.3 exempts an inactive control from contrast entirely — and
- * the chrome does not take the exemption, here or anywhere: a disabled Send is
- * the state a designer stares at while working out what the button still wants
- * from them, and "you cannot press this" is not the same message as "you cannot
- * read this".
+ * \`textDisabled\` on the resting \`bgHover\` fill, so a disabled button keeps its
+ * silhouette and only its ink steps down. In dark that ground is the 12% wash
+ * \`bgRaised\` was, so the dark ratio the token suite pins is unchanged. WCAG
+ * would let the whole question go — 1.4.3 exempts an inactive control — and the
+ * chrome does not take the exemption: a disabled Send is the state a designer
+ * stares at while working out what the button still wants from them.
  *
  * No \`opacity\`: it dims the fill and the ink by the same factor, which is what
  * let the two drift together in the first place, and it would fade the focus
@@ -624,10 +564,10 @@ html.designlayer-chrome-hidden .de-toolbar {
  */
 .de-button[disabled] {
   cursor: default;
-  background: ${t.color.bgRaised};
+  background: ${t.color.bgHover};
   color: ${t.color.textDisabled};
 }
-.de-button:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-button:focus-visible { ${FOCUS_OUTLINE} }
 
 /*
  * Nothing in the bar wears \`.de-button\` any more, and three rules went with the

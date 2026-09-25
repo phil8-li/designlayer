@@ -212,7 +212,7 @@ function noteOn(element, comment) {
   assert.ok(box, "no composer opened for the note")
   box.querySelector("textarea").value = comment
   Array.from(box.querySelectorAll("button"))
-    .find((b) => b.textContent === "Save")
+    .find((b) => b.textContent === "Save note")
     .dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
   editor.setState({ annotating: false })
 }
@@ -362,7 +362,7 @@ await check("clicking a note pin still reopens its composer", async () => {
   assert.equal(box.querySelector("textarea").value, "Reopen me")
   box.querySelector("textarea").value = "Rewritten"
   Array.from(box.querySelectorAll("button"))
-    .find((b) => b.textContent === "Save")
+    .find((b) => b.textContent === "Save note")
     .dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
   assert.equal(editor.annotations()[0].comment, "Rewritten")
   // The rewrite is a step too.

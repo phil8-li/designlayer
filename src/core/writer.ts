@@ -926,9 +926,9 @@ export function createWriter(bridge: RewriteBridge): Writer {
       if (dropped.length === 0) {
         bridge.toast(summary, "info")
       } else if (dropped.length === writes.length) {
-        bridge.toast(`${summary} — preview only (${dropped.join(", ")})`, "error")
+        bridge.toast(`${summary}: preview only (${dropped.join(", ")})`, "error")
       } else {
-        bridge.toast(`${summary} — ${dropped.join(", ")} is preview only`, "error")
+        bridge.toast(`${summary}: ${dropped.join(", ")} is preview only`, "error")
       }
     },
 
@@ -1030,7 +1030,7 @@ export function createWriter(bridge: RewriteBridge): Writer {
           },
         ]
       )
-      bridge.toast(`Swapped to ${variant.name} — preview only`, "info")
+      bridge.toast(`Swapped to ${variant.name}, preview only`, "info")
     },
 
     applyAttribute(selection, name, value, target) {
@@ -1078,7 +1078,7 @@ export function createWriter(bridge: RewriteBridge): Writer {
         },
         [{ property, from: before ?? "", to: value ?? "", element, written: false }]
       )
-      bridge.toast(`${summary} — preview only`, "info")
+      bridge.toast(`${summary}: preview only`, "info")
     },
 
     applyDelete(selections) {
@@ -1191,9 +1191,9 @@ export function createWriter(bridge: RewriteBridge): Writer {
       if (dropped.length === 0) {
         bridge.toast(summary, "info")
       } else if (dropped.length === total) {
-        bridge.toast(`${summary} — preview only (${names.join(", ")})`, "error")
+        bridge.toast(`${summary}: preview only (${names.join(", ")})`, "error")
       } else {
-        bridge.toast(`${summary} — ${names.join(", ")} is preview only`, "error")
+        bridge.toast(`${summary}: ${names.join(", ")} is preview only`, "error")
       }
     },
 

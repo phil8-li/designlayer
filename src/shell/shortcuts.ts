@@ -61,6 +61,7 @@ import { createWriter } from "../core/writer"
 import { tokens } from "../core/tokens"
 import { icon } from "../core/icons"
 import type { EditorContext } from "../core/context"
+import { plural } from "../core/format"
 
 /**
  * The display an element had before ⇧⌘H hid it.
@@ -183,7 +184,7 @@ export function installShortcuts(context: EditorContext): void {
       writer.applyStyles(entry, [{ property: "display", value }], hidden ? "Show" : "Hide")
     }
     context.refresh()
-    context.toast(hid ? `Hid ${hid}` : "Shown")
+    context.toast(hid ? `Hid ${plural(hid, "layer")}` : `Showed ${plural(selection.length, "layer")}`)
   })
 
   /**
@@ -421,8 +422,8 @@ function shortcutsPanel(): ShortcutsPanel {
 
     const close = el(
       "button",
-      { class: "de-shortcut-close", type: "button", "aria-label": "Close" },
-      [icon("X", tokens.icon.control)]
+      { class: "de-shortcut-close", type: "button", "aria-label": "Close keyboard shortcuts" },
+      [icon("X", tokens.icon.action)]
     )
     close.addEventListener("click", () => hide())
 
@@ -462,7 +463,7 @@ function shortcutsPanel(): ShortcutsPanel {
           el("p", { class: "de-shortcut-note" }, [
             // The whole contract in one sentence, where the person who is about
             // to press a key will read it.
-            `Figma’s keys. When the editor is collapsed, keys go to your page — except ${isMac() ? "⌘." : "Ctrl+."}, which brings it back. Esc closes, then deselects, then collapses.`,
+            `Figma’s keys. When the editor is collapsed, keys go to your page, except ${isMac() ? "⌘." : "Ctrl+."}, which brings it back. Esc closes, then deselects, then collapses.`,
           ]),
           close,
         ]),

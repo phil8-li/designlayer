@@ -35,8 +35,8 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
  */
 const EXPENSIVE = ["width", "max-width", "height", "max-height", "top", "left", "right", "bottom", "margin", "padding", "border-width"]
 
-/** Properties the compositor can animate on its own thread. */
-const CHEAP = ["opacity", "transform", "scale", "translate", "rotate", "filter", "box-shadow", "color", "background", "background-color", "border-color", "outline", "grid-template-rows", "display", "visibility", "stroke-width"]
+/** Properties the compositor can animate on its own thread, plus the discrete top-layer pair (`display`, `overlay`) a dialog exit keeps alive. */
+const CHEAP = ["opacity", "transform", "scale", "translate", "rotate", "filter", "box-shadow", "color", "background", "background-color", "border-color", "outline", "grid-template-rows", "display", "visibility", "overlay", "stroke-width"]
 
 async function collectCss() {
   const result = await build({

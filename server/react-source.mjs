@@ -489,7 +489,7 @@ export function createReactSource(config) {
           // one means "delete the branch".
           failed.push({
             operation,
-            reason: `<${found.node.tagName}> is not a child of another element — deleting it would leave invalid code`,
+            reason: `<${found.node.tagName}> is not inside another element, so deleting it would leave invalid code`,
           })
           continue
         }
@@ -558,7 +558,7 @@ export function createReactSource(config) {
         ) {
           failed.push({
             operation,
-            reason: `<${found.node.tagName}> is not a child of another element — nothing can sit beside it, so place it inside instead`,
+            reason: `<${found.node.tagName}> is not inside another element, so nothing can sit beside it. Place it inside instead`,
           })
           continue
         }

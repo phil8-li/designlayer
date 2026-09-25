@@ -51,7 +51,8 @@ function readIcons() {
   return new Function(`return ${literal}`)()
 }
 
-const STROKE_FOR_SIZE = { 10: 2.75, 12: 2.5, 16: 2.25, 20: 2.125, 24: 2, 32: 1.75 }
+// Mirrors `STROKE_FOR_SIZE` in src/core/icons.ts: the kit's flat 2-unit stroke on every rung.
+const STROKE_FOR_SIZE = { 12: 2, 14: 2, 16: 2, 18: 2, 20: 2, 24: 2 }
 
 /** The bar, in the order it is read. */
 const BAR = [

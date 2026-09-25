@@ -21,9 +21,11 @@
  * The second kind is a popover opened from a panel control — `.de-asset-details`
  * in `css/assets.ts`, `.de-token-popover` in `css/token-picker.ts` — which is
  * `position: fixed` in `document.body` with a z-index above `.de-root`. This
- * menu is the second kind, and shares their vocabulary exactly: `bgRaised` on
- * the `lg` corner, a hairline, and `shadow.popover`. A designer should not be
- * able to tell from the surface which lane built the card.
+ * menu is the second kind, and wears the kit's menu geometry exactly: `bgRaised`
+ * on the `3xl` (16px) corner, 6px of padding, 10px concentric rows, and
+ * `shadow.popover` — which already carries the one card-family hairline, so the
+ * card draws no border of its own. A designer should not be able to tell from
+ * the surface which lane built the card.
  *
  * ## Ordering
  *
@@ -48,14 +50,24 @@ import { tokens as t, nest } from "../tokens"
 const MENU_Z = 2147483250
 
 /**
- * The card's corner and the rows' corner, derived from one inset.
+ * The card's corner and the rows' corner, derived from one inset: the kit's
+ * menu (MICRO-INTERACTIONS § 6).
  *
- * `radius.lg` outside, a `space.sm` gap in, `radius.md` on the rows — which is
- * what they already wore. The padding is what changed: one pixel under the
- * spacing step, so the hairline the card draws is counted as part of the gap
- * between the two curves rather than added on top of it.
+ * `radius["3xl"]` (16) outside, a `space.xs` (6) gap in, `radius.md` (10) on the
+ * rows. No hairline in the arithmetic: the card's edge is the 1px ring inside
+ * `shadow.popover`, which is a shadow layer and takes no room, so the padding is
+ * the whole gap. A real border as well would have been a second ring and would
+ * have put the rows 7px inside a 16px curve, which lands off the ramp.
  */
-const MENU = nest({ of: ".de-app-menu", outer: t.radius.lg, inset: t.space.sm, hairline: 1 })
+const MENU = nest({ of: ".de-app-menu", outer: t.radius["3xl"], inset: t.space.xs })
+
+/**
+ * The keyboard focus ring, the kit's recipe: the edge takes the accent and a
+ * 3px halo of the accent at 30% sits outside it (MICRO-INTERACTIONS § 3). The
+ * mix is stated here from the token; it resolves to the same colour as
+ * `accentHalo`.
+ */
+const HALO = `color-mix(in srgb, ${t.color.accent} 30%, transparent)`
 
 /**
  * The margin the card keeps off the viewport, and the same number twice.
@@ -70,14 +82,14 @@ const MENU = nest({ of: ".de-app-menu", outer: t.radius.lg, inset: t.space.sm, h
  * scale would show up as a card one step too tall rather than as anything
  * anyone would look for here.
  *
- * \`space.md\`, and the step it replaces is the reason to name the failure here
- * rather than fix it silently: this read \`space.sm\`, which is 4, so the ceiling
+ * \`space.sm\`, and the step it replaces is the reason to name the failure here
+ * rather than fix it silently: this read \`space["2xs"]\`, which is 4, so the ceiling
  * came out \`100vh - 8px\` against a card positioned 8px off each edge. The card
  * was allowed to be 8px taller than the room it had, which is not enough to
  * notice and exactly enough to put the last row's lower half under the window
  * edge on the short viewport this ceiling exists for.
  */
-const MENU_EDGE = t.space.md
+const MENU_EDGE = t.space.sm
 
 export const appChooserCss = `/* ---------- app chooser ---------- */
 /*
@@ -91,7 +103,7 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  *
  * Full bleed rather than inset, because it is the panel's header and a header
  * with a margin reads as the first item in a list. The horizontal padding is
- * the \`lg\` step, the same inset \`.de-tabs\` gives its first pill, so the
+ * the \`md\` step, the same inset \`.de-tabs\` gives its first pill, so the
  * app's name and the selected tab's edge share one left line. At the
  * workhorse 8 the header read as cramped against the panel edge.
  *
@@ -100,10 +112,10 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  */
 .de-app-chooser {
   flex: none;
-  display: flex; align-items: center; gap: ${t.space.sm}px;
+  display: flex; align-items: center; gap: ${t.space["2xs"]}px;
   width: 100%;
   height: ${t.size.panelHeader}px;
-  padding: 0 ${t.space.lg}px;
+  padding: 0 ${t.space.md}px;
   border: none;
   border-bottom: 1px solid ${t.color.border};
   border-radius: 0;
@@ -112,17 +124,24 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
   text-align: left;
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease};
 }
-/* 32px is over the 24px line in the hover rule, so it takes the quiet step its
-   own ground asks for rather than the louder one small controls get. */
-.de-app-chooser:hover { background: ${t.color.bgHoverQuiet}; }
-/* Inset, because the row is full-bleed: an outward ring on a box flush with the
-   panel edge is a ring with one side drawn off the panel. */
+/* 44px is over the 24px line in the hover rule, so it takes the quiet step its
+   own ground asks for rather than the louder one small controls get. Hover
+   paint only on a real pointer, so a tap does not leave the band lit. */
+@media (hover: hover) and (pointer: fine) {
+  .de-app-chooser:hover { background: ${t.color.bgHoverQuiet}; }
+}
+/* The kit's focus ring, drawn INSIDE because the row is full-bleed: an outward
+   ring on a box flush with the panel edge is a ring with one side drawn off the
+   panel. The 1px edge and the 3px halo are both inset shadows for that reason. */
 .de-app-chooser:focus-visible {
-  outline: 2px solid ${t.color.accent};
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px ${t.color.accent}, inset 0 0 0 4px ${HALO};
 }
+/* The open menu HOLDS its trigger's hover paint, so the trigger reads as "this
+   one" for as long as its card is up. No press dip: this is a menu trigger, and
+   the menu opening is its feedback. */
 .de-app-chooser[aria-expanded="true"] { background: ${t.color.bgHoverQuiet}; }
 /*
  * The name gives up its width before the chevron does.
@@ -157,7 +176,9 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * glyph-only carve-out on the ladder, applied to the one mark on this row.
  */
 .de-app-chooser svg { flex: none; color: ${t.color.textDim}; }
-.de-app-chooser:hover svg,
+@media (hover: hover) and (pointer: fine) {
+  .de-app-chooser:hover svg { color: ${t.color.text}; }
+}
 .de-app-chooser:focus-visible svg,
 .de-app-chooser[aria-expanded="true"] svg { color: ${t.color.text}; }
 
@@ -173,8 +194,8 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * long scoped name. Between them the card sizes to its content, and above the
  * viewport it stops and scrolls.
  *
- * That ceiling is new and it was a hole rather than an omission. A row is 42px,
- * which is 84px at 200% zoom; the registry's own notes record five editors
+ * That ceiling is new and it was a hole rather than an omission. A row is 24px,
+ * more when a name wraps and double that at 200% zoom; the registry's own notes record five editors
  * running on the machine this was written on, so five rows plus the trailing
  * note is taller than a short window — and the card simply hung off the bottom
  * edge with no scrollbar, which put the rows NEAREST the trigger out of reach.
@@ -194,10 +215,33 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   overscroll-behavior: contain;
   padding: ${MENU.padding};
   background: ${t.color.bgRaised};
-  border: ${MENU.hairline}px solid ${t.color.border};
+  border: none;
   border-radius: ${MENU.outer};
   box-shadow: ${t.shadow.popover};
   pointer-events: auto;
+}
+/*
+ * IT OPENS INSTANTLY AND LEAVES OVER 150MS — the kit's menu grammar.
+ *
+ * The card opens in its final geometry with no entrance: a menu is opened
+ * dozens of times an hour, and an entrance is a tax on every read. Dismissal
+ * gets a short, bounded fade to 0.99, so the card does not vanish in the same
+ * frame as the click that closed it.
+ *
+ * The fade plays on a COPY. \`panels/app-chooser.ts\` hides the real card at the
+ * instant it is dismissed — a card still present would absorb the next Escape
+ * and keep its rows in the tab order — and leaves an inert, aria-hidden clone
+ * in its place to play this, removed when the animation ends. That is the
+ * "exit on a ghost" \`css/base.ts\` names as the way to do this properly.
+ * \`transform-origin\` is the edge nearest the trigger, written by \`arriveFrom\`.
+ */
+.de-app-menu--leaving {
+  pointer-events: none;
+  transform-origin: var(--de-arrive-origin, center top);
+  animation: de-app-menu-exit ${t.duration.exit} ${t.easeReveal} both;
+}
+@keyframes de-app-menu-exit {
+  to { opacity: 0; transform: scale(0.99); }
 }
 /*
  * ONE LINE: a name, and a figure trailing it.
@@ -216,14 +260,18 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * metadata trails — and it puts every port in the card on one trailing edge,
  * where two of them can be compared by eye instead of by reading.
  *
- * \`baseline\` rather than \`center\`: the two items are 12px and 11px, and
- * centring two type sizes against each other lands the smaller one a fraction
- * high against a name it is supposed to sit beside.
+ * \`baseline\` rather than \`center\`: the name can wrap to two lines, and a
+ * baseline keeps the port on the name's first line rather than floating it to
+ * the middle of the pair.
+ *
+ * The row is the kit's menu item at the editor's density: 24px tall (4px above
+ * and below a 16px line) where the kit's is 36, on the \`radius.md\` corner the
+ * card's nest hands it.
  */
 .de-app-menu-row {
-  display: flex; align-items: baseline; gap: ${t.space.md}px;
+  display: flex; align-items: baseline; gap: ${t.space.sm}px;
   width: 100%;
-  padding: ${t.space.sm}px ${t.space.md}px;
+  padding: ${t.space["2xs"]}px ${t.space.sm}px;
   /* Read off the card's nest, not matched to it by hand — see \`MENU\`. */
   border: none; border-radius: ${MENU.radius};
   background: transparent;
@@ -231,29 +279,32 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease};
 }
 /*
  * A row on a raised surface lifts to \`bgRaisedHover\`, and the comment this
  * replaces had the right rule and the wrong token.
  *
  * It said "a row on a raised surface lifts to \`bgHover\`", which on this card
- * is not a lift at all: the menu is \`bgRaised\` — \`lift(14)\`, #4a4a4a — and
- * \`bgHover\` is \`lift(12)\`, #454545. Pointing at a row made it DARKER than the
- * card it sits in, so the hover read as a press, or as nothing.
+ * is not a lift at all: the menu is \`bgRaised\`, and \`bgHover\` is the same
+ * \`lift(12)\` in dark and a rung below the white card in light. Pointing at a
+ * row would change nothing, or read as a press.
  *
- * \`bgRaisedHover\` exists for exactly this and says so in \`tokens.ts\`: one rung
- * above the surface it sits on, in whichever direction that theme lifts. In
- * light the card is white and the rung is \`press(6)\`, which is darker and
- * correct — a light theme recesses.
+ * \`bgRaisedHover\` exists for exactly this: one rung off the surface it sits
+ * on — \`lift(16)\` in dark, the kit's \`--muted\` on the white card in light,
+ * which is darker and correct: a light theme recesses.
  *
- * Focus takes the same ground for the same reason. It also draws a ring, so it
- * was never invisible; it was just disagreeing with hover about which way this
- * surface moves.
+ * Focus takes the same ground for the same reason, plus the kit's ring: the
+ * row's edge in the accent and a 3px halo outside it. The halo fits inside the
+ * card's 6px padding, so the scroller does not shave it.
  */
-.de-app-menu-row:hover:not([aria-disabled="true"]) { background: ${t.color.bgRaisedHover}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-app-menu-row:hover:not([aria-disabled="true"]) { background: ${t.color.bgRaisedHover}; }
+}
 .de-app-menu-row:focus-visible {
-  outline: 2px solid ${t.color.accent};
-  outline-offset: -2px;
+  outline: none;
+  box-shadow: inset 0 0 0 1px ${t.color.accent}, 0 0 0 3px ${HALO};
   background: ${t.color.bgRaisedHover};
 }
 /*
@@ -402,7 +453,7 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   content: "";
   position: absolute; inset: 0;
   background: linear-gradient(90deg, transparent, ${t.color.borderStrong}, transparent);
-  animation: de-app-switching calc(${t.duration.base} * 6) linear infinite;
+  animation: de-app-switching calc(${t.duration.reveal} * 6) linear infinite;
   pointer-events: none;
 }
 @keyframes de-app-switching {
@@ -417,20 +468,22 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   }
 }
 /*
- * The app you are already editing.
+ * The app you are already editing: the SELECTED row, so it is a fill.
  *
- * A left rule in the accent rather than a filled band: the row is still a live
- * control — pressing it closes the menu — and a filled row in a list of
- * pressable rows reads as the one that is selected AND about to do something.
- * The mark is a border rather than a background so it survives hover, which is
- * the moment the reader most needs to be told they are on it.
+ * This was a 2px accent rule down the left edge. The kit's rule is that
+ * selection is a fill carried by hue — never a hairline, never another grey —
+ * so the row wears \`rowSelected\`, the same indigo container a selected layer
+ * row wears. It still says "you are here" under the pointer, because hover is
+ * held off it: the fill is the state, and a hover step over it would read as
+ * the selection going away.
  */
-.de-app-menu-row--current {
-  box-shadow: inset 2px 0 0 ${t.color.accent};
+.de-app-menu-row--current,
+.de-app-menu-row.de-app-menu-row--current:hover {
+  background: ${t.color.rowSelected};
   color: ${t.color.text};
 }
 /* The current app's name is a WORD in the accent, so it takes the ink rung
-   rather than the stroke rung — 4.23:1 against 5.4:1 in light. */
+   rather than the stroke rung. */
 .de-app-menu-row--current .de-app-menu-name { color: ${t.color.accentText}; }
 /*
  * Looking, empty, no chooser, failed — every answer the menu can give that is
@@ -443,17 +496,20 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * answer to the question that was asked.
  */
 .de-app-menu-note {
-  padding: ${t.space.sm}px ${t.space.md}px;
+  padding: ${t.space["2xs"]}px ${t.space.sm}px;
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
   line-height: ${t.type.leadingBody};
   word-break: break-word;
 }
 
-/* The only transition in this module is the trigger's hover fill, and a reader
-   who has asked for less motion has asked for that too. Nothing here animates
-   position or size, so there is nothing else to stand down. */
+/* Reduced motion keeps the exit's fade and drops its scale: opacity is
+   feedback, the shrink is travel. The hover fills stay — a colour change is not
+   motion — and the base blanket already clamps their duration. */
 @media (prefers-reduced-motion: reduce) {
-  .de-app-chooser { transition: none; }
+  .de-app-menu--leaving { animation-name: de-app-menu-exit-fade; }
+}
+@keyframes de-app-menu-exit-fade {
+  to { opacity: 0; }
 }
 `

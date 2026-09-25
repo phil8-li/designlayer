@@ -338,7 +338,7 @@ export function installLeftPanel(context: EditorContext): void {
      *
      * Two short words fit this panel at every width the seam allows. "Layers ·
      * Code · Controls" does not: the panel drags down to `panelMinWidth`, which
-     * is 180px, and three pills with `space.md` padding a side clear that
+     * is 180px, and three pills with `space.sm` padding a side clear that
      * before the labels are even measured. So the chosen tab has to bring
      * itself into view, exactly as the inspector's does — the strip draws no
      * scrollbar, and without this there would be no way to reach a tab that had

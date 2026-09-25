@@ -78,23 +78,23 @@ export function buttons(theme) {
   host.append(
     el("div", { class: "de-row", style: "display:flex;gap:8px;align-items:center" }, [
       el("button", { class: "de-button", type: "button", id: "glyph-button" }, [
-        icon("Search", tokens.icon.row),
+        icon("Search", tokens.icon.marker),
         "Audit",
       ]),
       el("button", { class: "de-button", type: "button", id: "plain-button" }, ["Ignore"]),
     ]),
     el("div", { class: "de-row", style: "display:flex;gap:8px;align-items:center" }, [
       el("button", { class: "de-button", type: "button" }, [
-        icon("MessageSquare", tokens.icon.row),
+        icon("MessageSquare", tokens.icon.marker),
         "Send to agent",
       ]),
     ]),
     el("div", { style: "display:flex;gap:2px;align-items:center" }, [
       el("button", { class: "de-mini", type: "button", "aria-label": "Add" }, [
-        icon("Plus", tokens.icon.row),
+        icon("Plus", tokens.icon.marker),
       ]),
       el("button", { class: "de-mini", type: "button", "aria-label": "Remove" }, [
-        icon("Trash", tokens.icon.row),
+        icon("Trash", tokens.icon.marker),
       ]),
     ])
   )
@@ -221,7 +221,7 @@ export function launcher(theme, page) {
    */
   document.documentElement.classList.add("designlayer-chrome-hidden")
   const disc = el("button", { class: "de-launcher", type: "button", "aria-label": "Open the editor" }, [
-    icon("Cursor", tokens.icon.launcher),
+    icon("Cursor", tokens.icon.chrome),
   ])
   // Placed inline rather than fixed so the shot can crop tight around it.
   disc.style.cssText += ";position:relative;right:auto;bottom:auto;margin:30px"
@@ -355,8 +355,8 @@ export function swap(theme) {
    * being compared.
    */
   const box = el("span", { class: "de-swap" }, [])
-  const rest = icon("Copy", tokens.icon.row)
-  const done = icon("Check", tokens.icon.row)
+  const rest = icon("Copy", tokens.icon.marker)
+  const done = icon("Check", tokens.icon.marker)
   rest.classList.add("de-swap-rest")
   done.classList.add("de-swap-done")
   box.append(rest, done)
@@ -402,7 +402,7 @@ export function annotationHint(theme) {
   document.documentElement.style.setProperty("--de-bar-left", "260px")
   document.documentElement.style.setProperty("--de-bar-right", "300px")
   const hint = el("div", { class: "de-ann-hint", role: "status" }, [
-    icon("MessageSquare", tokens.icon.control),
+    icon("MessageSquare", tokens.icon.action),
     "Click an element, drag a region, or select text to leave a note",
   ])
   document.body.append(hint)

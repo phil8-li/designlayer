@@ -271,7 +271,7 @@ await checkAsync("search filters on the name, case-insensitively", async () => {
     search.value = "nothing here"
     search.dispatchEvent(new window.Event("input", { bubbles: true }))
     assert.equal(rowsOf(popover).length, 0)
-    assert.equal(popover.querySelector(".de-token-empty").textContent, "No matches")
+    assert.equal(popover.querySelector(".de-token-empty").textContent, "No matching tokens. Enter your own value below.")
   })
 })
 
@@ -645,7 +645,7 @@ const offenders = (text) => BANNED.filter(([, pattern]) => pattern.test(text)).m
 /**
  * The row types FIXTURE cannot reach.
  *
- * Only the motion axis has inert tokens, so the `Unavailable — …` hint — the
+ * Only the motion axis has inert tokens, so the `Unavailable because …` hint — the
  * one remaining sentence of prose in this section — never entered the sweep
  * while the fixture declared no transition. A ring and a shadow are here for
  * the same reason: a row type that is never rendered is never scanned.
@@ -671,7 +671,7 @@ await checkAsync("no field, list or hint carries a machine spelling", async () =
         assert.ok(properties.includes("shadow") && properties.includes("ring-color"))
         const hints = [...right.querySelectorAll(".de-hint")].map((node) => node.textContent)
         assert.ok(
-          hints.some((text) => text.startsWith("Unavailable — ")),
+          hints.some((text) => text.startsWith("Unavailable because ")),
           "the sweep still misses the section's only prose"
         )
         assert.ok(hints.some((text) => text.startsWith("Could be ")), "the alias hint is not in the sweep")

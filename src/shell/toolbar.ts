@@ -117,7 +117,7 @@ import { onInsetsChange } from "./shell"
  * ramp in `tokens.icon` owns that number now, and `IconSize` turns the 14 this
  * once was into a compile error rather than something to catch in review.
  */
-const GLYPH = tokens.icon.control
+const GLYPH = tokens.icon.action
 
 /**
  * How far the pointer travels on the pill's ground before it is a drag.
@@ -294,7 +294,7 @@ const MODES = {
   interactive: {
     label: "Inspect",
     weight: "outline",
-    detail: "Off — clicks go to the app",
+    detail: "Off. Clicks go to the app",
   },
 } as const satisfies Record<string, { label: string; weight: IconWeight; detail: string }>
 
@@ -836,7 +836,7 @@ export function installToolbar(context: EditorContext): void {
      *
      * `ToolClose` rather than `X`, which is the same picture drawn by this
      * family instead of by Lucide. `X` is drawn seven other places, most of
-     * them at `icon.row` — 12px, a rung the native lattice may not land on — so
+     * them at `icon.marker` — 12px, a rung the native lattice may not land on — so
      * it keeps its Lucide artwork and the bar gets a mark of its own. What that
      * buys is weight: at 16px Lucide strokes 1.5 CSS pixels, and set among
      * seven 1-unit fills the cross read a step bolder than the bar it closes.

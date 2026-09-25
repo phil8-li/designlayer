@@ -91,7 +91,7 @@ export const appearanceSection: InspectorSection = (context) => {
    */
   const radiusToggle = iconButton({
     label: perCorner ? "Link all corners" : "Set each corner",
-    glyph: icon(perCorner ? "Square" : "Grid2x2", tokens.icon.control),
+    glyph: icon(perCorner ? "Square" : "Grid2x2", tokens.icon.action),
     pressed: perCorner,
     onClick: () => {
       setExpanded(RADIUS_EXPANDER, !perCorner)
@@ -103,7 +103,7 @@ export const appearanceSection: InspectorSection = (context) => {
   const radiusField = numberField({
     id: "appearance.radius",
     /*
-     * `icon.control`, AND IT STAYS THERE — this was tried at `icon.row` and put
+     * `icon.action`, AND IT STAYS THERE — this was tried at `icon.marker` and put
      * back, so the next person does not spend the same hour.
      *
      * The case for moving it is real. A field label slot holds either a word or
@@ -112,7 +112,7 @@ export const appearanceSection: InspectorSection = (context) => {
      * 12px/400, whose stems render around 1.0–1.1px, while a `control`-rung
      * glyph strokes at 1.500px — so the glyph labels read about 40% heavier
      * than the worded ones they alternate with, which is a rank nobody
-     * designed. `icon.row` would put them at 1.250px, within ~15%.
+     * designed. `icon.marker` would put them at 1.250px, within ~15%.
      *
      * It cannot be done at the call site, because these are NATIVE glyphs. The
      * hand-drawn family is set out on a grid whose strokes land on whole pixels
@@ -127,7 +127,7 @@ export const appearanceSection: InspectorSection = (context) => {
      * 12px redrawing of the five glyphs this column uses, or a decision that a
      * worded label is the only kind this column gets.
      */
-    label: icon("CornerRadius", tokens.icon.control),
+    label: icon("CornerRadius", tokens.icon.action),
     title: "Corner radius",
     value: uniformRadius,
     placeholder: uniformRadius === null ? "Mixed" : undefined,
@@ -228,7 +228,7 @@ export const appearanceSection: InspectorSection = (context) => {
       "Opacity",
       numberField({
         id: "appearance.opacity",
-        label: icon("Opacity", tokens.icon.control),
+        label: icon("Opacity", tokens.icon.action),
         title: "Opacity (%)",
         value: (Number.parseFloat(computed.opacity) || 0) * 100,
         min: 0,

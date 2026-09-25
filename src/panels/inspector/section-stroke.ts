@@ -67,7 +67,7 @@ export const strokeSection: InspectorSection = (context) => {
 
   const add = miniButton({
     label: visible || stored ? "Stroke already set" : "Add stroke",
-    glyph: icon("Plus", tokens.icon.row),
+    glyph: icon("Plus", tokens.icon.marker),
     onClick: () => {
       parked.delete(selection.key)
       applyStyles(
@@ -130,7 +130,7 @@ export const strokeSection: InspectorSection = (context) => {
       "stroke",
       "Stroke",
       el("div", { class: "de-stack" }, [
-        el("div", { class: "de-hint" }, ["No stroke."]),
+        el("div", { class: "de-hint" }, ["No stroke"]),
         hasBorder(selection.element, computed)
           ? tokenRow(context, "stroke-color", "Stroke color")
           : null,
@@ -224,7 +224,7 @@ export const strokeSection: InspectorSection = (context) => {
     }),
     miniButton({
       label: "Remove stroke",
-      glyph: icon("Minus", tokens.icon.row),
+      glyph: icon("Minus", tokens.icon.marker),
       danger: true,
       onClick: (event: Event) => {
         parked.delete(selection.key)

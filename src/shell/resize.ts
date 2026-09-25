@@ -120,13 +120,13 @@ const SPECS: Record<PanelSide, Spec> = {
  * curve from the one it slides out on reads as two different surfaces.
  *
  * DERIVED, not restated. These were the literals `0.24` and
- * `[0.32, 0.72, 0, 1]` — `tokens.duration.drawer` and `tokens.ease` written out
+ * `[0.32, 0.72, 0, 1]` — `tokens.duration.resize` and `tokens.ease` written out
  * by hand, with nothing keeping them in agreement. Motion wants seconds and a
  * number array where CSS wants a string, which is why the conversion exists;
  * it is not a reason for the values to be typed twice.
  */
 const FOLD = {
-  duration: Number.parseFloat(tokens.duration.drawer) / 1000,
+  duration: Number.parseFloat(tokens.duration.resize) / 1000,
   ease: cubicBezierPoints(tokens.ease),
 } as const
 

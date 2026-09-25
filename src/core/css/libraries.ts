@@ -38,11 +38,11 @@ import { tokens as t, nest } from "../tokens"
  * `.de-lib-field` and a `.de-button`. Three rounded things in four corners, and
  * `nest()` is what stops them being three separate guesses.
  *
- * `radius.lg` over `space.sm` rather than the `radius.md` over `space.md` this
+ * `radius.lg` over `space["2xs"]` rather than the `radius.sm` over `space.sm` this
  * started as, and the inset is what was actually wrong. Two of those three
- * children are SHARED furniture drawn at `radius.md` by rules this sheet does
+ * children are SHARED furniture drawn at `radius.sm` by rules this sheet does
  * not own, so the only inset that leaves them concentric is one that computes
- * back to `md` — 12 − 4 = 8. An 8px inset would have demanded they all square
+ * back to `sm` — 12 − 4 = 8. An 8px inset would have demanded they all square
  * off, which is a stack of hard-cornered cards in a soft-cornered well, and the
  * `.de-lint-ignored-row` note in `test/concentric-cases.mjs` records the same
  * call being made the same way: move the container, not the shared child.
@@ -51,51 +51,48 @@ import { tokens as t, nest } from "../tokens"
  * `.de-layer-menu` already use, which is the right company — all three are a
  * soft container holding a short list of rows.
  */
-const DRAWER = nest({ of: ".de-lib-panel", outer: t.radius.lg, inset: t.space.sm })
+const DRAWER = nest({ of: ".de-lib-panel", outer: t.radius.lg, inset: t.space["2xs"] })
 
-/**
- * The sign-in dialog, and the second nest this sheet declares.
+/*
+ * The sign-in dialog is NOT a nest any more, and that is the kit's geometry
+ * rather than an omission.
  *
- * THE CORNER IS THE SHORTCUTS SHEET'S, and that is the fixed point here. The
- * chrome has exactly two modals; a reader meets them weeks apart and the corner
- * is the one thing they can compare from memory, so `radius['2xl']` is taken
- * from that sheet rather than chosen again. What differs is what reaches a
- * corner — the sheet's is a `radius.sm` close button, this card's is the primary
- * `.de-button` at `radius.md` — so the INSET is what gives: 20 − 12 = 8 is the
- * only pairing that leaves the two curves parallel without asking shared
- * furniture to move, the same call `.de-lib-panel` above makes.
- *
- * That buys 12 where the sheet spends 16, and it is the right way round anyway:
- * this is a short form at 420px and that is a two-column reference at 760, so
- * the air ought to scale with the surface. 12 is also the step the panel's own
- * sections breathe at, which is the company this card actually keeps.
- *
- * The hairline is counted in, so the rule pads 11 and the border makes the gap
- * up to 12. A modal is the one surface in this sheet carrying a border AND a
- * shadow, because it is the only one with a dimmed page rather than a panel
- * behind it.
+ * It is drawn as the kit's dialog: the modal rung (`radius['5xl']`, 18) and the
+ * modal side inset (`space['2xl']`, 24). An inset past the radius erodes the
+ * corner entirely — 18 − 24 clamps to 0 — so no child shares a centre with it
+ * and there is no inner radius to compute. The action buttons in its foot keep
+ * the one action-button corner every text button wears, exactly as the kit's
+ * own dialog does. Declaring a nest here would assert that those buttons must
+ * be square, which is the opposite of the kit's rule that buttons are one
+ * family.
  */
-const SIGNIN = nest({
-  of: ".de-lib-signin",
-  outer: t.radius["2xl"],
-  inset: t.space.lg,
-  hairline: 1,
-})
 
 /**
- * A signed-in origin, drawn as a card like the library cards above it. Its
- * right corner holds the Forget `.de-mini` at `radius.sm`, so 12 − 8 = 4 is
- * the inset that keeps the two curves parallel; the border is counted in.
+ * A signed-in origin, drawn as a card like the library cards above it: the kit
+ * card rung (`radius['3xl']`). Its right corner holds the Forget `.de-mini`,
+ * an icon-only mini button at `radius.sm`, so 16 − 8 = 8 is the inset that
+ * keeps the two curves parallel; the border is counted in.
  */
 const SIGNED = nest({
   of: ".de-lib-signed-row",
-  outer: t.radius.lg,
-  inset: t.space.md,
+  outer: t.radius["3xl"],
+  inset: t.space.sm,
   hairline: 1,
 })
 
+/**
+ * Keyboard focus, as the kit draws it on an action: the edge takes the accent
+ * and a 3px halo of it at 30% sits outside. Drawn with `outline` for the edge
+ * so a borderless text control still gets one, and pointer focus paints
+ * nothing because every call site is `:focus-visible`.
+ */
+const FOCUS_RING = `outline: 1px solid ${t.color.accent}; outline-offset: 0; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.color.accent} 30%, transparent);`
+
+/** Hover paint only on a real pointer (kit interaction rule 1). */
+const HOVER = "@media (hover: hover) and (pointer: fine)"
+
 export const librariesCss = `/* ---------- libraries section ---------- */
-.de-lib { display: flex; flex-direction: column; gap: ${t.space.lg}px; }
+.de-lib { display: flex; flex-direction: column; gap: ${t.space.md}px; }
 
 /* The count rides in the section header's actions track, beside the chevron, so
    it lands on the same column as Fill's and Effects' \`+\`. Dim, because it is a
@@ -105,7 +102,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
 .de-lib-count { color: ${t.color.textDim}; }
 
 /* ---------- the installed list ---------- */
-.de-lib-list { display: flex; flex-direction: column; gap: ${t.space.md}px; }
+.de-lib-list { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
 .de-lib-list:empty { display: none; }
 /*
  * An enabled library is a raised card; a disabled one is the panel ground with
@@ -117,20 +114,25 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * — and a fade over the whole card takes the ink of the control down with the
  * card's own. Dropping the SURFACE says the same thing and touches nothing a
  * pointer is aimed at.
+ *
+ * The kit's card: the card rung (\`radius['3xl']\`), one hairline edge and NO
+ * shadow — it is docked in a panel, not floating over anything. The 8px pad
+ * leaves 16 − 8 = 8 at the corner, which is the corner the remove \`.de-mini\`
+ * in the top-right wears.
  */
 .de-lib-card {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding: ${t.space.md}px;
-  border: 1px solid ${t.color.border}; border-radius: ${t.radius.lg};
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding: ${t.space.sm}px;
+  border: 1px solid ${t.color.hairline}; border-radius: ${t.radius["3xl"]};
   background: ${t.color.bgRaised};
-  transition: background ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease};
 }
 .de-lib-card--off { background: transparent; }
 
 /* Name, badge and controls on one line — the only line of a row that has a
    fixed shape, which is why the variable-width part of it is the one that
    shrinks. */
-.de-lib-line { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-lib-line { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
 .de-lib-name {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -146,12 +148,12 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-kind {
   flex: none;
-  padding: 0 ${t.space.sm}px;
-  border-radius: ${t.radius.sm};
+  padding: 0 ${t.space["2xs"]}px;
+  border-radius: ${t.radius.xs};
   /* \`bgRaisedHover\`, not \`bgHover\`: this badge sits ON \`.de-lib-card\`, which
-     is \`bgRaised\`, and \`bgHover\` is a rung below that — so the plate read as a
-     hole punched in the card rather than a label laid on it. Same bug class as
-     the receding hovers, arrived at from a resting state instead. */
+     is \`bgRaised\`, and \`bgHover\` is no step up from that — the same value in
+     dark, a rung below in light — so the plate would read as nothing, or as a
+     hole punched in the card, rather than a label laid on it. */
   background: ${t.color.bgRaisedHover}; color: ${t.color.textMuted};
   font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
 }
@@ -175,11 +177,13 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   font-family: ${t.font.mono}; font-size: ${t.type.body};
   color: ${t.color.textDim};
 }
-.de-lib-actions { display: inline-flex; align-items: center; gap: ${t.space.sm}px; flex: none; }
-.de-lib-hint { margin: 0; color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
+.de-lib-actions { display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px; flex: none; }
+/* Sentences, not row labels, so they take the kit's reading leading. */
+.de-lib-hint { margin: 0; color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody}; }
 /* After \`.de-lib-hint\` on purpose: a failed scan wears both classes, and at
-   equal specificity the later rule is what makes the tint win. */
-.de-lib-error { color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
+   equal specificity the later rule is what makes the tint win. \`danger\` is the
+   status TEXT rung (4.5:1), not a decorative hue. */
+.de-lib-error { color: ${t.color.danger}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody}; }
 
 /* ---------- the add-by-URL CTA ---------- */
 /* No \`.de-lib-cta-label\` any more. The box had a caption over it reading "Link
@@ -188,8 +192,8 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    heading in the same pass, so a caption left on this one would be the only
    label in the block. The rule went with the span; a guard in
    \`design-system-tab-cases.mjs\` keeps it from growing back. */
-.de-lib-cta { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
-.de-lib-cta-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-lib-cta { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
+.de-lib-cta-row { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
 /*
  * \`field\` rather than the \`bgSunken\` the options browser's inputs take: that
  * one is a well on the panel ground, and the path box below sits INSIDE a well,
@@ -197,16 +201,16 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * rule for both boxes, so the primary and the secondary way in are the same
  * control. The boundary is \`borderInteractive\` for the reason spelled out in
  * \`css/options.ts\` — it is the rung this token set ships for the edge of a
- * control you can act on, and the divider rung measures 1.55:1, which is a
- * field that reads as text.
+ * control you can act on, and the divider rung measures 1.32:1 dark and 1.18:1
+ * light on the panel, which is a field that reads as text.
  */
 .de-lib-field {
   flex: 1; min-width: 0;
-  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space["2xs"]}px;
   border: 1px solid ${t.color.borderInteractive};
   /*
    * NOT \`CONTROL_RADIUS\`, and this is the one input-shaped control in the
-   * chrome that may not take it.
+   * chrome that may not take it — even though the two are both 8px today.
    *
    * The other three filters are loose in a panel body and are free to wear the
    * control rung. This one sits 4px inside \`.de-lib-panel\`'s 12px card, so its
@@ -217,13 +221,20 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    *
    * Concentricity outranks the control rung wherever the two disagree: a
    * reader sees the pair of corners, not the token behind either.
+   *
+   * \`radius.sm\` is also the kit's field corner adapted to editor density: the
+   * kit draws fields at 16px on a 36px box, and a 16px corner on a 24px field
+   * is a pill.
    */
-  border-radius: ${t.radius.md};
+  border-radius: ${t.radius.sm};
   background: ${t.color.field}; color: ${t.color.text};
   font-family: ${t.font.mono}; font-size: ${t.type.body};
   outline: none;
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease};
 }
-.de-lib-field:focus { border-color: ${t.color.accent}; }
+${HOVER} { .de-lib-field:hover { background: ${t.color.fieldHover}; } }
+/* The kit's field focus: the edge takes the accent, and nothing else. */
+.de-lib-field:focus-visible { border-color: ${t.color.accent}; }
 .de-lib-field::placeholder { color: ${t.color.textDim}; }
 
 /* ---------- the sign-in dialog ---------- */
@@ -239,10 +250,13 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * trap, the inertness and the top layer with it; \`libraries-section.ts\` carries
  * the argument at length.
  *
- * So the surface changes rung with the shape: a modal is the front-most thing on
- * screen, and \`bgRaised\` with a hairline and \`shadow.popover\` is what every
- * other card in this chrome that floats is drawn with. A sunken card over a
- * backdrop would be a hole in front of a dimmed page.
+ * So the surface changes rung with the shape, and it is the kit's dialog: the
+ * popover ground (\`bg\`, the kit's \`--popover\`), the modal corner
+ * (\`radius['5xl']\`), the modal side inset (\`space['2xl']\`) and the modal
+ * elevation (\`shadow.float\`, which carries the card hairline and, in dark, the
+ * top rim light). No border of its own: the hairline is already a layer of that
+ * shadow, and a second edge would be a ring beside the rim. A sunken card over
+ * a backdrop would be a hole in front of a dimmed page.
  *
  * ## The width is the other half of the change
  *
@@ -251,31 +265,46 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * seventy characters and a bearer token of several hundred, and at the old width
  * the id wrapped five times and the field showed a couple of dozen characters of
  * the paste. \`min()\` keeps it off the edge of a narrow viewport, and the
- * \`5xl\` gutter is the one the shortcuts sheet uses for the same job.
+ * gutter is the same modal inset.
+ *
+ * ## Motion is the kit's modal grammar
+ *
+ * It scales in place from 0.96 over \`reveal\` on \`easeReveal\` and fades in,
+ * and leaves to 0.98 over \`exit\` on \`easeExit\`. Nothing slides and nothing
+ * blurs. The exit can play because \`display\` and \`overlay\` ride the
+ * transition as discrete properties, so the dialog stays in the top layer until
+ * the fade has finished; \`@starting-style\` supplies the entrance's first frame.
  */
 .de-lib-signin::backdrop {
-  /* Dark enough to say the panel behind is out of play, light enough to keep
-     reading the link that was refused. Same value the shortcuts sheet dims at —
-     one editor should not have two strengths of "not now". */
-  background: rgba(0, 0, 0, 0.45);
+  /* The kit's static scrim, the same veil the shortcuts sheet dims with: one
+     editor has one strength of "not now". It never animates a blur. */
+  background: ${t.color.scrim};
 }
 .de-lib-signin {
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
-  width: min(420px, 100% - ${t.space["5xl"] * 2}px);
-  max-height: calc(100% - ${t.space["5xl"] * 2}px);
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
+  width: min(420px, 100% - ${t.space["2xl"] * 2}px);
+  max-height: calc(100% - ${t.space["2xl"] * 2}px);
   margin: auto;
   overflow-y: auto;
-  padding: ${SIGNIN.padding};
-  border: 1px solid ${t.color.border};
-  border-radius: ${SIGNIN.outer};
-  background: ${t.color.bgRaised};
-  box-shadow: ${t.shadow.popover};
+  padding: ${t.space["2xl"]}px;
+  border: none;
+  border-radius: ${t.radius["5xl"]};
+  background: ${t.color.bg};
+  box-shadow: ${t.shadow.float};
   color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body};
+  transform-origin: center;
+  transition: transform ${t.duration.reveal} ${t.easeReveal}, opacity ${t.duration.hover} linear;
 }
+@starting-style { .de-lib-signin[open] { opacity: 0; transform: scale(0.96); } }
 /* Not shown is not displayed. Without this a closed dialog still lays out — and
    this one is parked on \`document.body\`, so it would lay out across the app. */
-.de-lib-signin:not([open]) { display: none; }
+.de-lib-signin:not([open]) {
+  display: none;
+  opacity: 0; transform: scale(0.98);
+  transition: transform ${t.duration.exit} ${t.easeExit}, opacity ${t.duration.exit} ${t.easeExit},
+    display ${t.duration.exit} allow-discrete, overlay ${t.duration.exit} allow-discrete;
+}
 /* The credential box is autofocused on open, so the card itself only takes
    focus on the engines that ignore that — a ring there is a side effect of
    opening rather than a place anybody navigated to. Every control INSIDE keeps
@@ -284,13 +313,14 @@ export const librariesCss = `/* ---------- libraries section ---------- */
 /* Which wall, and whose origin: the dialog's accessible name, and the first
    thing read out when it opens. It wraps — an origin has no natural width, and
    truncating the subject of the dialog would hide the answer to "which site is
-   this about". \`weightSection\`, not the row weight it took as a line in the
-   panel: it is a real heading now and the only one on the surface. */
+   this about". The kit's title weight and tracking, at the editor's size: it
+   is a real heading and the only one on the surface. */
 .de-lib-signin-title {
   margin: 0;
   color: ${t.color.text};
   font-size: ${t.type.body};
-  font-weight: ${t.type.weightSection};
+  font-weight: ${t.type.weightTitle};
+  letter-spacing: ${t.type.trackingTitle};
   line-height: ${t.type.leadingRow};
 }
 /*
@@ -307,10 +337,10 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * hidden rule, so a row shown only when the wall carried that field needs this
  * to be hideable at all — the same correction \`.de-lib-signin\` makes above.
  */
-.de-lib-fact { display: flex; flex-direction: column; gap: ${t.space.xs}px; }
+.de-lib-fact { display: flex; flex-direction: column; gap: ${t.space["3xs"]}px; }
 .de-lib-fact[hidden] { display: none; }
 .de-lib-fact-label { color: ${t.color.textDim}; font-size: ${t.type.caption}; }
-.de-lib-fact-row { display: flex; align-items: flex-start; gap: ${t.space.sm}px; }
+.de-lib-fact-row { display: flex; align-items: flex-start; gap: ${t.space["2xs"]}px; }
 /*
  * The value, on a plate, WRAPPED rather than scrolled.
  *
@@ -327,13 +357,14 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-fact-value {
   flex: 1; min-width: 0;
-  padding: ${t.space.sm}px ${t.space.md}px;
+  padding: ${t.space["2xs"]}px ${t.space.sm}px;
+  /* A read-only field, so the dense field corner rather than the chip floor. */
   border-radius: ${t.radius.sm};
   background: ${t.color.field}; color: ${t.color.textMuted};
   font-family: ${t.font.mono}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow};
   overflow-wrap: anywhere;
 }
-.de-lib-signin-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-lib-signin-row { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
 /*
  * Both actions to the trailing edge, decline then commit.
  *
@@ -349,24 +380,25 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-signin-actions {
   display: flex; align-items: center; justify-content: flex-end;
-  gap: ${t.space.md}px;
-  margin-top: ${t.space.sm}px;
+  gap: ${t.space.sm}px;
+  margin-top: ${t.space["2xs"]}px;
 }
 /*
- * CLOSE HAS TO BE DROPPED A RUNG, OR IT IS INVISIBLE.
+ * CLOSE IS PINNED TO THE CONTROL SURFACE.
  *
- * \`.de-button\` fills with \`bgRaised\` because every other one in the chrome is
- * drawn on a panel or in a well — a ground below it. This card is \`bgRaised\`
- * itself, so the shared rule paints a button the exact colour of the surface
- * under it: measured in both themes, the only thing left of it was its label.
+ * It used to inherit a \`bgRaised\` fill, and in light that rung IS paper — the
+ * kit's \`--popover\` this card is drawn on — so the button was the exact colour
+ * of the surface under it and only its label was left. \`.de-button\` fills
+ * with \`bgHover\` now, which in light is already the value this sets.
  * The primary beside it is unaffected, since an accent fill owes nothing to the
  * ground.
  *
  * \`bgSunken\` is the answer rather than a border, and it is the role's own
  * definition — "the surface a control is drawn on" — applied one level up. It
- * moves AWAY from the ground in whichever direction that theme leaves free, so
- * the control is recessed into the card in dark and in light without this rule
- * knowing which is which. The hover follows it to the next rung along for the
+ * moves AWAY from the ground in whichever direction that theme leaves free — up
+ * off the card in dark, down into it in light, where it is the kit's
+ * \`--secondary\` button — without this rule knowing which is which. The hover
+ * follows it to the next rung along for the
  * same reason \`bgRaisedHover\` exists: a hover that recedes is a hover that
  * looks like a press.
  *
@@ -375,8 +407,16 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * describing it by exclusion, and it cannot reach the copy buttons or anything
  * else the fold holds.
  */
-.de-lib-signin-close { background: ${t.color.bgSunken}; }
-.de-lib-signin-close:hover { background: ${t.color.bgHover}; }
+/* \`fieldHover\` for the hover, the kit's secondary-to-secondary-hover step: in
+   light \`bgHover\` is the same rung as \`bgSunken\`, so the old hover did not
+   move at all. The token path's own submit is the same button on the same
+   ground, so it takes the same drop. */
+.de-lib-signin-close,
+.de-lib-signin-panel-actions > .de-button:not(.de-button--primary) { background: ${t.color.bgSunken}; }
+${HOVER} {
+  .de-lib-signin-close:hover,
+  .de-lib-signin-panel-actions > .de-button:not(.de-button--primary):hover { background: ${t.color.fieldHover}; }
+}
 /*
  * The token path's own submit, under the box it sends.
  *
@@ -386,7 +426,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * Trailing edge to agree with every other actions row in the chrome.
  */
 .de-lib-signin-panel-actions {
-  display: flex; justify-content: flex-end; margin-top: ${t.space.sm}px;
+  display: flex; justify-content: flex-end; margin-top: ${t.space["2xs"]}px;
 }
 
 /*
@@ -409,7 +449,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-signin-more { display: flex; flex-direction: column; }
 .de-lib-signin-panel {
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
   min-width: 0;
   /*
    * A HAIRLINE, because the two halves of this dialog are written for two
@@ -430,8 +470,8 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    * The margin becomes padding so the line sits at the top of the box the fold
    * clips, and disappears with it rather than hanging under the toggle.
    */
-  padding-top: ${t.space.md}px;
-  margin-top: ${t.space.md}px;
+  padding-top: ${t.space.sm}px;
+  margin-top: ${t.space.sm}px;
   border-top: 1px solid ${t.color.border};
   /* Load-bearing: see \`.de-lib-drawer\`. Without it the \`0fr\` row keeps this
      panel's content as its minimum and the fold never shuts. */
@@ -444,7 +484,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    shape \`.de-lib-panel[hidden]\` uses one block down. */
 .de-lib-signin-panel[hidden] {
   visibility: hidden;
-  transition: visibility 0s linear ${t.duration.base};
+  transition: visibility 0s linear ${t.duration.exit};
 }
 
 /* ---------- what this editor is signed in to ---------- */
@@ -458,15 +498,15 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * Text, a plate for the kind, and the forget control in the actions column
  * every row in this sheet already uses.
  */
-.de-lib-signed { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lib-signed { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 .de-lib-signed[hidden] { display: none; }
 /* Each sign-in is a card, drawn with the library card's surface so the two
    lists in this section read as the same kind of object. */
-.de-lib-signed-rows { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lib-signed-rows { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 .de-lib-signed-row {
-  display: flex; align-items: center; gap: ${t.space.sm}px;
+  display: flex; align-items: center; gap: ${t.space["2xs"]}px;
   padding: ${SIGNED.padding};
-  border: 1px solid ${t.color.border}; border-radius: ${SIGNED.outer};
+  border: 1px solid ${t.color.hairline}; border-radius: ${SIGNED.outer};
   background: ${t.color.bgRaised};
 }
 
@@ -493,14 +533,16 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    real \`.de-button\` now, so this grammar is the fold's alone again. */
 .de-lib-expand {
   align-self: flex-start;
-  display: inline-flex; align-items: center; gap: ${t.space.sm}px;
+  display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px;
   padding: 0; border: none; background: transparent;
   color: ${t.color.textDim};
   font-family: inherit; font-size: ${t.type.caption};
   cursor: pointer;
 }
-.de-lib-expand:hover { color: ${t.color.text}; }
-.de-lib-expand:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-lib-expand { border-radius: ${t.radius.xs}; transition: color ${t.duration.hover} ${t.ease}; }
+${HOVER} { .de-lib-expand:hover { color: ${t.color.text}; } }
+.de-lib-expand[aria-expanded="true"] { color: ${t.color.text}; }
+.de-lib-expand:focus-visible { ${FOCUS_RING} }
 /* A real glyph from the vendored set rather than a \`content\` character, so this
    disclosure mark is the same drawing as the options browser's and the
    inspector's instead of three fonts' idea of a triangle. */
@@ -508,14 +550,14 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   flex: none;
   display: inline-flex; align-items: center; justify-content: center;
   color: ${t.color.textDim};
-  transition: transform ${t.duration.fast} ${t.ease};
+  transition: transform ${t.duration.hover} ${t.ease};
 }
 .de-lib-expand[aria-expanded="true"] .de-lib-twisty { transform: rotate(90deg); }
 
 /*
  * THE FOLD ITSELF, AND IT USED TO BE HALF AN ANIMATION.
  *
- * The twisty above turns over 120ms and the thing it discloses arrived between
+ * The twisty above turns over \`hover\` and the thing it discloses arrived between
  * two frames, which is the worst of both: the mark says a drawer is opening and
  * the drawer says it was always there. The words under the twisty promise a
  * movement the body never made.
@@ -561,7 +603,9 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 0fr);
   overflow: hidden;
-  transition: grid-template-rows ${t.duration.base} ${t.ease};
+  /* Closing is a dismissal: the kit's \`exit\` on \`easeExit\`. The open rule
+     below carries the reveal, so each direction takes its own tween. */
+  transition: grid-template-rows ${t.duration.exit} ${t.easeExit};
 }
 /*
  * Driven by the panel's own \`hidden\`, not by the toggle's \`aria-expanded\`.
@@ -572,10 +616,10 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * claims about it, and if those two ever drift the box should follow the thing
  * that decides whether the controls inside can be reached.
  *
- * \`base\` rather than \`drawer\`, in spite of the name: \`drawer\` is the 240ms a
- * whole panel takes to cross the screen edge, and this is a disclosure opening
- * inside a section — the same statement \`.de-entering\` in \`css/base.ts\` makes
- * about a group finding its height, so it takes the same rung.
+ * \`reveal\` rather than \`resize\`, in spite of the name: \`resize\` is the tween
+ * a whole panel takes to change width, and this is a disclosure settling in
+ * inside a section — a surface reveal, 250ms on \`easeReveal\`, and it closes
+ * over the kit's shorter \`exit\`.
  */
 /* Two panels ride this drawer now — the local-file fold in the section, and the
    credential fold inside the sign-in modal — and they are named separately
@@ -585,6 +629,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
 .de-lib-drawer:has(> .de-lib-panel:not([hidden])),
 .de-lib-drawer:has(> .de-lib-signin-panel:not([hidden])) {
   grid-template-rows: minmax(0, 1fr);
+  transition: grid-template-rows ${t.duration.reveal} ${t.easeReveal};
 }
 
 /*
@@ -598,10 +643,10 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * the permanent ones.
  */
 .de-lib-panel {
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
   /* The gap \`.de-lib-local\` gave up, carried here so the fold closes over it
      as well. */
-  margin-top: ${t.space.sm}px;
+  margin-top: ${t.space["2xs"]}px;
   /* Load-bearing: see \`.de-lib-drawer\`. Without it the \`0fr\` row keeps the
      panel's content as its minimum and the drawer never shuts. */
   min-height: 0;
@@ -629,7 +674,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  */
 .de-lib-panel[hidden] {
   visibility: hidden;
-  transition: visibility 0s linear ${t.duration.base};
+  transition: visibility 0s linear ${t.duration.exit};
 }
 .de-lib-status:empty { display: none; }
 .de-lib-status { color: ${t.color.textDim}; font-size: ${t.type.body}; }
@@ -648,9 +693,9 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * there is no file tally on this side of the wire to print; a number invented
  * here would be a progress bar that knows nothing about the progress.
  *
- * The drawing is the lint panel's, down to the six base rungs and the ink: an
- * indeterminate loop has no duration to be correct about, so it takes the
- * ramp's slowest step multiplied rather than a literal, and it is the surface's
+ * The drawing is the lint panel's, down to the six reveal rungs and the ink: an
+ * indeterminate loop has no duration to be correct about, so it takes
+ * \`reveal\` multiplied rather than a literal, and it is the surface's
  * own border colour rather than a hue of its own — a progress mark that
  * introduces a new colour reads as a state change, which is the one thing this
  * is not.
@@ -680,7 +725,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
 .de-lib-status[data-de-busy],
 .de-lib-signin-hint[data-de-busy] {
   position: relative;
-  padding-bottom: ${t.space.sm}px;
+  padding-bottom: ${t.space["2xs"]}px;
   overflow: hidden;
 }
 .de-lib-status[data-de-busy]::after,
@@ -691,7 +736,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   /*
    * NO \`border-radius\`, and its absence is the decision.
    *
-   * There was a \`radius.sm\` here, which on a two-pixel bar clamps to a pair of
+   * There was a \`radius.xs\` here, which on a two-pixel bar clamps to a pair of
    * semicircular caps — and those caps are drawn at the two points where this
    * gradient has already faded to \`transparent\`. It rounded nothing anybody
    * could see, and it cost real complexity: a radius past half the height is a
@@ -703,30 +748,31 @@ export const librariesCss = `/* ---------- libraries section ---------- */
    * budget that allows five) or loosening the audit.
    */
   background: linear-gradient(90deg, transparent, ${t.color.borderStrong}, transparent);
-  animation: de-lib-scan calc(${t.duration.base} * 6) linear infinite;
+  animation: de-lib-scan calc(${t.duration.reveal} * 6) linear infinite;
 }
 @keyframes de-lib-scan { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
-/* Rests where the candidates will land, at the height two of their four lines
-   take. Flat on purpose: the sweep above is already the moving part, and a
+/* Rests where the candidates will land, each one a candidate's exact box: its
+   8px pads and hairlines, three 12/16 lines and a row-high button, 2px apart —
+   the kit's rule that a skeleton stands in the loaded geometry. Flat on purpose: the sweep above is already the moving part, and a
    drawer with two things breathing at different rates in it reads as two
    things going wrong rather than one thing working. */
-.de-lib-scan { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lib-scan { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 .de-lib-scan-row {
-  height: calc(${t.size.rowHeight}px * 2);
-  border-radius: ${t.radius.md};
+  height: ${2 * t.space.sm + 2 * t.size.hairline + 3 * Math.round(Number.parseFloat(t.type.body) * t.type.leadingRow) + t.size.rowHeight + 3 * t.space["3xs"]}px;
+  border-radius: ${t.radius.sm};
   background: ${t.color.bgHoverQuiet};
 }
 
-.de-lib-candidates { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-lib-candidates { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 /* Up off the well, so a row you can act on is a surface and the drawer it sits
    in is not. \`bg\` rather than \`bgRaised\`: these are candidates, not installed
    libraries, and the cards above have to stay the lightest thing in the
    section. */
 .de-lib-candidate {
-  display: flex; flex-direction: column; gap: ${t.space.xs}px;
-  padding: ${t.space.md}px ${t.space.sm}px;
-  border: 1px solid ${t.color.border}; border-radius: ${t.radius.md};
+  display: flex; flex-direction: column; gap: ${t.space["3xs"]}px;
+  padding: ${t.space.sm}px ${t.space.md}px;
+  border: 1px solid ${t.color.hairline}; border-radius: ${DRAWER.radius};
   background: ${t.color.bg};
 }
 /*
@@ -737,7 +783,7 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * waiting, and then it had always had this in it. Dealing them out says the
  * list is being filled, which is what just happened.
  *
- * Half a \`snap\` per row is the shortest step the eye reads as an order rather
+ * Half an \`exit\` per row is the shortest step the eye reads as an order rather
  * than as one event, and the index is capped by the section that writes it —
  * see \`ARRIVAL_STEPS\` in \`libraries/libraries-section.ts\`. The step lives here
  * because this is the file that knows what a short delay is; the cap lives
@@ -748,22 +794,29 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * stagger exists to remove, once per row.
  */
 .de-lib-candidate--arriving {
-  animation: de-lib-candidate-in ${t.duration.fast} ${t.ease} both;
-  animation-delay: calc(${t.duration.snap} / 2 * var(--de-lib-arrive, 0));
+  animation: de-lib-candidate-in ${t.duration.hover} ${t.easeReveal} both;
+  animation-delay: calc(${t.duration.exit} / 2 * var(--de-lib-arrive, 0));
 }
+/* A fade and nothing else: the kit's rule is that nothing slides in, and a 4px
+   drop from above was a slide. */
 @keyframes de-lib-candidate-in {
-  from { opacity: 0; transform: translateY(-${t.space.sm}px); }
+  from { opacity: 0; }
 }
 
 /* The path box is the way past a scan that missed something, so it is separated
    from the scan's own results by a rule rather than by a gap. */
 .de-lib-manual {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding-top: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding-top: ${t.space.sm}px;
   border-top: 1px solid ${t.color.border};
 }
 .de-lib-manual-label { color: ${t.color.textDim}; font-size: ${t.type.caption}; }
-.de-lib-manual-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-lib-manual-row { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
+/* A button laid in a well: the shared pill's fill is the well's own rung in
+   light (both are the kit's \`--secondary\`), so it takes the panel ground
+   instead and lifts off the well in both themes. */
+.de-lib-manual-row > .de-button:not(.de-button--primary) { background: ${t.color.bg}; }
+${HOVER} { .de-lib-manual-row > .de-button:not(.de-button--primary):hover { background: ${t.color.bgRaisedHover}; } }
 
 /* ---------- the switch ---------- */
 /*
@@ -792,11 +845,11 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   flex: none;
   width: 28px; height: 16px;
   padding: 0;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.xl};
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius["3xl"]};
   background: ${t.color.field};
   cursor: pointer;
-  transition: background-color ${t.duration.base} ${t.ease}, border-color ${t.duration.base} ${t.ease},
-    transform ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
 /* A 28x16 track is the drawing, not the target: 4px a side takes it to 24. */
 .de-lib-switch::before {
@@ -810,32 +863,37 @@ export const librariesCss = `/* ---------- libraries section ---------- */
   border-radius: 50%;
   background: ${t.color.text};
   transform: translateX(0);
-  transition: transform ${t.duration.base} ${t.ease}, background-color ${t.duration.base} ${t.ease};
+  /* The knob's travel is a lateral move, so it takes the emphasized curve over a
+     reveal; its ink flip is a colour change and takes the hover tween. */
+  transition: transform ${t.duration.reveal} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-lib-switch:hover { background: ${t.color.fieldHover}; }
+${HOVER} { .de-lib-switch:hover { background: ${t.color.fieldHover}; } }
 .de-lib-switch[aria-pressed="true"] {
   background: ${t.color.accentSurface};
   border-color: ${t.color.accentSurface};
 }
-.de-lib-switch[aria-pressed="true"]:hover {
-  background: ${t.color.accentSurfaceHover};
-  border-color: ${t.color.accentSurfaceHover};
+${HOVER} {
+  .de-lib-switch[aria-pressed="true"]:hover {
+    background: ${t.color.accentSurfaceHover};
+    border-color: ${t.color.accentSurfaceHover};
+  }
 }
-/* The knob FLIPS its ink as it arrives. White on this accent is the 1.9:1 that
-   \`accentFill\` exists to prevent, and the flip gives the on state a second
-   channel besides where the knob is. */
+/* The knob takes \`onAccent\` as it arrives: white on the indigo, 4.97:1 dark
+   and 6.70:1 light. In light that flips it from ink to white, a second channel
+   besides where the knob is; in dark it stays near-white and the track's fill
+   carries the change. */
 .de-lib-switch[aria-pressed="true"]::after {
   transform: translateX(12px);
   background: ${t.color.onAccent};
 }
-.de-lib-switch:active { transform: scale(0.96); }
+.de-lib-switch:active:not([disabled]) { transform: scale(0.98); }
 /* A switch has no text to dim, so "disabled" has to land on the two things it
    does draw: the knob and the track's edge. Fading the whole control took the
    knob's contrast down with it, which blurs the one distinction a switch exists
    to make — OFF and DISABLED stopped being tellable apart. */
 .de-lib-switch[disabled] { cursor: default; border-color: ${t.color.border}; }
 .de-lib-switch[disabled]::after { background: ${t.color.textDisabled}; }
-.de-lib-switch:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-lib-switch:focus-visible { ${FOCUS_RING} }
 
 /*
  * NO LIBRARY-COMPONENT SECTION HERE ANY MORE.
@@ -856,8 +914,11 @@ export const librariesCss = `/* ---------- libraries section ---------- */
  * blanket rule in base.ts that clamps every duration carries one.
  */
 @media (prefers-reduced-motion: reduce) {
-  .de-lib-switch::after { transition: background-color ${t.duration.base} linear !important; }
-  .de-lib-switch:active { transform: none; }
+  .de-lib-switch::after { transition: background-color ${t.duration.hover} linear !important; }
+  .de-lib-switch:active:not([disabled]) { transform: none; }
+  /* The dialog keeps its fade and gives up the scale: travel goes, feedback stays. */
+  .de-lib-signin, .de-lib-signin:not([open]) { transform: none; }
+  @starting-style { .de-lib-signin[open] { transform: none; } }
   /*
    * The blanket in \`css/base.ts\` clamps every duration to 0.01ms, which stops a
    * finite animation dead but leaves an INFINITE one looping thousands of times

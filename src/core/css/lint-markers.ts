@@ -40,13 +40,13 @@ import { tokens as t } from "../tokens"
  * area at equal width. Taking two off puts the two marks on the same apparent
  * size, so switching layers does not look like the page changed scale.
  *
- * 12 is `icon.row`, the ramp's dense rung, which is the largest glyph that
+ * 12 is `icon.marker`, the ramp's dense rung, which is the largest glyph that
  * leaves a ring of plate visible around it at 20px. A glyph that touched the
  * corners would erase the corner radius, and the corner radius is the channel
  * doing the severity work.
  */
 const BADGE = 20
-const GLYPH = t.icon.row
+const GLYPH = t.icon.marker
 
 /**
  * The WCAG 2.5.8 floor, bought back from a transparent pad.
@@ -60,12 +60,12 @@ const TARGET = 24
 /**
  * The two corners, and the whole non-hue half of the severity signal.
  *
- * `radius.sm` and `radius.md` off the kit's own scale rather than two numbers
+ * `radius.xs` and `radius.sm` off the kit's own scale rather than two numbers
  * invented here: 4 and 8 are one step apart on a nine-step ramp, which is the
  * smallest gap the ramp offers that still reads as a different shape at 20px.
  */
-const ERROR_CORNER = t.radius.sm
-const WARNING_CORNER = t.radius.md
+const ERROR_CORNER = t.radius.xs
+const WARNING_CORNER = t.radius.sm
 
 /**
  * How far the second plate of a stacked badge peeks out from under the first.
@@ -106,8 +106,8 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
  * This said \`onAccent\` and argued the opposite — "the plate's fill is a
  * severity and does not flip with the theme, so neither may its ink." The
  * premise was already false when it was written, and the conclusion put a white
- * glyph on an amber plate at 1.78:1. \`onSemantic\` is 9.75:1 there. See the
- * role's note in \`tokens.ts\` for the table.
+ * glyph on the dark theme's amber plate, at 2.01:1. \`onSemantic\` is 9.49:1
+ * there, and 5.57:1 (white) on the light theme's amber.
  */
 .de-lint-marker {
   position: absolute;
@@ -120,16 +120,11 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
   cursor: pointer;
   user-select: none;
   pointer-events: auto;
-  /* Split for the reason the pin's is split: colour eases slower than
-     geometry, so a plate that is both recolouring and growing finishes its
-     move before its hue and never looks like it is lagging the pointer. */
-  /* On the ramp, where two of these three were literals. 150 and 100 were
-     agentation's numbers, copied in when the plates were built to match its
-     toolbar; \`base\` and \`snap\` are the rungs either side of them and land the
-     pair back in the chrome's own vocabulary. The SPLIT survives — colour still
-     eases slower than geometry, for the reason above. */
-  transition: background-color ${t.duration.base} ${t.ease}, transform ${t.duration.snap} ${t.ease},
-    box-shadow ${t.duration.fast} ${t.ease};
+  /* The kit's one rung for hover, press and colour changes: \`duration.hover\`.
+     The old split (colour slower than geometry) put the recolour on the reveal
+     rung, which the kit keeps for surfaces settling in, not for a hover. */
+  transition: background-color ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease};
 }
 .de-lint-marker svg { width: ${GLYPH}px; height: ${GLYPH}px; }
 /* ${BADGE}px drawn, ${TARGET}px hit: the pad the note pin uses, squared off. */
@@ -185,7 +180,7 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
    out at length: this badge is painted over the app being reviewed, and a badge
    stuck at 110% after a tap reads as a fault in that app rather than in the
    editor. The tint rules around it are deliberately not wrapped. */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .de-lint-marker:hover { transform: scale(1.1); }
 }
 /*
@@ -223,7 +218,7 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
 /*
  * The frame on the offending element's own box.
  *
- * One pixel, and that is a deliberate quarter of the annotation hover outline's
+ * One pixel, and that is a deliberate half of the annotation hover outline's
  * two. These are not transient — every marked element on the page wears one for
  * as long as the layer is up — so the weight has to be the weight of a
  * statement about the page rather than of a gesture about to happen. At 2px a
@@ -236,7 +231,7 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
 .de-lint-marker-box {
   position: absolute;
   border: 1px solid ${t.color.lintWarning};
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   pointer-events: none;
   transition: none;
   animation: none;

@@ -922,7 +922,7 @@ await check("no row prints the message, and none prints the no-fix note", () => 
 
 await check("only an unfixable row gets a hint, and it names the choice left", () => {
   // Two near-misses listed and no single answer: the reader has to pick one.
-  assert.equal(textOf("title-color", ".de-lint-hint"), "2 near matches — pick one in the inspector")
+  assert.equal(textOf("title-color", ".de-lint-hint"), "2 near matches. Pick one in the inspector")
   // An unfixable row under a rule this editor ships no wording for still says
   // the fact, and deliberately does not invent an instruction to go with it.
   assert.equal(textOf("ghost", ".de-lint-hint"), "No automatic fix")
@@ -937,7 +937,7 @@ await check("the group heading is the problem in English, with the id on hover",
   const heads = Array.from(panel.node.querySelectorAll(".de-lint-group-rule"))
   const named = heads.find((n) => n.getAttribute("title") === "design-tokens/no-raw-colors")
   assert.ok(named, "the raw-colour group is missing")
-  assert.equal(named.textContent.trim(), "Hardcoded colors")
+  assert.equal(named.textContent.trim(), "Hard-coded colors")
   // A rule this editor ships no wording for keeps its id, rather than being
   // renamed by guesswork into something that sounds authoritative and is wrong.
   const unknown = heads.find((n) => n.getAttribute("title") === "design-tokens/no-hardcoded-color")

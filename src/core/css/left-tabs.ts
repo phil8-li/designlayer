@@ -17,7 +17,7 @@
  * second copy of that stylesheet is a promise to keep two sets of measurements
  * in step forever — which is a promise nothing enforces. Sharing it is also
  * what keeps the two strips reading as one control through a restyle: when the
- * right panel traded its underlined icon+label tabs for Figma's neutral pills,
+ * right panel traded its underlined icon+label tabs for neutral pills,
  * the left strip became pills in the same commit, because there was only ever
  * one rule to change.
  *

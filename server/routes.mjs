@@ -271,7 +271,7 @@ function libraryRoutes(libraries, auth, signin, rest, req, res, url, readBody) {
         })
         if (probe.sso) {
           throw badRequest(
-            "That credential was refused — the site still asked for sign-in. Check it has not " +
+            "The site refused that credential and still asked for sign-in. Check that it has not " +
               "expired, and that it belongs to this site."
           )
         }

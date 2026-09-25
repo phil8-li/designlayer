@@ -12,6 +12,8 @@
  * without the guard.
  */
 
+import { tokens } from "./tokens"
+
 /**
  * Whether the reader has asked for less motion, right now.
  *
@@ -102,4 +104,98 @@ export function arriveFrom(
     "--de-arrive-rise",
     `${side === "above" ? ARRIVE_RISE : -ARRIVE_RISE}px`
   )
+}
+
+/**
+ * The two dismissals the kit defines (MICRO-INTERACTIONS § 6 and § 8).
+ *
+ * A menu or popover fades to 0.99 over `exit` on `easeReveal`; a dialog fades
+ * to 0.98 over `exit` on `easeExit`. Both are shorter than any entrance,
+ * because dismissal hands control back.
+ */
+export type ExitKind = "menu" | "modal"
+
+const EXIT_SCALE: Record<ExitKind, number> = { menu: 0.99, modal: 0.98 }
+const EXIT_EASE: Record<ExitKind, string> = { menu: tokens.easeReveal, modal: tokens.easeExit }
+const EXIT_MS = Number.parseFloat(tokens.duration.exit)
+/** Above every surface the chrome stacks, and below nothing it has to paint over. */
+const GHOST_Z = "2147483646"
+
+/**
+ * Plays a surface's exit on an inert COPY, so the surface itself can be gone
+ * at the instant it is dismissed. Call it BEFORE hiding or removing the real
+ * surface: the copy is frozen at the surface's current box.
+ *
+ * Every dismissible surface in this chrome has a contract that says "gone
+ * now": a menu or dialog still in the document absorbs the next Escape, keeps
+ * its rows in the tab order, and — for a modal — leaves a backdrop taking
+ * clicks. So closing and painting are split. The real surface closes
+ * synchronously; a clone that is `inert`, `aria-hidden`, id-less, role-less
+ * and pointer-dead is pinned `position: fixed` over the box it occupied and
+ * fades out. A modal's copy is a plain open `<dialog>` outside the top layer,
+ * so it carries no backdrop and no modality.
+ *
+ * Web Animations rather than a stylesheet keyframe, for two reasons. The copy
+ * is the only thing that ever animates out, so the keyframe has one owner here
+ * rather than one per surface sheet. And an engine without `animate` — jsdom,
+ * which every suite runs in — gets no copy at all, so "the menu is gone" stays
+ * true of the whole document in a test the same way it is true to a reader.
+ *
+ * Reduced motion keeps the fade and drops the shrink: opacity is feedback, the
+ * scale is travel.
+ */
+export function playExit(surface: HTMLElement, kind: ExitKind = "menu"): void {
+  if (!surface.isConnected || typeof surface.animate !== "function") return
+  const box = surface.getBoundingClientRect()
+  if (!box.width || !box.height) return
+  const origin = getComputedStyle(surface).transformOrigin
+
+  const ghost = surface.cloneNode(true) as HTMLElement
+  for (const node of [ghost, ...ghost.querySelectorAll<HTMLElement>("[id]")]) node.removeAttribute("id")
+  for (const name of ["role", "aria-label", "aria-labelledby", "aria-describedby", "aria-modal"]) {
+    ghost.removeAttribute(name)
+  }
+  // A typed draft is a property, not an attribute, so a clone would lose it.
+  const typed = surface.querySelectorAll<HTMLTextAreaElement | HTMLInputElement>("textarea, input")
+  ghost.querySelectorAll<HTMLTextAreaElement | HTMLInputElement>("textarea, input").forEach((field, index) => {
+    if (typed[index]) field.value = typed[index].value
+  })
+  ghost.setAttribute("aria-hidden", "true")
+  ghost.setAttribute("data-de-leaving", kind)
+  ghost.inert = true
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: `${box.left}px`,
+    top: `${box.top}px`,
+    right: "auto",
+    bottom: "auto",
+    width: `${box.width}px`,
+    height: `${box.height}px`,
+    maxWidth: "none",
+    maxHeight: "none",
+    margin: "0",
+    transform: "none",
+    transformOrigin: origin,
+    pointerEvents: "none",
+    zIndex: GHOST_Z,
+  })
+  surface.after(ghost)
+
+  const scale = prefersReducedMotion() ? 1 : EXIT_SCALE[kind]
+  let gone = false
+  const remove = (): void => {
+    if (gone) return
+    gone = true
+    ghost.remove()
+  }
+  const animation = ghost.animate(
+    [
+      { opacity: 1, transform: "scale(1)" },
+      { opacity: 0, transform: `scale(${scale})` },
+    ],
+    { duration: EXIT_MS, easing: EXIT_EASE[kind], fill: "forwards" }
+  )
+  animation.finished.then(remove, remove)
+  // The backstop for a `finished` that never settles (a background tab).
+  window.setTimeout(remove, EXIT_MS + 100)
 }

@@ -221,7 +221,7 @@ function switchField(options: {
      * THE NEW STATE IS PAINTED ON THIS NODE BEFORE THE PANEL IS INVALIDATED.
      *
      * `css/variants.ts` specifies this control properly — 12px of knob travel
-     * over `duration.base`, a track crossfade, a press squeeze — and none of it
+     * over `duration.reveal`, a track crossfade, a press squeeze — and none of it
      * ever played. `onCommit` ends in `context.invalidate()`, the Design tab
      * rebuilds all thirteen sections (`inspector/index.ts`), and the button the
      * user pressed is replaced by a new one already at `translateX(12px)`. A
@@ -539,7 +539,7 @@ function headerRow(
 ): HTMLElement {
   return el("div", { class: "de-instance-head", "data-de-instance": "header" }, [
     el("span", { class: "de-instance-glyph", "aria-hidden": "true" }, [
-      icon("Component", tokens.icon.control),
+      icon("Component", tokens.icon.action),
     ]),
     // A picture only where one is cheap and real: `componentPreview` clones an
     // instance the page already holds, and the page is holding one — the
@@ -693,7 +693,7 @@ export const instanceSection: InspectorSection = (context) => {
           ? `Props preview${hostTag ? ` on ${hostTag}` : ""} and go to Changes. They are not written to the file.${
               stated ? " The rest are documented only." : ""
             }`
-          : `Documented by ${match.libraryName}. Read-only — ${
+          : `Documented by ${match.libraryName}. Read-only: ${
               hostTag ? `${hostTag} has` : "this element has"
             } no matching attributes.`,
       ])
@@ -721,7 +721,7 @@ export const instanceSection: InspectorSection = (context) => {
   const actions = snippet
     ? miniButton({
         label: `Copy the ${name} snippet`,
-        glyph: icon("Copy", tokens.icon.control),
+        glyph: icon("Copy", tokens.icon.action),
         onClick: () => copyLibrarySnippet(context.editor, snippet, name),
       })
     : undefined

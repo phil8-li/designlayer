@@ -319,8 +319,8 @@ function uncertaintyHint(matches: DesignSystemMatch[]): string {
   if (matches.length < 2 && !matches.some((match) => match.ambiguous)) return ""
   const names = matches.map((match) => tokenDisplayName(match.token)).join(" or ")
   return matches.some((match) => match.ambiguous)
-    ? `Could be ${names} — the theme decides`
-    : `Could be ${names} — they share this value`
+    ? `Could be ${names}. The theme decides`
+    : `Could be ${names}. They share this value`
 }
 
 /** The field, plus the two hints that explain what it will and will not do. */
@@ -386,7 +386,7 @@ function build(context: SectionContext, spec: RowSpec, hidePreview = false): Bui
     field,
     uncertain: bound ? "" : uncertaintyHint(matches),
     inert: unwritable.length
-      ? `Unavailable — ${UNWRITABLE_REASON[spec.property] ?? "this element has nothing to carry them"}: ${unwritable
+      ? `Unavailable because ${UNWRITABLE_REASON[spec.property] ?? "this element has nothing to carry them"}: ${unwritable
           .map((token) => tokenDisplayName(token))
           .join(", ")}`
       : "",

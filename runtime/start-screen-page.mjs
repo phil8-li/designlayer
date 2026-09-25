@@ -549,7 +549,7 @@ function showCurrent(status) {
    * but the route accepts any shape and the suite already builds the short one.
    */
   const where = editing?.projectRoot
-    ? editing.appUrl + " — code in " + tilde(editing.projectRoot)
+    ? editing.appUrl + " · code in " + tilde(editing.projectRoot)
     : editing?.appUrl ?? ""
   show(el.currentWhere, where)
   el.currentOpen.href = status.url
@@ -746,7 +746,7 @@ el.waitingBack.addEventListener("click", () => {
   showChooser()
   show(
     el.stopped,
-    "Stopped waiting. Your app may still be starting — check your terminal."
+    "Stopped waiting. Your app may still be starting. Check your terminal."
   )
 })
 
@@ -831,7 +831,7 @@ export function startScreenPage() {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>designlayer — open an app</title>
+<title>Open an app · designlayer</title>
 <style>${startScreenStyle()}</style>
 </head>
 <body>

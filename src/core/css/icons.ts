@@ -34,14 +34,21 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  *
  * Half a unit, not a whole one. The bump lands on top of the accent colour and
  * border a pressed control already wears, so it is the third signal rather than
- * the only one — and a full unit at the \`mark\` rung would close a glyph's
+ * the only one — and a full unit at the \`marker\` rung would close a glyph's
  * counters up instead of emphasising it.
  *
- * \`--de-icon-stroke\` is written inline by \`drawIcon\`, per rung, which is what
- * lets one rule serve six sizes: a 10px glyph strokes at 2.75 and a 32px one at
- * 1.75, and each gets its own +0.5 rather than a shared absolute that would be
- * heavy on one and invisible on the other. The \`2\` fallback is Lucide's native
- * width, and only ever applies to a glyph drawn outside \`drawIcon\`.
+ * \`--de-icon-stroke\` is written inline by \`drawIcon\`. Every rung strokes at
+ * the kit's 2 now (see \`STROKE_FOR_SIZE\` in \`tools/build-icons.mjs\`), so the
+ * property is the editor's version of the kit's \`--icon-stroke-width\` —
+ * namespaced, because the kit's name inherits from the HOST page and a host
+ * tuned to 1.75 would re-weight the chrome. The \`2\` fallback only applies to a
+ * glyph drawn outside \`drawIcon\`.
+ *
+ * WHAT THIS DOES NOT REACH. A shape with \`stroke: none\` is a fill whose weight
+ * is its outline — the kit's chevron-down, x, copy and arrows, and the whole
+ * native lattice family — and no stroke rule can thicken it. Those glyphs say
+ * "selected" with the colour and plate their control already paints. That is
+ * the kit's own arrangement: its filled glyphs have no heavier weight either.
  *
  * Scoped twice over — under the chrome attribute, and to \`[data-de-glyph]\` — so
  * it reaches neither an \`<svg>\` belonging to the app being edited nor a HOST
@@ -50,10 +57,11 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  * selected.
  */
 /*
- * \`fast\` IS 120ms and \`ease\` is this chrome's curve. This was the last
- * unargued literal duration in the stylesheet — the same number spelled a
- * second way, next to the keyword curve rather than the kit's — so it was the
- * one that would silently stop agreeing the day the rung moved.
+ * \`hover\` is the kit's \`--duration-hover\` (150ms) and \`ease\` its emphasized
+ * curve. This was
+ * once the last unargued literal duration in the stylesheet — the same number
+ * spelled a second way — so it was the one that would silently stop agreeing
+ * the day the rung moved.
  *
  * ## AND THIS SELECTOR OUTRANKS EVERY OTHER GLYPH TRANSITION IN THE CHROME
  *
@@ -74,7 +82,7 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  * \`css/annotations.ts\`, which is the pattern to copy.
  */
 [data-designlayer] svg[data-de-glyph] {
-  transition: stroke-width ${t.duration.fast} ${t.ease};
+  transition: stroke-width ${t.duration.hover} ${t.ease};
 }
 
 [data-designlayer][aria-pressed="true"] svg[data-de-glyph],
@@ -101,7 +109,7 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  * Measured rather than eyeballed, by rasterising each glyph at 120px and taking
  * the alpha-weighted centroid of the ink:
  *
- *   Cursor   centroid off centre by 6.3% of the box — 1.27px at the launcher
+ *   Cursor   centroid off centre by 6.3% of the box — 1.5px at the launcher
  *   Plus     0.4%    Search  0.9%    Check  0.5%
  *
  * So this is not a systemic failure with one visible instance; it is one glyph
@@ -111,7 +119,7 @@ export const iconsCss = `/* ---------- glyph weight ---------- */
  * fractions of a pixel nobody can see, to fix one they can.
  *
  * A PERCENTAGE, so it holds at every rung. \`translate\` resolves a percentage
- * against the element's own size, so 6.3% is 1.27px on the launcher's 20px mark
+ * against the element's own size, so 6.3% is 1.5px on the launcher's 24px mark
  * and 1.0px on the toolbar's 16px one, with no per-size table to keep correct.
  *
  * Keyed on the name, which is why \`icon()\` stamps one. Scoped to

@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 /**
- * Regenerates `src/core/icons.ts` from Lucide (https://lucide.dev/icons, ISC).
+ * Regenerates `src/core/icons.ts` from three sources: the design foundations
+ * kit's glyphs (`tools/icons/foundations/*.svg`), Lucide
+ * (https://lucide.dev/icons, ISC) for the editor marks the kit has no picture
+ * for, and the native lattice family authored below.
  *
  * The glyphs are VENDORED as path data rather than imported at runtime, for the
  * same reason they always were: the bundle is an IIFE with no imports, and the
  * editor must not add a dependency to the app it is editing. This script is how
  * that data is kept honest — the mapping below is the only place an editor name
- * is tied to a Lucide name, so a glyph swap is a one-line edit and a re-run.
+ * is tied to a source drawing, so a glyph swap is a one-line edit and a re-run.
+ *
+ * THE KIT FIRST. Where the kit has a glyph for a role — close, check, search,
+ * copy, comment, submit — the editor draws the kit's, so the chrome and every
+ * product built on the kit share one picture per meaning (ADOPTION-GUIDE § 6,
+ * "one meaning, one glyph"). The kit's SVGs are copied into the repo unchanged
+ * and read here; see `kit()` and `readKitGlyph`. Lucide stays for the marks that
+ * are this editor's own subject matter — flow, padding, constrain, wrap — and
+ * for the half of a state PAIR whose partner the kit does not draw.
  *
  *   node tools/build-icons.mjs          # rewrite src/core/icons.ts
  *   node tools/build-icons.mjs --check  # fail if the file is out of date
@@ -38,7 +49,9 @@
  *      "on means heavier" a property of the design system rather than a thing
  *      each call site remembers.
  *
- *   3. Stroke weight is compensated per SIZE. See `STROKE_FOR_SIZE`.
+ *   3. Stroke weight is ONE number at every size — the kit's 2. It used to be
+ *      compensated per size, and the kit's filled glyphs are why it no longer
+ *      is. See `STROKE_FOR_SIZE`.
  */
 
 import fs from "node:fs"
@@ -47,9 +60,16 @@ import { fileURLToPath } from "node:url"
 
 const root = path.dirname(fileURLToPath(new URL("../package.json", import.meta.url)))
 const OUT = path.join(root, "src", "core", "icons.ts")
+const KIT_DIR = path.join(root, "tools", "icons", "foundations")
 
 /**
- * Editor name -> Lucide name.
+ * A MAP value that names a kit glyph rather than a Lucide one: the file
+ * `tools/icons/foundations/<name>.svg`, named as the kit's `icons.json` names it.
+ */
+const kit = (name) => ({ kit: name })
+
+/**
+ * Editor name -> source drawing: a Lucide name, or `kit("…")`.
  *
  * The editor's own names are kept: they say what the mark MEANS here, which is
  * not always what Lucide calls it (`Square` is our generic element box,
@@ -118,7 +138,7 @@ const MAP = {
   // The token picker's search FIELD, and only that now. It labelled DS Lint's
   // Audit button too, which was one mark doing two unrelated jobs — see
   // `ListChecks` below.
-  Search: "Search",
+  Search: kit("search"),
   /*
    * Run the design-system audit — DS Lint's one starting control.
    *
@@ -140,21 +160,37 @@ const MAP = {
    * control is pressed before anything is known, which is the one promise this
    * panel refuses to make anywhere else. `ClipboardCheck` is the clipboard,
    * which the annotations tab has already spent on Copy.
+   *
+   * The kit's `list-checks` is the same subject drawn as a checklist inside a
+   * frame, with the tick breaking out of its corner, and is the drawing now.
    */
-  ListChecks: "ListChecks",
-  Check: "Check",
-  X: "X",
-  ChevronDown: "ChevronDown",
-  ChevronRight: "ChevronRight",
+  ListChecks: kit("list-checks"),
+  Check: kit("check"),
+  X: kit("x"),
+  // The kit draws these two differently — `chevron-down` as a filled outline,
+  // `chevron-right` as a 2-unit stroke — and at the flat 2 of `STROKE_FOR_SIZE`
+  // the two land at the same weight, which is why that table is flat.
+  ChevronDown: kit("chevron-down"),
+  ChevronRight: kit("chevron-right"),
   // Show more / show less, where the thing shown is a LIST that grows downward:
   // the per-side token rows, the full container-step ladder. A double chevron
   // says "there is more of this", which a single one — already spent on section
   // disclosure and on the tree twisty — cannot say without ambiguity.
+  //
+  // Lucide's, not the kit's: the kit's `chevrons-up-down` is a pair of opposed
+  // ARROWS, which is a sort control, and it has no collapse partner.
   ChevronsUpDown: "ChevronsUpDown",
   ChevronsDownUp: "ChevronsDownUp",
-  Plus: "Plus",
+  /*
+   * Add and remove, as a pair. The kit's `plus` IS Lucide's (it ships it under
+   * ISC), so `Plus` is the kit's drawing either way. `Minus` stays Lucide's
+   * rather than taking the kit's filled `minus`, because they sit side by side
+   * on every fill, stroke and effect header and the kit's minus spans 20 of the
+   * grid against its own plus's 16: Lucide's is the drawn partner of that plus.
+   */
+  Plus: kit("plus"),
   Minus: "Minus",
-  Copy: "Copy",
+  Copy: kit("copy"),
   /*
    * Handing the session to a coding agent — the annotations tab's Send button.
    *
@@ -164,14 +200,18 @@ const MAP = {
    * it names the RECIPIENT as an AI, where the plane names the ACT. The button
    * beside it copies the same brief to a clipboard, so the distinction the
    * glyph has to draw is departure, not intelligence.
+   *
+   * The kit's role map settles which plane: "Send" is `paper-plane-filled`, and
+   * the hollow `paper-plane` means "post into a chat". Handing the brief off is
+   * the first.
    */
-  Send: "Send",
-  Trash: "Trash2",
-  // Lucide's `Code` is the `< >` pair. It labels the inspector's Code TAB, and
-  // has to read at 16 beside a slider stack and a speech bubble.
-  Code: "Code",
-  Sparkles: "Sparkles",
-  Play: "Play",
+  Send: kit("paper-plane-filled"),
+  Trash: kit("trash-2"),
+  // The Code TAB. The kit's code mark is `</>` — Lucide's `Code` was `< >` —
+  // and it has to read at 16 beside a speech bubble.
+  Code: kit("code-2"),
+  Sparkles: kit("sparkles"),
+  Play: kit("play"),
   /*
    * `Info` twice, once with its ring and once without, because the ring is
    * load-bearing on one of the three surfaces that draw it and redundant on the
@@ -181,7 +221,7 @@ const MAP = {
    * its own — the lint badge pinned over the app, a rounded square plate keyed
    * by severity, where a bare `i` would read as a stray letter.
    *
-   * `InfoMark` is the same mark with Lucide's circle dropped and the `i` scaled
+   * `InfoMark` is the same mark with the kit's ring dropped and the `i` scaled
    * up to fill what took its place. It is for the two dots that ALREADY draw a
    * circle: the settings help dot and the lint header's. They are 14px discs
    * with a 12px glyph in them, so the ringed drawing put a second circle 1.4px
@@ -191,21 +231,21 @@ const MAP = {
    * Either way an `i` and not a question mark — a `?` asks the reader whether
    * they are confused, an `i` offers a fact.
    */
-  Info: "Info",
-  InfoMark: "Info",
+  Info: kit("info"),
+  InfoMark: kit("info"),
   // The theme switch wears the mode it will GIVE you, which is the convention
-  // every OS switch uses: a moon offers night.
+  // every OS switch uses: a moon offers night. Both are NATIVE (see below), so
+  // these Lucide names are shadowed; the kit's `sun` and `moon` are not used,
+  // for the reason the toolbar block gives.
   Sun: "Sun",
   Moon: "Moon",
   /*
    * Annotation: the toolbar mode toggle, the annotations tab's mark, and every
-   * marker pinned on the canvas. Lucide's ROUND bubble, not its square one — at
-   * the size a marker is drawn, the square bubble's tail is the only thing
-   * separating it from a plain box.
-   *
-   * It is drawn MIRRORED and scaled — see `REDRAWN`. Lucide hangs the tail off
-   * the bottom left and this editor wants it on the right, and because one name
-   * serves all three surfaces the flip reaches every one of them at once.
+   * marker pinned on the canvas. The kit's role map names `message-square` for
+   * "comment", and the kit draws it as a ROUND bubble with its tail at the
+   * bottom right — the two things this mark was already asking of Lucide, where
+   * it had to be `MessageCircle` MIRRORED to get the tail on the right. The
+   * mirror is gone with Lucide; the scale stays — see `REDRAWN`.
    *
    * A native bubble stood here for one round and was the wrong answer. It had
    * to be a rounded rectangle, because a circle with a separately-authored tail
@@ -214,16 +254,25 @@ const MAP = {
    * not. The round bubble was better than anything drawn to replace it, so what
    * it needed was the flip, not a redrawing.
    */
-  MessageSquare: "MessageCircle",
+  MessageSquare: kit("message-square"),
 
-  // Layer-tree row state. Eye and lock each have an explicit opposite drawing,
-  // because "hidden" and "locked" are not the pressed state of a control — they
-  // are facts about the layer, and a struck-through eye says so at a glance.
+  /*
+   * Layer-tree row state. Eye and lock each have an explicit opposite drawing,
+   * because "hidden" and "locked" are not the pressed state of a control — they
+   * are facts about the layer, and a struck-through eye says so at a glance.
+   *
+   * A PAIR is one drawing in two states, so both halves come from one source.
+   * The kit draws a lock and no open lock, so `LockOpen` is the kit's lock with
+   * its shackle swung open — one arc edited, see `REDRAWN`. The kit's eye is a
+   * filled half-lid with no counterpart to strike through, and deriving one is
+   * redrawing it, so the eye pair stays Lucide's: a row that toggled between
+   * two families on every click would be worse than one that shares neither.
+   */
   Eye: "Eye",
   EyeOpen: "Eye",
   EyeOff: "EyeOff",
-  Lock: "Lock",
-  LockOpen: "LockOpen",
+  Lock: kit("lock"),
+  LockOpen: kit("lock"),
 
   // The one control in this chrome that LEAVES it: "Sign in with …" in the
   // library sign-in dialog hands the person over to their identity provider, in
@@ -231,12 +280,13 @@ const MAP = {
   // glyph is what makes it survive a skim — a button that opens something
   // somewhere else should not look like one that acts here, and an arrow out of
   // a box is the mark everybody already reads that way.
-  ExternalLink: "ExternalLink",
+  ExternalLink: kit("external-link"),
 
-  // What a layer IS.
+  // What a layer IS. `Square` stays Lucide's outline: the kit's `square` is a
+  // SOLID swatch, which in a layer row would read as a colour, not a box.
   Square: "Square",
   Type: "Type",
-  Image: "Image",
+  Image: kit("image"),
   Component: "Component",
 
   // Align: three marks along each axis. Lucide names these six by the edge they
@@ -251,10 +301,17 @@ const MAP = {
   SpaceBetweenHorizontal: "AlignHorizontalSpaceBetween",
   SpaceBetweenVertical: "AlignVerticalSpaceBetween",
 
-  // Arrange, as two pairs: one arrow steps, two arrows go all the way.
-  ArrowUp: "ArrowUp",
-  ArrowDown: "ArrowDown",
-  ArrowRight: "ArrowRight",
+  /*
+   * The shared arrows — layers tree, app chooser, layer menu, field steppers.
+   * The kit draws `arrow-up` and `arrow-right` and no `arrow-down`, and up and
+   * down sit together in every one of those surfaces, so `ArrowDown` is the
+   * kit's `arrow-up` flipped vertically (see `REDRAWN`) rather than Lucide's,
+   * which is 14 units tall against the kit's 22. The two `…ToLine` marks keep
+   * Lucide's: the kit has none, and the options panel draws its one alone.
+   */
+  ArrowUp: kit("arrow-up"),
+  ArrowDown: kit("arrow-up"),
+  ArrowRight: kit("arrow-right"),
   ArrowUpToLine: "ArrowUpToLine",
   ArrowDownToLine: "ArrowDownToLine",
 
@@ -342,56 +399,68 @@ const MAP = {
    * the fix was to add one rather than keep picking the least wrong glyph
    * already in the set.
    */
-  Pencil: "Pencil",
+  Pencil: kit("pencil"),
   // Split one value into four, and collapse four back into one — the corner
   // radii, and the padding sides. Four cells against one box, which is the whole
   // of what that toggle does.
   Grid2x2: "Grid2x2",
   // The 3x3 alignment pad's cells. Nine of these inside an 18px grid, so the
   // mark has to survive being the smallest thing in the chrome: a ring still
-  // reads at the `mark` rung, where a solid dot closes up.
+  // reads at the `marker` rung, where a solid dot closes up.
   Circle: "Circle",
 }
 
 /**
- * The ramp a glyph may be drawn at, and the stroke it wears at each rung.
+ * The ramp a glyph may be drawn at — the kit's six icon roles, marker 12 to
+ * feature 24 — and the stroke it wears at each rung.
  *
- * This is the half of "one family" that a stroke set must state outright and a
- * fill set gets for free.
+ * FLAT AT THE KIT'S 2, where it used to be compensated per size (2.75 at 10
+ * down to 1.75 at 32). Two things changed, and either would have been enough.
  *
- * A stroke's WIDTH is in grid units, so its rendered thickness is
- * `width * size / 24`. Held at Lucide's native 2 across this ramp, one mark
- * arrives 0.83px thick at the `mark` rung and 2.67px at `hero` — a threefold
- * spread in apparent weight between two drawings the design system calls the
- * same icon. The small end is the end that fails: below about 1px a stroke
- * antialiases into a grey suggestion of itself, which is exactly how an icon
- * comes to look "too small" while measuring precisely the size it was asked for.
+ * The kit's glyphs are half STROKES and half FILLS, and a fill is a stroke
+ * already expanded: `chevron-down`, `x`, `copy` and `arrow-up` are outlines
+ * whose 2-unit weight is baked into the path, and no attribute can make them
+ * heavier at 12px. Compensating the strokes would put a `chevron-right` a
+ * quarter heavier than the `chevron-down` it swaps with in the same row, which
+ * is the kit's own named bug ("a lone quiet stroke among 2-stroke peers")
+ * turned the other way. One number is the only weight both halves can share.
  *
- * So the width is compensated — heavier on the small rungs, lighter on the large
- * ones — landing rendered thickness on 1.15, 1.25, 1.50, 1.77, 2.00 and 2.33px.
- * That curve is deliberately not FLAT: a 32px icon drawn at a 12px icon's
- * thickness reads as a hairline drawing rather than as the same mark enlarged.
- * It simply travels a fifth as far as the uncompensated one does.
+ * And the rung that needed rescuing is gone. Compensation existed because 2
+ * units at 10px is 0.83px, under the point where a stroke antialiases into a
+ * grey smear. The kit's ramp stops at 12, where 2 units is exactly 1 CSS pixel:
+ * two whole device pixels on a 2x screen, one whole pixel at 1x. That is the
+ * thinnest line this chrome draws anywhere, hairlines included, and it reads.
+ * Rendered thickness now rises 1.0 → 2.0px across the ramp, a 2x spread that is
+ * the same mark enlarged rather than two weights.
  *
- * 24 keeps Lucide's own 2, so the set looks like Lucide where Lucide is drawn at
- * Lucide's size.
+ * TUNING. The kit exposes this as `--icon-stroke-width`. The chrome does not
+ * read that name, because it inherits from the HOST page and a host set to the
+ * kit's quiet 1.75 would re-weight the editor. The editor's equivalent is
+ * `--de-icon-stroke`, written per glyph by `drawIcon` from this table.
  *
  * The ceiling is not free: half of a stroke lies outside the path it is centred
- * on, so a width of `w` needs `w / 2` units of clearance inside the grid.
- * `assertFits` measures every glyph's real clearance and fails the build if any
- * rung would push its ink past the viewBox — which would not look like a heavy
- * icon, it would look like a clipped one.
+ * on, so a width of `w` needs `w / 2` units of clearance inside the grid — plus
+ * the selected-state bump (see `SELECTED_STROKE_BUMP`). `assertFits` measures
+ * every glyph's real clearance and fails the build if any stroked shape would
+ * push its ink past the viewBox.
  */
 const STROKE_FOR_SIZE = {
-  10: 2.75,
-  12: 2.5,
-  16: 2.25,
-  20: 2.125,
+  12: 2,
+  14: 2,
+  16: 2,
+  18: 2,
+  20: 2,
   24: 2,
-  32: 1.75,
 }
 
-/** Lucide's grid. Never re-windowed — see the header. */
+/**
+ * How much heavier `css/icons.ts` draws a glyph in a selected row or pressed
+ * control (`calc(var(--de-icon-stroke) + 0.5)`). Mirrored here only so the
+ * clearance check measures the heaviest stroke that actually renders.
+ */
+const SELECTED_STROKE_BUMP = 0.5
+
+/** The kit's and Lucide's grid. Never re-windowed — see the header. */
 const GRID = 24
 
 /* ── The native family, and the measurement that forced it ──────────────────
@@ -441,19 +510,19 @@ const GRID = 24
  * A native glyph is authored on a 16 lattice and emitted into the 24 viewBox,
  * so one authored unit renders at `size / 16` CSS pixels — `size / 8` device
  * pixels on a 2x display. That is a whole number only when the size is a
- * multiple of 8: **16, 24 and 32 are crisp; 10 and 12 are not.**
+ * multiple of 8: **16 and 24 are crisp; 12, 14, 18 and 20 are not.**
  *
  * Measured, because it is not a small difference. The align mark at 16px
  * resolves to two ink levels in the rendered panel — the ink and one edge
  * sample. The same construction at 12px resolves to four to six, which is
  * exactly the soft, half-covered edge this family was built to get rid of.
  *
- * So a native glyph in a field's leading strip is drawn at `icon.control`
- * (16), not at `icon.row` (12) as a 12px-tall control would suggest. The strip
+ * So a native glyph in a field's leading strip is drawn at `icon.action`
+ * (16), not at `icon.marker` (12) as a 12px-tall control would suggest. The strip
  * grows from 20px to 24px to hold it, which is what Figma's is anyway.
  *
  * `test/icon-cases.mjs` enforces this against the source, because the failure
- * is invisible in review: `tokens.icon.row` is the locally reasonable thing to
+ * is invisible in review: `tokens.icon.marker` is the locally reasonable thing to
  * reach for beside 12px text, and the glyph it produces looks fine until it is
  * next to one drawn at 16.
  */
@@ -1103,7 +1172,7 @@ const NATIVE = {
    * changes the drawing everywhere it appears and churns no call site. `Sun`,
    * `Moon`, `PanelLeft` and `PanelRight` are each called from exactly one
    * control in this bar. `X`, `RotateCcw` and `RotateCw` are not — `X` closes
-   * seven other things at `icon.row`, which is 12px and a rung this family may
+   * seven other things at `icon.marker`, which is 12px and a rung this family may
    * not be drawn at — so the toolbar's cross and its two history arrows are
    * NEW marks under names that say what the button does rather than what the
    * picture is.
@@ -1401,45 +1470,48 @@ const FILLED = {
 
 const lucide = await import("lucide")
 
-/* ── Redrawing a Lucide glyph in place ──────────────────────────────────────
+/* ── Redrawing a vendored glyph in place ────────────────────────────────────
  *
- * Three edits are allowed to a vendored path, and they reach two glyphs: the
- * note bubble and the bare info mark. Everything else arrives exactly as Lucide
- * drew it.
+ * Four edits are allowed to a vendored path, and they reach four glyphs: the
+ * note bubble, the bare info mark, the down arrow and the open lock.
+ * Everything else arrives exactly as the kit or Lucide drew it.
  *
- * MIRRORING, because Lucide hangs `MessageCircle`'s tail off the bottom LEFT
- * and this editor wants it on the right. Done to the path DATA rather than with
- * a `transform` attribute, which is the tempting one-liner and quietly breaks
- * the build's own eyesight: `inkBox` reads coordinates, not transforms, so a
- * mirrored-by-attribute glyph would be measured in its old position and
- * `assertFits` would be checking a drawing nobody renders.
+ * REFLECTING, because the kit draws `arrow-up` and no `arrow-down`. Done to the
+ * path DATA rather than with a `transform` attribute, which is the tempting
+ * one-liner and quietly breaks the build's own eyesight: `inkBox` reads
+ * coordinates, not transforms, so a flipped-by-attribute glyph would be
+ * measured in its old position and `assertFits` would be checking a drawing
+ * nobody renders. (The note bubble was MIRRORED here while it was Lucide's
+ * `MessageCircle`, whose tail hung off the left; the kit's already hangs right.)
  *
- * SCALING, because Lucide's bubble is a circle of radius 10 on a 24 grid — the
- * largest mark in the whole set, and 24% wider than anything else in this bar
- * once the other seven marks were authored to one system. Lucide's optical
- * sizing is calibrated against Lucide's own neighbours, and this glyph no
- * longer has any: it is the only vendored mark in a strip of eight. Note this
- * is NOT re-windowing, which the header forbids and `test/icon-cases.mjs` pins.
- * Re-windowing widens the viewBox, which shrinks the drawing AND its stroke
- * together and lands the mark under weight. Scaling the path leaves
- * `stroke-width` alone, so the bubble gets smaller at exactly the weight
- * everything around it is drawn at — which is the whole point.
+ * SCALING, because the bubble is a circle of radius 10 on a 24 grid — the
+ * largest mark in the toolbar, and 24% wider than anything else in it once the
+ * other seven marks were authored to one system. Note this is NOT re-windowing,
+ * which the header forbids and `test/icon-cases.mjs` pins. Re-windowing widens
+ * the viewBox, which shrinks the drawing AND its stroke together and lands the
+ * mark under weight. Scaling the path leaves `stroke-width` alone, so the
+ * bubble gets smaller at exactly the weight everything around it is drawn at.
  *
  * DROPPING A SHAPE, because a glyph whose outer ring is redundant is worse than
- * one drawn a size too small. `Info` is a circle with an `i` inside it, and the
+ * one drawn a size too small. `Info` is a ring with an `i` inside it, and the
  * two surfaces that explain a setting — the settings help dot and the lint
  * header's — already draw a 14px disc for it to sit in. Two concentric circles
- * 1.4px apart is what the reader sees there, and the `i` between them is a
- * 1.25px stroke over 2px of stem: a ring with a smudge in it. Dropping Lucide's
- * circle and scaling what is left about the grid centre hands the ring to the
- * disc, which was drawing one anyway, and spends the whole 14px on the mark
- * that carries the meaning.
+ * 1.4px apart is what the reader sees there, with the `i` squeezed between.
+ * Dropping the ring and scaling what is left about the grid centre hands the
+ * ring to the disc, which was drawing one anyway, and spends the whole 14px on
+ * the mark that carries the meaning.
  *
  * Kept as a SECOND name rather than applied to `Info`, because the third
  * surface that draws this glyph — the lint badge over the page — is a rounded
  * SQUARE plate keyed by severity, and a bare `i` on a red square is a letter,
  * not a notice. The ring is load-bearing there and redundant in a disc, so the
  * set carries both drawings and each surface asks for the one it needs.
+ *
+ * EDITING ONE SEGMENT, by exact text, for the open lock: the kit's shackle arc
+ * ends back on the body, and the open state ends it early, swung up and away.
+ * An exact-text replace rather than new geometry so the body and the start of
+ * the shackle stay the kit's to the digit, and the build fails if the kit's
+ * path ever changes under it.
  */
 
 /** Every point in a path, moved by `move`, with arc flags kept honest. */
@@ -1509,46 +1581,68 @@ function transformPath(d, move, { flips = false, scale = 1 } = {}) {
 }
 
 /**
- * A vendored glyph, mirrored across the grid's vertical centre and scaled about
- * its middle. Both are identity by default, so a glyph with no entry is
- * untouched.
+ * Per-glyph edits to a vendored drawing: reflected, scaled about the grid
+ * centre, a shape dropped, a segment replaced. All identity by default, so a
+ * glyph with no entry is untouched.
  */
 const REDRAWN = {
-  // The note bubble: tail to the right, and pulled in to the size the seven
-  // native marks beside it are drawn at. See the block above for both reasons.
-  MessageSquare: { mirror: true, scale: 0.78 },
+  // The note bubble, pulled in to the size the seven native marks beside it in
+  // the toolbar are drawn at. See the block above.
+  MessageSquare: { scale: 0.78 },
   /*
    * The info mark with its ring taken off, for the two dots that already have
    * one. See the block above for why it is a separate name from `Info`.
    *
-   * 1.5 is the factor that leaves the `i` sitting in the disc the way Lucide's
-   * own sits in its circle. Lucide inks 10.5 units of a 22-unit circle, 26% of
-   * it clear at each end; the scaled mark inks 14.5 of the 28 grid units the
-   * 14px disc covers at the `row` rung, 24% clear. Measured at 1x and 2x before
-   * it was chosen — 1.25 reads as a small `i` in a big disc and 1.625 crowds the
-   * edge, and both are legible where the ringed original at this size is not.
+   * 1.3 lands the kit's `i` — 11.3 units of ink, dot top to stem foot — on the
+   * 14.7 units the Lucide `i` was measured at before it was chosen here: 24% of
+   * the 14px disc clear at each end at the `marker` rung. The kit's `i` is
+   * taller than Lucide's was, which is why the factor dropped from 1.5.
+   *
+   * `keepRadius` leaves the dot at the kit's own radius while its position
+   * scales. The stem is a stroke, and a stroke does not scale with the path;
+   * scaling the dot alone would swell it from the kit's 1.25x the stem's width
+   * to 1.6x, a full stop over a thin line.
    */
-  InfoMark: { drop: ["circle"], scale: 1.5 },
+  InfoMark: { drop: ([tag, attrs]) => tag === "circle" && attrs.stroke !== "none", scale: 1.3, keepRadius: true },
+  // The kit's `arrow-up`, pointing down. See the note on the arrows in `MAP`.
+  ArrowDown: { flip: true },
+  /*
+   * The kit's lock with the shackle open: the arc stops 11.5 degrees above the
+   * horizontal on the right instead of dropping back into the body — the angle
+   * Lucide's `LockOpen` opens to — so the pair differs by that gap and nothing
+   * else, and the mark cannot change size on toggle.
+   */
+  LockOpen: { edit: [["a4.222 4.222 0 0 1 8.444 0v3.333", "a4.222 4.222 0 0 1 8.359-.844"]] },
 }
 
 function redraw(name, shapes) {
   const recipe = REDRAWN[name]
   if (!recipe) return shapes
-  const { mirror = false, scale = 1, drop = [] } = recipe
-  if (drop.length) {
-    shapes = shapes.filter(([tag]) => !drop.includes(tag))
+  const { mirror = false, flip = false, scale = 1, drop, keepRadius = false, edit = [] } = recipe
+  if (drop) {
+    shapes = shapes.filter((shape) => !drop(shape))
     if (!shapes.length) throw new Error(`redraw: ${name} dropped every shape it had`)
+  }
+  for (const [from, to] of edit) {
+    const hits = shapes.filter(([tag, attrs]) => tag === "path" && attrs.d.includes(from))
+    if (hits.length !== 1) throw new Error(`redraw: ${name} expected one path containing "${from}"`)
+    shapes = shapes.map(([tag, attrs]) =>
+      tag === "path" && attrs.d.includes(from) ? [tag, { ...attrs, d: attrs.d.replace(from, to) }] : [tag, attrs]
+    )
   }
   const mid = GRID / 2
   const move = (x, y) => [
     mid + (mirror ? -1 : 1) * (x - mid) * scale,
-    mid + (y - mid) * scale,
+    mid + (flip ? -1 : 1) * (y - mid) * scale,
   ]
+  // One reflection reverses every arc's sweep; two cancel out.
+  const flips = mirror !== flip
+  if (!mirror && !flip && scale === 1) return shapes
   return shapes.map(([tag, attrs]) => {
-    if (tag === "path") return [tag, { ...attrs, d: transformPath(attrs.d, move, { flips: mirror, scale }) }]
+    if (tag === "path") return [tag, { ...attrs, d: transformPath(attrs.d, move, { flips, scale }) }]
     if (tag === "circle") {
       const [cx, cy] = move(Number(attrs.cx), Number(attrs.cy))
-      return [tag, { ...attrs, cx, cy, r: Number(attrs.r) * scale }]
+      return [tag, { ...attrs, cx, cy, r: keepRadius ? Number(attrs.r) : Number(attrs.r) * scale }]
     }
     if (tag === "rect") {
       const [x0, y0] = move(Number(attrs.x), Number(attrs.y))
@@ -1559,35 +1653,129 @@ function redraw(name, shapes) {
   })
 }
 
-/** One glyph's shapes, in the tags this renderer knows how to draw and measure. */
-function readGlyph(lucideName) {
+/**
+ * The rules every vendored shape is held to, whichever set it came from.
+ *
+ * Only `path`, `circle` and `rect`, and nothing passed through unrecognised.
+ * Not fussiness: `assertFits` has to measure every shape to know whether its
+ * stroke clears the viewBox, and a tag it cannot measure would be silently
+ * excluded from that check — a glyph clipping at the `marker` rung with nothing
+ * to say so. React spelling and unresolved custom properties are both SILENT in
+ * the DOM: `setAttribute` accepts any name, and a `var()` in an attribute value
+ * never resolves. Both have shipped from a vendored set before.
+ */
+function checkShape(label, tag, attrs) {
+  if (!["path", "circle", "rect"].includes(tag)) {
+    throw new Error(`${label}: <${tag}> is not a shape this renderer draws`)
+  }
+  for (const [key, value] of Object.entries(attrs)) {
+    if (/[A-Z]/.test(key)) throw new Error(`${label}: attribute "${key}" is camelCase`)
+    if (String(value).includes("var(--")) {
+      throw new Error(`${label}: attribute "${key}" carries an unresolved custom property`)
+    }
+  }
+  return [tag, attrs]
+}
+
+function readLucideGlyph(lucideName) {
   const shapes = lucide[lucideName]
   if (!Array.isArray(shapes)) throw new Error(`lucide has no icon named ${lucideName}`)
-  return shapes.map(([tag, attrs]) => {
-    /*
-     * Lucide draws the mapped set with `path`, `circle` and `rect` only, and
-     * this refuses anything else rather than passing it through.
-     *
-     * Not fussiness: `assertFits` has to measure every shape to know whether its
-     * stroke clears the viewBox, and a tag it cannot measure would be silently
-     * excluded from that check — a glyph clipping at the `mark` rung with
-     * nothing to say so.
-     */
-    if (!["path", "circle", "rect"].includes(tag)) {
-      throw new Error(`${lucideName}: <${tag}> is not a shape this renderer draws`)
+  return shapes.map(([tag, attrs]) => checkShape(`lucide/${lucideName}`, tag, attrs))
+}
+
+/** The attributes of a kit shape that are GEOMETRY, and so survive vendoring. */
+const KIT_GEOMETRY = ["d", "cx", "cy", "r", "x", "y", "width", "height", "rx", "ry"]
+/** Paint the kit states per shape, which is resolved rather than copied. */
+const KIT_PAINT = ["fill", "stroke", "fill-rule", "clip-rule"]
+/** Stroke styling the root decides for every glyph, so a shape's copy is dropped. */
+const KIT_STROKE_STYLE = ["stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit"]
+
+/**
+ * One kit glyph, read from its SVG file into the renderer's shape records.
+ *
+ * The kit's SVGs are two kinds of drawing in one set, and each is mapped onto
+ * how `drawIcon` paints:
+ *
+ *   - A STROKED shape keeps only its geometry and inherits the root's paint —
+ *     `stroke="currentColor"` at the rung's width, `fill="none"` on the outline
+ *     weight and `currentColor` on the filled one. That inheritance is what
+ *     lets a toggle flood the kit's bubble, and it is why the shape's own
+ *     `stroke-width="var(--icon-stroke-width, 2)"` is dropped rather than kept:
+ *     one weight per glyph is the root's to set (see `STROKE_FOR_SIZE`).
+ *
+ *   - A FILLED shape states `fill="currentColor" stroke="none"`, the same
+ *     convention the native family uses: its weight is the outline it traces,
+ *     and a root stroke on top would draw it a unit heavier on every side.
+ *
+ * Anything else — a shape both filled and stroked, a stroke that is not the
+ * kit's 2, a transform, an opacity — throws, because each would be a drawing
+ * this renderer silently gets wrong.
+ */
+function readKitGlyph(kitName) {
+  const label = `foundations/${kitName}`
+  const file = path.join(KIT_DIR, `${kitName}.svg`)
+  if (!fs.existsSync(file)) throw new Error(`${label}: no ${path.relative(root, file)}`)
+  const text = fs.readFileSync(file, "utf8")
+  const attrsOf = (source) => Object.fromEntries([...source.matchAll(/([\w:-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]))
+  const inherited = [{}]
+  const shapes = []
+  for (const [, close, tag, source, selfClosing] of text.matchAll(/<(\/?)([a-z][\w-]*)([^>]*?)(\/?)>/gi)) {
+    if (close) {
+      if (tag === "g" || tag === "svg") inherited.pop()
+      continue
     }
-    for (const [key, value] of Object.entries(attrs)) {
-      // React spelling and unresolved custom properties are both SILENT in the
-      // DOM: `setAttribute` accepts any name, and a `var()` in an attribute
-      // value never resolves. Both have shipped from a vendored set before.
-      if (/[A-Z]/.test(key)) throw new Error(`${lucideName}: attribute "${key}" is camelCase`)
-      if (String(value).includes("var(--")) {
-        throw new Error(`${lucideName}: attribute "${key}" carries an unresolved custom property`)
+    const attrs = attrsOf(source)
+    const paint = { ...inherited.at(-1) }
+    for (const key of [...KIT_PAINT, ...KIT_STROKE_STYLE]) if (key in attrs) paint[key] = attrs[key]
+    if (tag === "svg") {
+      if (attrs.viewBox !== `0 0 ${GRID} ${GRID}`) throw new Error(`${label}: viewBox is ${attrs.viewBox}`)
+      inherited.push(paint)
+      continue
+    }
+    if (tag === "g") {
+      for (const key of Object.keys(attrs)) {
+        if (![...KIT_PAINT, ...KIT_STROKE_STYLE].includes(key)) throw new Error(`${label}: <g ${key}> is not supported`)
+      }
+      if (!selfClosing) inherited.push(paint)
+      continue
+    }
+    for (const key of Object.keys(attrs)) {
+      if (![...KIT_GEOMETRY, ...KIT_PAINT, ...KIT_STROKE_STYLE].includes(key)) {
+        throw new Error(`${label}: <${tag} ${key}> is not supported`)
       }
     }
-    return [tag, attrs]
-  })
+    const stroked = paint.stroke !== undefined && paint.stroke !== "none"
+    const filled = paint.fill !== undefined && paint.fill !== "none"
+    if (stroked === filled) throw new Error(`${label}: a <${tag}> is ${stroked ? "both filled and stroked" : "unpainted"}`)
+    if (stroked) {
+      const width = String(paint["stroke-width"] ?? "2").match(/^(?:var\(--icon-stroke-width,\s*)?([\d.]+)\)?$/)
+      if (!width || Number(width[1]) !== 2) {
+        throw new Error(`${label}: stroke-width ${paint["stroke-width"]} is not the kit's 2`)
+      }
+    }
+    const geometry = Object.fromEntries(KIT_GEOMETRY.filter((key) => key in attrs).map((key) => [key, attrs[key]]))
+    shapes.push(
+      checkShape(
+        label,
+        tag,
+        stroked
+          ? geometry
+          : {
+              ...geometry,
+              ...(paint["fill-rule"] ? { "fill-rule": paint["fill-rule"] } : {}),
+              fill: "currentColor",
+              stroke: "none",
+            }
+      )
+    )
+  }
+  if (!shapes.length) throw new Error(`${label}: draws nothing`)
+  return shapes
 }
+
+/** One glyph's shapes from whichever source its MAP entry names. */
+const readGlyph = (source) => (typeof source === "string" ? readLucideGlyph(source) : readKitGlyph(source.kit))
+const originOf = (source) => (typeof source === "string" ? `lucide/${source}` : `foundations/${source.kit}`)
 
 /** Where a cubic turns around — the roots of its derivative, solved not sampled. */
 function derivativeRoots(p0, p1, p2, p3) {
@@ -1735,9 +1923,14 @@ function walkPath(d, push, label) {
     } else if (kind === "A") {
       const arcRx = num()
       const arcRy = num()
-      num() // x-axis-rotation; zero throughout Lucide
+      num() // x-axis-rotation; zero throughout Lucide and the kit
       const largeArc = num()
       const sweep = num()
+      // Minified SVG may pack flags against the next number ("0 011.5"), which
+      // this tokenizer would read as one. A flag that is not 0 or 1 is that.
+      if ((largeArc !== 0 && largeArc !== 1) || (sweep !== 0 && sweep !== 1)) {
+        throw new Error(`${label}: packed arc flags this tokenizer cannot read`)
+      }
       const endX = rx(num())
       const endY = ry(num())
       arcPoints(x, y, arcRx, arcRy, largeArc, sweep, endX, endY, push)
@@ -1812,30 +2005,42 @@ function paintedBox(shapes, label) {
 }
 
 /**
- * No rung's stroke may push a glyph's ink outside the grid it is drawn in.
+ * No stroke may push a glyph's ink outside the grid it is drawn in.
  *
- * Half a stroke lies outside the path it is centred on, so the heaviest rung
- * needs `max(STROKE_FOR_SIZE) / 2` units of clearance on every side. Lucide
- * draws to a 1-unit padding guideline and in practice leaves just under 2 across
- * this set, which is what affords the compensation above — but "in practice" is
- * a measurement, not a promise, and a glyph swapped into the map later may be
+ * Half a stroke lies outside the path it is centred on, so a STROKED shape
+ * needs half the heaviest stroke that renders — the widest rung plus the
+ * selected-state bump — of clearance on every side. A FILLED shape
+ * (`stroke: none`) inks exactly its geometry and needs only to stay inside the
+ * grid; the kit draws its fills out to 1 unit from the edge, which is fine for
+ * a fill and would clip a stroke. So clearance is measured per shape, against
+ * what that shape actually paints.
+ *
+ * Lucide and the kit both draw to a padding guideline, but "in practice" is a
+ * measurement, not a promise, and a glyph swapped into the map later may be
  * drawn tighter. This makes that a build failure rather than a clipped corner
- * somebody eventually notices in a screenshot.
+ * somebody eventually notices in a screenshot. Returns the smallest spare
+ * margin, for the report the script prints.
  */
-function assertFits(box, label) {
-  const clearance = Math.min(box.minX, box.minY, GRID - box.maxX, GRID - box.maxY)
-  const heaviest = Math.max(...Object.values(STROKE_FOR_SIZE)) / 2
-  if (clearance < heaviest) {
-    throw new Error(
-      `${label}: only ${clearance.toFixed(3)} units of clearance inside the ${GRID} grid, ` +
-        `but the heaviest rung needs ${heaviest} — it would clip`
-    )
+function assertFits(shapes, label) {
+  const heaviest = (Math.max(...Object.values(STROKE_FOR_SIZE)) + SELECTED_STROKE_BUMP) / 2
+  let spare = Infinity
+  for (const shape of shapes) {
+    const box = inkBox([shape], label)
+    const clearance = Math.min(box.minX, box.minY, GRID - box.maxX, GRID - box.maxY)
+    const needs = shape[1].stroke === "none" ? 0 : heaviest
+    if (clearance < needs) {
+      throw new Error(
+        `${label}: a <${shape[0]}> has only ${clearance.toFixed(3)} units of clearance inside the ` +
+          `${GRID} grid, but ${needs ? `its heaviest stroke needs ${needs}` : "a fill needs 0"} — it would clip`
+      )
+    }
+    spare = Math.min(spare, clearance - needs)
   }
-  return clearance
+  return spare
 }
 
 /*
- * A name may be drawn HERE or taken from Lucide, never both.
+ * A name may be drawn HERE or vendored, never both.
  *
  * Twenty-three of the native glyphs deliberately reuse a name the map already
  * had — the six aligns, the seven text marks, the four padding sides, the two
@@ -1847,7 +2052,7 @@ function assertFits(box, label) {
  * swapping a shared mark to suit one panel is how a set stops being a set. The
  * arrange strip gets its own four names instead, and so do the toolbar's cross,
  * its two history arrows and its note bubble — `X` alone is drawn seven other
- * places, most of them at `icon.row`, which is a rung this family may not be
+ * places, most of them at `icon.marker`, which is a rung this family may not be
  * drawn at.
  *
  * The collision check is the guard on that reasoning: a native glyph that does
@@ -1870,16 +2075,9 @@ for (const name of Object.keys(FILLED)) {
 
 const entries = names.map((name) => {
   const shapes = NATIVE[name] ?? redraw(name, readGlyph(MAP[name]))
-  const origin = NATIVE[name] ? "native" : `lucide/${MAP[name]}`
+  const origin = NATIVE[name] ? "native" : originOf(MAP[name])
   const box = inkBox(shapes, `${name} (${origin})`)
-  /*
-   * A filled glyph is measured for clearance too, and passes easily — its ink
-   * stops at 3 units from the grid edge where the heaviest rung needs 1.375.
-   * The check is kept rather than skipped because the number it guards is the
-   * ink extent, and a filled mark drawn to the edge would clip just as hard as
-   * a stroked one; nothing about a fill makes the viewBox bigger.
-   */
-  const clearance = assertFits(box, `${name} (${origin})`)
+  const clearance = assertFits(shapes, `${name} (${origin})`)
   /*
    * An authored counterpart is measured by the same two rules as the outline,
    * and then against the outline itself.
@@ -1893,7 +2091,7 @@ const entries = names.map((name) => {
   const filled = FILLED[name]
   if (!filled) return { name, origin, shapes, box, clearance }
   const filledBox = inkBox(filled, `${name} (filled)`)
-  assertFits(filledBox, `${name} (filled)`)
+  assertFits(filled, `${name} (filled)`)
   const painted = paintedBox(shapes, `${name} (${origin})`)
   const filledPainted = paintedBox(filled, `${name} (filled)`)
   const spread = Math.max(
@@ -1914,6 +2112,7 @@ const entries = names.map((name) => {
 const version = JSON.parse(
   fs.readFileSync(path.join(root, "node_modules", "lucide", "package.json"), "utf8")
 ).version
+const kitCount = new Set(Object.values(MAP).filter((source) => typeof source !== "string").map((source) => source.kit)).size
 
 const serialiseShapes = (shapes) =>
   shapes
@@ -1951,12 +2150,15 @@ const strokeTable = Object.entries(STROKE_FOR_SIZE)
 const file = `/**
  * The editor chrome's glyph set.
  *
- * GENERATED by \`tools/build-icons.mjs\` from Lucide ${version}
- * (https://lucide.dev/icons, ISC) — do not hand-edit. To swap a glyph, change
- * the mapping in that script and re-run it.
+ * GENERATED by \`tools/build-icons.mjs\` — do not hand-edit. To swap a glyph,
+ * change the mapping in that script and re-run it. Sources, in order of
+ * preference: the design foundations kit (\`tools/icons/foundations\`, ${kitCount}
+ * drawings) for every role the kit has a glyph for; Lucide ${version}
+ * (https://lucide.dev/icons, ISC) for the editor's own subjects; and a native
+ * lattice family authored in the script.
  *
- * Lucide is a STROKE family on a single ${GRID}x${GRID} grid, and three things follow from
- * that, each of which used to be the opposite here:
+ * Every glyph sits on one ${GRID}x${GRID} grid, and four things follow, each of which
+ * used to be the opposite here:
  *
  *   - ONE drawing per glyph, with a fill painted over it rather than a second
  *     drawing. Lucide ships no filled counterparts, and flooding an outline
@@ -1977,10 +2179,11 @@ const file = `/**
  *     scales a stroke along with the drawing and lands it under weight, trading
  *     a size error for a weight error. The extents are deliberately uneven — a
  *     chevron inks 12 of the grid and a layer stack 20 — because that is
- *     Lucide's own optical sizing.
+ *     each source's own optical sizing.
  *
- *   - Stroke width is compensated per SIZE, which is what actually makes the
- *     family cohere across the ramp. See \`STROKE_FOR_SIZE\`.
+ *   - ONE stroke width, the kit's 2, at every size. The kit's filled glyphs
+ *     carry that weight baked into their outlines, so a stroke compensated per
+ *     size would split the family at the small rungs. See \`STROKE_FOR_SIZE\`.
  */
 
 export type IconNode = [
@@ -1990,7 +2193,9 @@ export type IconNode = [
 ]
 
 /**
- * One glyph: Lucide's shapes, on Lucide's grid.
+ * One glyph: its shapes, on the shared 24 grid. A shape with \`stroke: none\` is
+ * a fill whose weight is its outline; every other shape strokes at the root's
+ * width.
  *
  * \`filled\` is the counterpart drawn for the marks a flood cannot express — see
  * the header. Absent, which is the usual case, the filled weight paints the
@@ -2017,7 +2222,9 @@ export interface IconData {
 export type IconWeight = "outline" | "filled" | "auto"
 
 /**
- * The only sizes a glyph may be drawn at: the ramp in \`tokens.icon\`.
+ * The only sizes a glyph may be drawn at: the kit's six icon roles in
+ * \`tokens.icon\` — marker 12, inline 14, action 16, chrome 18, header 20,
+ * feature 24.
  *
  * A union rather than \`number\`, so a size off the ramp fails to compile instead
  * of shipping. The set drifted to seven sizes once — 10, 12, 13, 14, 16, 18 and
@@ -2025,32 +2232,26 @@ export type IconWeight = "outline" | "filled" | "auto"
  * right next to the text beside it. Nothing caught it, because every one of
  * those calls was locally reasonable.
  *
- * Call sites should pass \`tokens.icon.row\` and friends rather than the number,
+ * Call sites should pass \`tokens.icon.action\` and friends rather than the number,
  * which is what makes the ramp readable at the point of use; this type is the
  * backstop for the ones that do not.
  */
 export type IconSize = ${Object.keys(STROKE_FOR_SIZE).join(" | ")}
 
 /**
- * The stroke each rung wears, in grid units.
+ * The stroke each rung wears, in grid units: the kit's 2 at every rung.
  *
- * The half of "one family" a stroke set has to state outright and a fill set
- * gets for free. Rendered thickness is \`width * size / ${GRID}\`, so Lucide's native
- * 2 held flat across this ramp would draw one mark 0.83px thick at \`mark\` and
- * 2.67px at \`hero\` — a threefold spread in apparent weight between two drawings
- * the design system calls the same icon. The small end is the end that fails:
- * under about 1px a stroke antialiases into a grey suggestion of itself, which
- * is how an icon comes to look "too small" while measuring exactly the size it
- * was asked for.
+ * It used to be compensated per size, heavier on the small rungs. Two things
+ * retired that. The kit's filled glyphs — chevron-down, x, copy, arrow-up —
+ * carry a 2-unit weight baked into their outlines that no attribute can
+ * thicken, so compensating the stroked half would split the set at exactly
+ * the rungs where the two halves sit side by side. And the rung that needed
+ * rescuing is gone: at the kit's floor of 12px, 2 units is exactly 1 CSS pixel,
+ * two whole device pixels at 2x. Rendered thickness rises 1.0 to 2.0px across
+ * the ramp — the same mark enlarged.
  *
- * Compensated, rendered thickness lands on 1.15, 1.25, 1.50, 1.77, 2.00 and
- * 2.33px. Deliberately not flat — a 32px glyph drawn at a 12px glyph's thickness
- * reads as a hairline rather than as the same mark enlarged — but it travels a
- * fifth as far as the uncompensated one. 24 keeps Lucide's own 2, so the set
- * looks like Lucide at Lucide's size.
- *
- * \`tools/build-icons.mjs\` measures every glyph's clearance inside the grid and
- * fails the build if the heaviest rung here would clip one.
+ * \`tools/build-icons.mjs\` measures every stroked shape's clearance inside the
+ * grid and fails the build if the heaviest stroke that renders would clip one.
  */
 const STROKE_FOR_SIZE: Record<IconSize, number> = {
 ${strokeTable}
@@ -2092,19 +2293,19 @@ export const ICON_NAMES = Object.keys(ICONS) as IconName[]
  *
  * Exported so the rung rule can be CHECKED rather than just written down: these
  * land on whole device pixels only at a size that is a multiple of 8, so they
- * may be drawn at \`icon.control\` (16) and above, never at \`icon.row\` (12) or
- * \`icon.mark\` (10). \`test/icon-cases.mjs\` reads this list and greps the source
- * for a call that breaks it.
+ * may be drawn at \`icon.action\` (16) or \`icon.feature\` (24), never at marker
+ * 12, inline 14, chrome 18 or header 20. \`test/icon-cases.mjs\` reads this list
+ * and greps the source for a call that breaks it.
  *
  * A comment could not carry this. The mistake it prevents — reaching for
- * \`tokens.icon.row\` because the text beside the glyph is 12px — is locally
+ * \`tokens.icon.marker\` because the text beside the glyph is 12px — is locally
  * reasonable every single time, and the result looks fine until it is set
  * beside a glyph drawn at 16.
  */
 export const NATIVE_ICON_NAMES = ${JSON.stringify(Object.keys(NATIVE).sort())} as const satisfies readonly IconName[]
 
 /** The rungs a native glyph renders crisply at — every multiple of 8 on the ramp. */
-export const NATIVE_ICON_SIZES = [16, 24, 32] as const satisfies readonly IconSize[]
+export const NATIVE_ICON_SIZES = [16, 24] as const satisfies readonly IconSize[]
 
 const SVG_NS = "http://www.w3.org/2000/svg"
 
@@ -2214,14 +2415,16 @@ if (process.argv.includes("--check")) {
     console.error("STALE src/core/icons.ts — run `node tools/build-icons.mjs`")
     process.exit(1)
   }
-  console.log(`PASS src/core/icons.ts matches lucide ${version} (${names.length} glyphs)`)
+  console.log(`PASS src/core/icons.ts matches the kit + lucide ${version} (${names.length} glyphs)`)
   process.exit(0)
 }
 
 fs.writeFileSync(OUT, file)
 const tightest = entries.reduce((a, b) => (a.clearance < b.clearance ? a : b))
 console.log(
-  `Wrote ${path.relative(root, OUT)} — ${names.length} glyphs from lucide ${version}\n` +
-    `  tightest clearance: ${tightest.name} at ${tightest.clearance.toFixed(3)} units ` +
-    `(heaviest rung needs ${Math.max(...Object.values(STROKE_FOR_SIZE)) / 2})`
+  `Wrote ${path.relative(root, OUT)} — ${names.length} glyphs ` +
+    `(${entries.filter((entry) => entry.origin.startsWith("foundations/")).length} from the kit, ` +
+    `${entries.filter((entry) => entry.origin.startsWith("lucide/")).length} from lucide ${version}, ` +
+    `${entries.filter((entry) => entry.origin === "native").length} native)\n` +
+    `  least spare clearance: ${tightest.name} at ${tightest.clearance.toFixed(3)} units`
 )

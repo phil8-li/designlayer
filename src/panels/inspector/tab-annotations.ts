@@ -62,6 +62,7 @@ import type { EditorContext } from "../../core/context"
 import { plainSection, section, selectField } from "./field"
 import type { InspectorTab } from "./tab-code"
 import { tokens } from "../../core/tokens"
+import { plural } from "../../core/format"
 
 /*
  * THE COMPONENTS SWITCH IS GONE, and nothing replaced it.
@@ -155,7 +156,7 @@ function announceHover(id: string | null): void {
 
 /** `3 notes`, `1 note`. Spelled out because the confirm has to count aloud. */
 function noteWord(count: number): string {
-  return `${count} note${count === 1 ? "" : "s"}`
+  return plural(count, "note")
 }
 
 /**
@@ -347,7 +348,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     if (primaryButton.dataset.label === key) return
     primaryButton.dataset.label = key
     clear(primaryButton)
-    if (send) primaryButton.append(icon("Send", tokens.icon.row))
+    if (send) primaryButton.append(icon("Send", tokens.icon.marker))
     primaryButton.append(text)
   }
 
@@ -419,7 +420,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   function setGlyph(button: HTMLElement, glyph: IconName, label: string): void {
     if (button.dataset.glyph !== glyph) {
       button.dataset.glyph = glyph
-      button.replaceChildren(icon(glyph, tokens.icon.row))
+      button.replaceChildren(icon(glyph, tokens.icon.marker))
     }
     button.setAttribute("aria-label", label)
     button.title = label
@@ -615,7 +616,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         "aria-label": `Help: ${setting}`,
         "aria-description": hint,
       },
-      [icon("InfoMark", tokens.icon.row)]
+      [icon("InfoMark", tokens.icon.marker)]
     )
   }
 
@@ -819,13 +820,13 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         try {
           void navigator.clipboard.writeText(url).catch(() => {
             undoMcpCopied()
-            editor.toast("Could not copy — clipboard access was blocked", "error")
+            editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
           })
           showMcpCopied()
           editor.toast("Copied. Paste into your agent’s MCP settings.")
         } catch {
           undoMcpCopied()
-          editor.toast("Could not copy — clipboard access was blocked", "error")
+          editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
         }
       },
     },
@@ -1158,7 +1159,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
           else erase()
         },
       },
-      [icon("Trash", tokens.icon.row)]
+      [icon("Trash", tokens.icon.marker)]
     )
 
     /*
@@ -1206,7 +1207,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         onclick: () =>
           window.dispatchEvent(new CustomEvent(EDIT_EVENT, { detail: { id: note.id } })),
       },
-      [icon("Pencil", tokens.icon.row)]
+      [icon("Pencil", tokens.icon.marker)]
     )
     return trackHover(
       el("div", { class: "de-ann-item de-ann-item--note" }, [
@@ -1368,7 +1369,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
           }
         },
       },
-      [icon("X", tokens.icon.row)]
+      [icon("X", tokens.icon.marker)]
     )
 
     /*
@@ -1436,7 +1437,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
 
   function emptyState(): HTMLElement {
     return el("div", { class: "de-empty de-ann-empty" }, [
-      el("span", { "aria-hidden": "true" }, [icon("MessageSquare", tokens.icon.display)]),
+      el("span", { "aria-hidden": "true" }, [icon("MessageSquare", tokens.icon.feature)]),
       el("div", {}, [EMPTY_DETAIL]),
     ])
   }

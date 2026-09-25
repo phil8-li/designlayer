@@ -110,6 +110,7 @@ import {
   type LintFinding,
 } from "./store"
 import { displayLiteral, hintFor, ruleTitle, swatchFor } from "./plain"
+import { formatCount, plural } from "../core/format"
 
 /**
  * The two halves of the row/badge hover pair, named exactly as the marker
@@ -158,7 +159,7 @@ const NO_FIX =
 
 /** `3 issues`, `1 issue`. The summary has to count aloud. */
 function issueWord(count: number): string {
-  return `${count} issue${count === 1 ? "" : "s"}`
+  return plural(count, "issue")
 }
 
 /** The tail of the path: what identifies a file to someone working in the repo. */
@@ -221,7 +222,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       "data-de-lint": "audit",
       onclick: () => audit(),
     },
-    [icon("ListChecks", tokens.icon.row), "Audit"]
+    [icon("ListChecks", tokens.icon.marker), "Audit"]
   ) as HTMLButtonElement
 
   /**
@@ -266,7 +267,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       "data-de-lint": "checkers",
       "aria-label": "Which checkers run",
     },
-    [icon("InfoMark", tokens.icon.row)]
+    [icon("InfoMark", tokens.icon.marker)]
   ) as HTMLButtonElement
 
   const summaryLine = el("div", {
@@ -362,7 +363,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         editor.toast(
           error instanceof Error
             ? error.message
-            : "Fix failed — the file may have changed. Run Audit again.",
+            : "Fix failed. The file may have changed. Run Audit again.",
           "error"
         )
       })
@@ -523,7 +524,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         // The severity is in the accessible name because the dot beside the
         // message is the only other place it is stated, and a colour is not a
         // name.
-        "aria-label": `${severity}: ${finding.message} — ${finding.file}:${finding.line}`,
+        "aria-label": `${severity}: ${finding.message}, at ${finding.file}:${finding.line}`,
         // The whole of what the checker said, one hover away. Also carries
         // `NO_FIX` on a row that has no Fix button, which is the question that
         // row raises and the only row that raises it.
@@ -662,7 +663,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     const running = lintRunState() === "running"
     auditButton.disabled = running || (lintToolsLoaded() && !lintTools().some((tool) => tool.available))
     clear(auditButton)
-    auditButton.append(icon("ListChecks", tokens.icon.row), running ? "Auditing…" : "Audit")
+    auditButton.append(icon("ListChecks", tokens.icon.marker), running ? "Auditing…" : "Audit")
     /*
      * A disabled button has to say where the answer is, and say it twice.
      *
@@ -783,7 +784,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         onclick: () => setMarkersShown(!markersShown()),
       },
       [
-        icon(markersShown() ? "EyeOff" : "Eye", tokens.icon.row),
+        icon(markersShown() ? "EyeOff" : "Eye", tokens.icon.marker),
         markersShown() ? "Hide markers" : "Show markers",
       ]
     )
@@ -819,7 +820,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       },
       [
         el("span", { class: "de-lint-twisty", "aria-hidden": "true" }, [
-          icon("ChevronRight", tokens.icon.row),
+          icon("ChevronRight", tokens.icon.marker),
         ]),
         `Show ignored (${dismissed.length})`,
       ]
@@ -898,7 +899,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // statistic rather than as a door.
     if (dismissed) {
       return empty(
-        `No open issues. ${issueWord(dismissed)} ignored — see “Show ignored” below.`
+        `No open issues. ${issueWord(dismissed)} ignored. See “Show ignored” below.`
       )
     }
     return empty("No design-system issues found.")
@@ -949,9 +950,9 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       summaryLine.append(
         [
           issueWord(summary.total),
-          `${summary.errors} error${summary.errors === 1 ? "" : "s"}`,
-          `${summary.warnings} warning${summary.warnings === 1 ? "" : "s"}`,
-          `${summary.onPage} on this page`,
+          plural(summary.errors, "error"),
+          plural(summary.warnings, "warning"),
+          `${formatCount(summary.onPage)} on this page`,
         ].join(" · ")
       )
     }

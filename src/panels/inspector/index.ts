@@ -73,6 +73,7 @@ import { strokeSection } from "./section-stroke"
 import { effectsSection } from "./section-effects"
 import { typographySection } from "./section-typography"
 import { classesSection } from "./section-classes"
+import { formatCount } from "../../core/format"
 
 export interface SectionContext {
   editor: EditorContext
@@ -272,7 +273,7 @@ export function installInspector(editor: EditorContext): void {
     button.setAttribute("aria-label", label)
     const paint = (): void => {
       const owed = owedCount()
-      if (owed > 0) button.dataset.deCount = String(owed)
+      if (owed > 0) button.dataset.deCount = formatCount(owed)
       else delete button.dataset.deCount
     }
     paint()
@@ -479,7 +480,7 @@ export function installInspector(editor: EditorContext): void {
             {
               class: "de-button",
               type: "button",
-              style: `margin-top:${tokens.space.lg}px`,
+              style: `margin-top:${tokens.space.md}px`,
               onclick: () => editor.setState({ layersOpen: true, leftTab: "controls" }),
             },
             ["Browse app controls"]

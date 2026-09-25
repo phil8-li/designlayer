@@ -16,6 +16,7 @@
  */
 
 import { tokens as t } from "../tokens"
+import { FOCUS_RING, PRESS } from "./panels"
 
 export const variantsCss = `/* ---------- variant axes ---------- */
 /* 64 and not 62: the name column is a spacing decision like any other, and 64
@@ -27,7 +28,7 @@ export const variantsCss = `/* ---------- variant axes ---------- */
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
   align-items: center;
-  gap: ${t.space.md}px;
+  gap: ${t.space.sm}px;
 }
 .de-variant-axis-name {
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
@@ -54,17 +55,13 @@ export const variantsCss = `/* ---------- variant axes ---------- */
  * long in a 260px panel and the part with an ellipsis to fall back on.
  */
 .de-instance-head {
-  display: flex; align-items: center; gap: ${t.space.md}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
   min-width: 0;
 }
 /*
- * The four-diamond mark, in the accent.
- *
- * Figma draws it purple, which is that product's colour for "this is an
- * instance of something". The equivalent claim here is the editor's own accent
- * rather than a borrowed purple: this chrome has exactly one colour that means
- * "the tool is telling you something", and a second one would be a hue nobody
- * can look up.
+ * The four-diamond mark, in neither the accent nor a borrowed purple: this
+ * chrome has exactly one colour that means "the tool is telling you
+ * something", and a second one would be a hue nobody can look up.
  */
 .de-instance-glyph {
   flex: none;
@@ -91,7 +88,7 @@ export const variantsCss = `/* ---------- variant axes ---------- */
 .de-instance-thumb {
   position: relative; flex: none; overflow: hidden;
   width: ${t.size.rowHeight}px; height: ${t.size.rowHeight}px;
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   background: ${t.color.bgSunken};
 }
 .de-instance-thumb .de-asset-clone {
@@ -103,8 +100,8 @@ export const variantsCss = `/* ---------- variant axes ---------- */
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   background: ${t.color.bgSunken}; color: ${t.color.textDim};
-  font-size: ${t.type.micro}; font-weight: ${t.type.weightSection};
-  letter-spacing: 0.04em;
+  /* The kit's badge role: 10px at 500, no tracking. */
+  font-size: ${t.type.micro}; font-weight: ${t.type.weightValue};
 }
 /* Name over owner, because the name is what was selected and the owner is why
    this block is on screen at all. */
@@ -167,18 +164,20 @@ export const variantsCss = `/* ---------- variant axes ---------- */
  * spacing step would move the knob off centre.
  *
  * \`transform\`, never \`left\`: a knob animated on an inset is laid out again on
- * every frame.
+ * every frame. Colour and travel both take the kit's 150ms tween: a switch is
+ * a repeated change, not a surface arriving. The track is a true pill, so it
+ * is written as one and opts out of the squircle in \`css/base.ts\`.
  */
 .de-instance-switch {
   position: relative;
   flex: none; justify-self: start;
   width: 28px; height: 16px;
   padding: 0;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.xl};
+  border: 1px solid ${t.color.borderInteractive}; border-radius: 999px;
   background: ${t.color.field};
   cursor: pointer;
-  transition: background-color ${t.duration.base} ${t.ease}, border-color ${t.duration.base} ${t.ease},
-    transform ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease};
 }
 .de-instance-switch::after {
   content: "";
@@ -187,25 +186,28 @@ export const variantsCss = `/* ---------- variant axes ---------- */
   border-radius: 50%;
   background: ${t.color.text};
   transform: translateX(0);
-  transition: transform ${t.duration.base} ${t.ease}, background-color ${t.duration.base} ${t.ease};
+  transition: transform ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-instance-switch:hover { background: ${t.color.fieldHover}; }
 .de-instance-switch[aria-checked="true"] {
   background: ${t.color.accentSurface};
   border-color: ${t.color.accentSurface};
 }
-.de-instance-switch[aria-checked="true"]:hover {
-  background: ${t.color.accentSurfaceHover};
-  border-color: ${t.color.accentSurfaceHover};
+@media (hover: hover) and (pointer: fine) {
+  .de-instance-switch:hover { background: ${t.color.fieldHover}; }
+  .de-instance-switch[aria-checked="true"]:hover {
+    background: ${t.color.accentSurfaceHover};
+    border-color: ${t.color.accentSurfaceHover};
+  }
 }
-/* The knob FLIPS its ink as it arrives. White on this accent is the 1.9:1 that
-   \`accentFill\` exists to prevent, and the flip gives the on state a second
-   channel besides where the knob is. */
+/* The knob takes \`onAccent\` as it arrives: white on the indigo, 4.97:1 dark
+   and 6.70:1 light. In light that flips it from ink to white, a second channel
+   besides where the knob is; in dark it stays near-white and the track's fill
+   carries the change. */
 .de-instance-switch[aria-checked="true"]::after {
   transform: translateX(12px);
   background: ${t.color.onAccent};
 }
-.de-instance-switch:active { transform: scale(0.96); }
+.de-instance-switch:active { ${PRESS} }
 /*
  * The press squeeze goes with the motion, the way its two siblings' already do.
  *
@@ -221,5 +223,5 @@ export const variantsCss = `/* ---------- variant axes ---------- */
    than an omission: a switch is drawn in a POSITION, and a boolean this panel
    cannot read has no position to draw it in. The section states those as text
    instead — see \`section-instance.ts\`. */
-.de-instance-switch:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+.de-instance-switch:focus-visible { ${FOCUS_RING} }
 `

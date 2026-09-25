@@ -60,10 +60,11 @@ const { icon, drawHostIcon, ICON_NAMES, NATIVE_ICON_NAMES, NATIVE_ICON_SIZES, to
 console.log("\nThe size ramp")
 
 /*
- * Five sizes, and every glyph in the chrome is drawn at one of them.
+ * Six sizes — the kit's icon roles — and every glyph in the chrome is drawn at
+ * one of them.
  *
  * `IconSize` already makes an off-ramp number a compile error, so what is left
- * to check is the part TypeScript cannot see: that the ramp is still the five
+ * to check is the part TypeScript cannot see: that the ramp is still the six
  * values it is supposed to be, that the roles land on it, and — the one that
  * actually rots — that no call site has gone back to passing a literal.
  *
@@ -71,12 +72,12 @@ console.log("\nThe size ramp")
  * 20. Each was locally reasonable at the call site that introduced it, which is
  * exactly why nothing caught the family coming apart.
  */
-// 10 is the floor the design kit sets. It is a MARK rung — a numeral in a chip,
-// a twisty, a dot beside a label — and deliberately not a size anything
-// pressable is drawn at, which `tokens.icon.mark` says at the definition.
-const RAMP = [10, 12, 16, 20, 24, 32]
+// The kit's six roles (ADOPTION-GUIDE § 6): marker 12, inline 14, action 16,
+// chrome 18, header 20, feature 24. 12 is the floor — a status marker, a
+// twisty — and no 13, 15 or 17px one-offs.
+const RAMP = [12, 14, 16, 18, 20, 24]
 
-check("the ramp is 10, 12, 16, 20, 24, 32 and every role lands on it", () => {
+check("the ramp is 12, 14, 16, 18, 20, 24 and every role lands on it", () => {
   const roles = Object.entries(tokens.icon)
   assert.ok(roles.length > 0, "tokens.icon is empty")
   for (const [role, size] of roles) {
@@ -132,8 +133,8 @@ check("no call site spells its icon size as a number", () => {
  *
  * That family is authored on a 16 lattice and emitted into the shared 24
  * viewBox, so one authored unit renders at `size / 8` device pixels on a 2x
- * display — a whole number only when the size is a multiple of 8. 16, 24 and
- * 32 are crisp; 10 and 12 are not.
+ * display — a whole number only when the size is a multiple of 8. 16 and 24
+ * are crisp; 12, 14, 18 and 20 are not.
  *
  * Measured rather than reasoned: in the rendered panel the align mark at 16px
  * resolves to two ink levels, and the same construction at 12px to four or six.
@@ -142,7 +143,7 @@ check("no call site spells its icon size as a number", () => {
  *
  * Checked against the SOURCE, because it is a rule about what a call site may
  * ask for and because the mistake is locally reasonable every time it is made:
- * `tokens.icon.row` is the obvious rung to reach for beside 12px text, and the
+ * `tokens.icon.marker` is the obvious rung to reach for beside 12px text, and the
  * glyph looks fine until it is set next to one drawn at 16. Four call sites did
  * exactly this when the family first landed.
  *
@@ -151,7 +152,7 @@ check("no call site spells its icon size as a number", () => {
  * emptying it.
  */
 check("a native glyph is never drawn at a rung it cannot land on", () => {
-  const RUNG = { mark: 10, row: 12, control: 16, launcher: 20, display: 24, hero: 32 }
+  const RUNG = { marker: 12, inline: 14, action: 16, chrome: 18, header: 20, feature: 24 }
   const native = new Set(NATIVE_ICON_NAMES)
   const allowed = new Set(NATIVE_ICON_SIZES)
   assert.ok(native.size > 0, "no native glyphs — this case would assert nothing")
@@ -258,22 +259,17 @@ check("every glyph strokes in currentColor, at its rung's width", () => {
 /*
  * Rendered stroke thickness, across the ramp.
  *
- * The rule a stroke family lives or dies by, and the one a fill family never
- * has to state. A stroke's width is in GRID units, so what reaches the screen
- * is `width * size / 24`. Left at Lucide's native 2 for every rung — the
- * obvious implementation, and the one every `lucide-react` call site uses — the
- * same mark arrives 0.83px thick at `mark` and 2.67px at `hero`. That is a
- * threefold spread in apparent weight between two drawings the design system
- * calls one icon, and the small end is the end that fails: under about 1px a
- * stroke antialiases into a grey suggestion of itself.
+ * A stroke's width is in GRID units, so what reaches the screen is
+ * `width * size / 24`. Under about 1px a stroke antialiases into a grey
+ * suggestion of itself — the mechanism behind "this icon looks too small" —
+ * and that is the floor this holds: no rung may render a stroke thinner than
+ * one CSS pixel.
  *
- * Which is the mechanism behind "this icon looks too small". It is not the
- * size — the size is exactly what was asked for — it is that the ink inside
- * that size is too thin to read.
- *
- * So: rendered thickness must rise with size, and stay inside a band no wider
- * than 2.5x from the smallest rung to the largest. Uncompensated, that ratio is
- * 3.2 and this fails.
+ * The floor used to be 1.1, with per-size compensation to reach it at a 10px
+ * rung. The kit's ramp stops at 12, where its flat 2 units is exactly 1px, and
+ * its filled glyphs carry that 2 baked in, so the strokes stay flat to match
+ * them (see `STROKE_FOR_SIZE` in `tools/build-icons.mjs`). Rendered thickness
+ * must still rise with size and stay inside a 2.5x band — flat, it spans 2x.
  */
 check("rendered stroke thickness rises with size, and stays in one band", () => {
   const rendered = RAMP.map((size) => {
@@ -289,7 +285,7 @@ check("rendered stroke thickness rises with size, and stays in one band", () => 
   }
   const thinnest = rendered[0].px
   const thickest = rendered[rendered.length - 1].px
-  assert.ok(thinnest >= 1.1, `the smallest rung renders at ${thinnest.toFixed(2)}px, under the 1.1 floor`)
+  assert.ok(thinnest >= 1, `the smallest rung renders at ${thinnest.toFixed(2)}px, under the 1px floor`)
   assert.ok(
     thickest / thinnest <= 2.5,
     `the ramp spans ${(thickest / thinnest).toFixed(2)}x in apparent weight, which is two families`
@@ -312,12 +308,18 @@ check("rendered stroke thickness rises with size, and stays in one band", () => 
 check("no glyph's stroke is clipped by the viewBox at any rung", () => {
   const offenders = []
   for (const name of ICON_NAMES) {
-    const box = inkBox(name)
     for (const size of RAMP) {
-      const half = Number(icon(name, size).getAttribute("stroke-width")) / 2
-      const clearance = Math.min(box.minX, box.minY, 24 - box.maxX, 24 - box.maxY)
-      if (clearance < half) {
-        offenders.push(`${name}@${size}: ${clearance.toFixed(2)} clearance, needs ${half}`)
+      // Per shape: a fill (`stroke: none`) inks exactly its geometry, and the
+      // kit draws fills out to 1 unit from the edge — fine for a fill, a clip
+      // for a stroke. The +0.5 is the selected-state bump in `css/icons.ts`.
+      const svg = icon(name, size)
+      const half = (Number(svg.getAttribute("stroke-width")) + 0.5) / 2
+      for (const box of shapeBoxes(name)) {
+        const clearance = Math.min(box.minX, box.minY, 24 - box.maxX, 24 - box.maxY)
+        const needs = box.stroked ? half : 0
+        if (clearance < needs) {
+          offenders.push(`${name}@${size}: a <${box.tag}> has ${clearance.toFixed(2)} clearance, needs ${needs}`)
+        }
       }
     }
   }
@@ -354,9 +356,9 @@ check("no glyph's stroke is clipped by the viewBox at any rung", () => {
  * the editor held the pointer, which is the silent failure this list is for.
  *
  * `MessageSquare` was on this list for one round, while it was native too, and
- * is off it again. It is Lucide's round bubble once more — mirrored and scaled,
- * but still one closed stroked silhouette — and a flood fills that correctly.
- * The requirement left with the drawing.
+ * is off it again. It is the kit's round bubble now — scaled, but still one
+ * closed stroked silhouette — and a flood fills that correctly. The
+ * requirement left with the drawing.
  */
 const COUNTERPARTS = ["PanelLeft", "PanelRight", "Cursor"]
 
@@ -836,6 +838,35 @@ function inkBox(name, weight = "outline") {
   }
 }
 
+/** Each shape's authored box, and whether it strokes — for the clipping case. */
+function shapeBoxes(name) {
+  const svg = icon(name, 24)
+  return Array.from(svg.querySelectorAll("*")).map((node) => {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    const push = (px, py) => {
+      minX = Math.min(minX, px)
+      maxX = Math.max(maxX, px)
+      minY = Math.min(minY, py)
+      maxY = Math.max(maxY, py)
+    }
+    const tag = node.tagName.toLowerCase()
+    const attr = (key) => Number(node.getAttribute(key))
+    if (tag === "path") walkPath(node.getAttribute("d"), push)
+    else if (tag === "rect") {
+      push(attr("x"), attr("y"))
+      push(attr("x") + attr("width"), attr("y") + attr("height"))
+    } else if (tag === "circle") {
+      push(attr("cx") - attr("r"), attr("cy") - attr("r"))
+      push(attr("cx") + attr("r"), attr("cy") + attr("r"))
+    } else throw new Error(`unsupported shape <${tag}> in ${name}`)
+    const stroke = node.getAttribute("stroke") ?? svg.getAttribute("stroke")
+    return { tag, minX, minY, maxX, maxY, stroked: Boolean(stroke) && stroke !== "none" }
+  })
+}
+
 /**
  * How much of the grid a flood actually covers, in square units.
  *
@@ -940,29 +971,34 @@ check("no glyph is re-windowed, because a stroke cannot survive it", () => {
 })
 
 /*
- * Lucide's own optical sizing reaches the DOM intact.
+ * The source's own optical sizing reaches the DOM intact.
  *
  * The rule above says no glyph was re-fitted; this says the variation that
- * survives is the RIGHT variation, and not an artefact of the vendoring. `X`
- * and `Plus` are the pair that isolates it: the same two arms, one set rotated
- * 45 degrees. A designer draws the diagonal one smaller, because its corners
- * reach further into the eye at the same box size — `X` inks 12 of the grid
- * where `Plus` inks 14.
+ * survives is the RIGHT variation, and not an artefact of the vendoring. A
+ * designer draws a diagonal mark smaller than an axis-aligned one, because its
+ * corners reach further into the eye at the same box size.
  *
- * If a future change reintroduced box normalisation, these two would come out
- * equal and this would fail. That is the point: the naive fix for "the icons
- * are inconsistent sizes" is exactly the change that breaks them.
+ * This compared `X` with `Plus` while both were Lucide's (12 against 14 of the
+ * grid). They are no longer twins: `X` is the kit's own drawing and `Plus` is
+ * the Lucide glyph the kit retains, drawn to Lucide's smaller budget. The
+ * kit's budget is "painted extent about 22 of 24" (ADOPTION-GUIDE § 6), which
+ * its frames — `Image`, `ExternalLink` — fill exactly, and the kit's cross is
+ * pulled in from that. If a future change reintroduced box normalisation, the
+ * cross would come out at 22 and this would fail. That is the point: the naive
+ * fix for "the icons are inconsistent sizes" is exactly the change that breaks
+ * them.
  */
-check("a diagonal glyph is drawn smaller than its axis-aligned twin", () => {
+check("a diagonal glyph is drawn smaller than an axis-aligned one", () => {
   const box = (name) => {
     const ink = drawnInk(name)
     return Math.max(ink.width, ink.height)
   }
+  const frame = box("Image")
+  assert.ok(Math.abs(frame - 22) < 0.5, `the kit's frame inks ${frame.toFixed(2)}, not its 22-unit budget`)
   const x = box("X")
-  const plus = box("Plus")
-  assert.ok(x < plus - 1, `X (${x.toFixed(2)}) is not pulled in from Plus (${plus.toFixed(2)})`)
+  assert.ok(x < frame - 2, `X (${x.toFixed(2)}) is not pulled in from the frame (${frame.toFixed(2)})`)
   // And not so far in that it stops reading as the same size mark.
-  assert.ok(x > plus * 0.75, `X (${x.toFixed(2)}) has been shrunk past recognition`)
+  assert.ok(x > frame * 0.75, `X (${x.toFixed(2)}) has been shrunk past recognition`)
 })
 
 /*

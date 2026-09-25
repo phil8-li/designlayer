@@ -53,22 +53,21 @@ const SWAP_SCALE = 0.8
  * bottom corner.
  *
  * Unusually for this chrome the offset here is a real distance rather than a
- * thin rail: `space.md` between the two curves, because the card is a popover
- * with room in it and not a pill wrapped around a row. Both of the things that
- * reach its corners are ordinary `radius.md` furniture — a field and a button,
- * at the size they are everywhere else — so the inset fixes what the OUTER
- * radius has to be, and the answer is `radius.xl`, not the `radius.lg` this was
- * drawn at.
+ * thin rail: `space.sm` between the two curves, because the card is a popover
+ * with room in it and not a pill wrapped around a row. What reaches its bottom
+ * corner is the shared `.de-button`, and the kit gives every action button one
+ * corner, `radius["2xl"]` (14). So the inset fixes what the OUTER radius has to
+ * be: 14 + 8 = 22, `radius["6xl"]` — the rung the kit names for "large cards,
+ * the composer". The textarea in the top corners takes the same 14, which on a
+ * field at least 56px tall is a soft corner rather than a pill.
  *
- * Solving it from the outside is what makes it right rather than merely
- * consistent. Going the other way — keeping `lg` and taking the children down
- * to `radius.sm` — is equally concentric and much worse: `.de-button` is shared
- * furniture, so it would mean a button that rounds differently depending on
- * which surface it is standing on. And `xl` is the token this card should have
- * had from the start; the scale calls `lg` a card and `xl` a popover, and a
- * floating composer anchored to a pin is the second thing.
+ * Solved from the outside for the reason it always was: `.de-button` is shared
+ * furniture, and a button that rounds differently depending on which surface
+ * it stands on is worse than a card one rung rounder. No hairline in the
+ * arithmetic: the card's edge is the 1px ring inside `shadow.popover`, which
+ * takes no room, so the padding is the whole gap.
  */
-const COMPOSER = nest({ of: ".de-ann-composer", outer: t.radius.xl, inset: t.space.md, hairline: 1 })
+const COMPOSER = nest({ of: ".de-ann-composer", outer: t.radius["6xl"], inset: t.space.sm })
 
 /*
  * THE OUTBOX HAS NO BOX, and the nest that described one went with it.
@@ -91,23 +90,13 @@ const COMPOSER = nest({ of: ".de-ann-composer", outer: t.radius.xl, inset: t.spa
  * The row is a two-column grid — text, then an `auto` column of actions — so
  * the thing in the corner is a button, not the head.
  *
- * IT GOT ROOMIER, AND THE RADIUS HAD TO MOVE WITH IT.
- *
- * The inset was `space.sm`: 4px less a 1px hairline, so a 3px gap between the
- * row's edge and the sentence inside it. That was sized for life inside
- * `.de-ann-box`, where the frame supplied the air and the row could not afford
- * its own; with the frame gone the rows are the only objects in the list and
- * 3px reads as text pressed against a border. `space.md` doubles it to a 7px
- * pad inside an 8px gap.
- *
- * The corner follows, and not for taste: the `.de-mini` in the top-right sits
- * at the nest's inner radius, and `radius.md` less 8 clamps to zero — square
- * buttons inside a rounded row. Stepping the row up to `radius.lg` puts the
- * inner radius back on 4, which is the `radius.sm` those buttons already draw.
- * The two numbers are one decision: a roomier row is a rounder row, or its
- * corner stops being parallel to anything.
+ * The row is a card, so it takes the kit's card rung, `radius["3xl"]` (16), over
+ * a `space.sm` inset (a 7px pad inside a 1px hairline). The `.de-mini` in the
+ * top-right sits at the nest's inner radius, 16 − 8 = 8, which is `radius.sm` —
+ * the rung the kit gives an icon-only mini button. The two numbers are one
+ * decision: the card's corner and the button's corner stay parallel.
  */
-const ITEM = nest({ of: ".de-ann-item", outer: t.radius.lg, inset: t.space.md, hairline: 1 })
+const ITEM = nest({ of: ".de-ann-item", outer: t.radius["3xl"], inset: t.space.sm, hairline: 1 })
 
 /**
  * How much the pin grows when the panel points at it.
@@ -123,14 +112,14 @@ const ACTIVE_SCALE = 1.12
  * The tab's gutter, and the air between the two stacked sections.
  *
  * The tab is one column now — Notes, then Settings — so the only thing telling
- * a reader where one section ends is the space under it. `space.md` is the
- * panel's own inset everywhere else; `space.2xl` is twice that, which is the
+ * a reader where one section ends is the space under it. `space.sm` is the
+ * panel's own inset everywhere else; `space.lg` is twice that, which is the
  * smallest step on the kit's scale that still reads as "a different section"
  * rather than "a wider row gap" once the section titles are as quiet as they
  * are below.
  */
-const GUTTER = t.space.md
-const SECTION_GAP = t.space["2xl"]
+const GUTTER = t.space.sm
+const SECTION_GAP = t.space.lg
 
 /**
  * The floor for anything you have to hit, and the disc beside a setting's name.
@@ -143,11 +132,28 @@ const SECTION_GAP = t.space["2xl"]
  * has a 12px padding box and an INTEGER centre at 1x and at 2x, where 13 put
  * the centre on 5.5 and landed the tick's 1.5px strokes between pixels. The
  * checkbox is gone and the number stays: the help dot is the only thing left
- * on it, and at 14 the ${t.icon.row}px glyph inside sits inside its own circle, which 13
+ * on it, and at 14 the ${t.icon.marker}px glyph inside sits inside its own circle, which 13
  * could not do.
  */
 const TARGET = 24
 const CHECK = 14
+
+/**
+ * The switch's drawing: a 28x16 track and a 12px knob. Sizes, not spacing —
+ * the knob's 12px of travel is the track less the knob less its 1px border
+ * clearance on each end.
+ */
+const TRACK_W = 28
+const TRACK_H = 16
+const KNOB = 12
+
+/**
+ * The keyboard focus ring, the kit's recipe (MICRO-INTERACTIONS § 3): the edge
+ * takes the accent and a 3px halo of the accent at 30% sits outside it. Built
+ * from the accent token; it resolves to the same colour as `accentHalo`.
+ */
+const HALO = `color-mix(in srgb, ${t.color.accent} 30%, transparent)`
+const FOCUS_RING = `0 0 0 1px ${t.color.accent}, 0 0 0 4px ${HALO}`
 
 /**
  * The overlay's rung, and the composer's stated one above it.
@@ -208,15 +214,15 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   background: var(--de-ann-color, ${t.color.danger});
   color: ${t.color.onUserColor};
   box-shadow: ${t.shadow.marker};
-  /* 11px/600 — \`caption\` is already Agentation's 0.6875rem, so the pin lands on
-     the kit's own rung rather than introducing a size for one element. */
+  /* The caption rung at the strong weight: the pin's numeral is a label read at
+     a glance, and it keeps one width as the count grows (tabular figures). */
   font-family: inherit; font-size: ${t.type.caption}; font-weight: ${t.type.weightSection};
   line-height: ${t.type.leadingFlush};
   /*
    * The numeral carries its own shadow, and this is the one liberty taken with
    * Agentation's treatment.
    *
-   * White on \`#FFCC00\` is 1.4:1. Nothing about weight or size rescues that, and
+   * White on \`#FFCC00\` is 1.5:1. Nothing about weight or size rescues that, and
    * the alternatives were both worse than a shadow: darkening the yellow stops
    * it being the Apple yellow the palette is copied from, and flipping the ink
    * per-preset means two kinds of pin on one page, which is exactly the
@@ -233,12 +239,13 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   user-select: none;
   pointer-events: auto;
   /*
-   * Agentation's pair, and the split is deliberate: colour eases slower than
-   * geometry, so a pin that is both recolouring and growing finishes its move
-   * before it finishes its hue and never looks like it is lagging the pointer.
+   * The kit's hover tween for all three. This was Agentation's split — colour
+   * at 150ms, the grow at a literal 100ms — and the 100 was a number off the
+   * ramp. At one rung the hue and the grow finish together, which is what the
+   * split was protecting against in the first place: a pin that lags.
    */
-  transition: background-color 150ms ${t.ease}, transform 100ms ${t.ease},
-    box-shadow ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease};
 }
 /*
  * A PIN LANDING ON THE PAGE, which is the one moment here that is an object
@@ -256,7 +263,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * pin back into view does not pop it again.
  */
 @keyframes de-ann-marker-in { from { opacity: 0; transform: scale(0.3); } }
-.de-ann-marker--arriving { animation: de-ann-marker-in ${t.duration.base} ${t.easeSpring}; }
+.de-ann-marker--arriving { animation: de-ann-marker-in ${t.duration.reveal} ${t.easeSpring}; }
 /* ${MARKER}px drawn, ${TARGET}px hit. A pin is a click target on a page it shares with the
    app's own controls, and ${MARKER} is under the ${TARGET} WCAG 2.5.8 asks for; a transparent
    pad buys the 1px a side back without growing the disc. */
@@ -274,9 +281,12 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * Shape survives both. The disc is a remark about the page; the square is a
  * change already made to it, and the corner is the kit's tightest so the two
  * still read as one family at ${MARKER}px.
+ *
+ * \`.de-ann-marker\` is on \`css/base.ts\`'s round opt-out list because the disc
+ * is a circle; the square is not, so it takes the chrome's squircle back.
  */
-.de-ann-marker--edit { border-radius: ${t.radius.sm}; }
-.de-ann-marker--edit::before { border-radius: ${t.radius.sm}; }
+.de-ann-marker--edit { border-radius: ${t.radius.xs}; corner-shape: ${t.cornerShape}; }
+.de-ann-marker--edit::before { border-radius: ${t.radius.xs}; corner-shape: ${t.cornerShape}; }
 /*
  * Hover grows the pin itself — Agentation's 1.1, not a ring.
  *
@@ -288,7 +298,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * something. Scaling changes the pin's size without changing the space it
  * claims from its neighbours.
  *
- * 100ms, from the \`transform\` half of the transition pair on the base rule.
+ * On the hover tween, from the \`transform\` part of the base rule.
  */
 /*
  * ## AND IT IS BEHIND \`hover: hover\`, WHICH ALMOST NOTHING IN THIS CHROME IS
@@ -310,7 +320,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * emulation — which reports \`hover: none\` and is exactly what a designer uses
  * to check their own mobile breakpoints, with this chrome on screen.
  */
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .de-ann-marker:hover { transform: scale(1.1); }
 }
 /*
@@ -319,24 +329,24 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  *
  * Every other control is focused against a surface this stylesheet painted, so
  * a single accent ring has a known ratio behind it. A pin sits on the app being
- * edited, over whatever colour happens to be there, and the accent measured
- * 1.9:1 against a white page — a ring that is visible in the sense that it is
- * a different hue, and invisible in the sense WCAG 1.4.11 means, which is the
+ * edited, over whatever colour happens to be there: the accent clears 3:1 on a
+ * white page, and on an indigo or mid-tone one it is visible only in the sense
+ * that it is a different hue — not in the sense WCAG 1.4.11 means, which is the
  * sense that survives a monochrome display or a red-green deficiency.
  *
- * A dark ring wrapped in a white one cannot fail both ways at once: against
- * light ground the near-black is 16:1, against dark ground the white is, and
- * the pair reads as one ring at any size because they are concentric and
- * adjacent. The colours are the fixed pair, not theme roles — the ring is over
- * the app, so the editor's theme says nothing about what is behind it.
+ * A dark ring wrapped in a white one cannot fail both ways at once, and the
+ * pair reads as one ring at any size because they are concentric and adjacent.
+ * The colours are fixed roles that do not follow the editor's theme — the ring
+ * is over the app, so the theme says nothing about what is behind it. As the
+ * palette stands, \`focusCore\` is near-black and \`focusHalo\` white.
  *
  * \`box-shadow\` for the outer tone rather than a second outline: an element gets
  * one outline, and the shadow is already on this rule's transition so the ring
  * arrives with the same timing as everything else the pin does.
  */
 .de-ann-marker:focus-visible {
-  /* \`focusCore\`, not \`onUserColor\`: the numeral's ink is white now, and this
-     ring's inner tone has to stay dark or the pair is white on white. */
+  /* \`focusCore\`, not \`onUserColor\`: the numeral's ink is white, and this
+     ring's inner tone is the dark one. */
   outline: 2px solid ${t.color.focusCore};
   outline-offset: 2px;
   box-shadow: ${t.shadow.marker}, 0 0 0 6px ${t.color.focusHalo};
@@ -355,9 +365,10 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * it is still reading the row; \`z-index\` lifts it out from under the pins it
  * overlaps in a dense corner; and the ring is the part that has to survive any
  * background, so it is TWO rings at opposite ends of the scale — 2px of the
- * chrome's near-black, then 2px of white. Against a white page the dark spacer
- * is the edge, against a dark page the white ring is, and against the user's own
- * marker colour both are.
+ * panel ground, then 2px of the text ink: near-black then white in dark, white
+ * then near-black in light. Against a white page the dark ring is the edge,
+ * against a dark page the white one is, and against the user's own marker
+ * colour both are.
  *
  * Not the editor accent: an indigo ring around an orange pin reads as a second
  * object arriving, and it says nothing at all if indigo is what the user picked.
@@ -379,27 +390,36 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann-composer {
   position: absolute;
   z-index: ${COMPOSER_Z};
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
   padding: ${COMPOSER.padding};
-  border: ${COMPOSER.hairline}px solid ${t.color.border}; border-radius: ${COMPOSER.outer};
+  border: none; border-radius: ${COMPOSER.outer};
   background: ${t.color.bgRaised};
   box-shadow: ${t.shadow.popover};
   pointer-events: auto;
-  animation: de-ann-composer-in ${t.duration.fast} ${t.ease};
   /*
-   * Aimed at the pin, the same way the chrome's shared \`.de-arrive\` is aimed at
-   * its trigger. \`annotations/canvas.ts\`'s \`place\` flips this card above the
-   * anchor when dropping below would overrun the viewport — which is most of
-   * the time on the lower half of a page — and until now it flipped the
-   * POSITION without flipping the entrance, so the composer grew out of its top
-   * edge and drifted downward while sitting above the pin it belongs to. The
-   * pair of properties is the same one \`core/motion.ts\` writes, so both
-   * surfaces move on one decision.
+   * Aimed at the pin: \`annotations/canvas.ts\`'s \`place\` flips this card above
+   * the anchor when dropping below would overrun the viewport, and writes the
+   * edge nearest the pin here through \`arriveFrom\`. The card has no entrance
+   * any more, so the origin is only read by the exit below.
    */
   transform-origin: var(--de-arrive-origin, center top);
 }
-@keyframes de-ann-composer-in {
-  from { opacity: 0; transform: translateY(var(--de-arrive-rise, -4px)); }
+/*
+ * IT OPENS INSTANTLY AND LEAVES OVER 150MS — the kit's popover grammar.
+ *
+ * The composer is a popover anchored to a pin, opened on every note, and it
+ * takes a keystroke the moment it exists; the kit gives such surfaces no
+ * entrance at all (MICRO-INTERACTIONS § 6, § 18). It used to rise 4px and fade
+ * in. The dismissal is the kit's bounded fade to 0.99, played on an inert copy
+ * in a sibling layer (\`playExit\` in \`annotations/canvas.ts\`), because the
+ * real card must be gone the instant it is saved or cancelled.
+ */
+.de-ann-composer--leaving {
+  pointer-events: none;
+  animation: de-ann-composer-exit ${t.duration.exit} ${t.easeReveal} both;
+}
+@keyframes de-ann-composer-exit {
+  to { opacity: 0; transform: scale(0.99); }
 }
 /*
  * Wide enough for a sentence before it wraps, and it grows DOWN only — as the
@@ -426,22 +446,26 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   max-height: 200px;
   overflow-y: auto;
   resize: none;
-  padding: ${t.space.md}px;
-  /* Read off the card's nest. It resolves to the \`radius.md\` a field wears
-     anywhere else, and that is not a coincidence to leave to chance — the card
-     was sized around it. See \`COMPOSER\`. */
+  padding: ${t.space.sm}px;
+  /* Read off the card's nest: the same 14 as the Save button in the opposite
+     corner, so the card's two inner curves agree. See \`COMPOSER\`. */
   border: 1px solid transparent; border-radius: ${COMPOSER.radius};
   background: ${t.color.field};
   color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body};
   line-height: ${t.type.leadingBody};
   outline: none;
-  transition: border-color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
+  transition: border-color ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-ann-composer-text:hover { background: ${t.color.fieldHover}; }
-.de-ann-composer-text:focus { background: ${t.color.fieldHover}; border-color: ${t.color.accent}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-composer-text:hover { background: ${t.color.fieldHover}; }
+}
+/* The kit's field focus: the border takes the accent. A textarea matches
+   \`:focus-visible\` on every focus, pointer included, which is right for a
+   field — the caret is about to be used. */
+.de-ann-composer-text:focus-visible { background: ${t.color.fieldHover}; border-color: ${t.color.accent}; }
 .de-ann-composer-text::placeholder { color: ${t.color.textDim}; }
-.de-ann-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: ${t.space.sm}px; }
+.de-ann-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: ${t.space["2xs"]}px; }
 
 /*
  * The drag rectangle, while it is being dragged.
@@ -454,7 +478,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann-region {
   position: absolute;
   border: 2px dashed var(--de-ann-color, ${t.color.danger});
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   background: color-mix(in srgb, var(--de-ann-color, ${t.color.danger}) 14%, transparent);
   pointer-events: none;
   transition: none;
@@ -475,7 +499,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann-target {
   position: absolute;
   border: 2px solid var(--de-ann-color, ${t.color.danger});
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   background: color-mix(in srgb, var(--de-ann-color, ${t.color.danger}) 8%, transparent);
   pointer-events: none;
   transition: none;
@@ -494,23 +518,22 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  *
  * \`pointer-events: none\`: it is a label, and it sits over the app.
  *
- * Its EDGE is two declarations because the chrome went near-black. A soft cast
- * (\`shadow.float\`) and a \`border\` hairline measuring 1.5:1 against the pill's
- * own fill was the whole boundary, which is nothing at all over a dark page.
- * \`borderStrong\` is a light line that reads on a dark page; \`shadow.popover\`
- * brings the half-pixel dark rule that reads on a light one. Both, because the
- * page is not ours to know — the same argument the marker above makes.
+ * Its EDGE is two declarations because the page behind it is unknown.
+ * \`borderStrong\` (paper 15% in dark, ink 26% in light) is a line that reads
+ * against a page of the pill's own appearance; \`shadow.popover\` brings the
+ * cast and hairline that read against the other. Both, because the page is not
+ * ours to know — the same argument the marker above makes.
  */
 .de-ann-hint {
   position: fixed;
-  top: calc(var(--de-top) + 12px);
+  top: calc(var(--de-top) + ${t.space.md}px);
   left: calc(var(--de-bar-left) + (100vw - var(--de-bar-left) - var(--de-bar-right)) / 2);
   transform: translateX(-50%);
-  max-width: calc(100vw - var(--de-bar-left) - var(--de-bar-right) - 24px);
-  min-height: 24px;
-  display: inline-flex; align-items: center; gap: ${t.space.md}px;
-  padding: ${t.space.sm}px ${t.space.md}px;
-  border: 1px solid ${t.color.borderStrong}; border-radius: ${t.radius.xl};
+  max-width: calc(100vw - var(--de-bar-left) - var(--de-bar-right) - ${t.space["2xl"]}px);
+  min-height: ${t.size.rowHeight}px;
+  display: inline-flex; align-items: center; gap: ${t.space.sm}px;
+  padding: ${t.space["2xs"]}px ${t.space.sm}px;
+  border: 1px solid ${t.color.borderStrong}; border-radius: ${t.radius["3xl"]};
   background: ${t.color.bg};
   color: ${t.color.textMuted};
   font-size: ${t.type.body};
@@ -564,7 +587,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann {
   flex: 1 0 auto;
   display: flex; flex-direction: column;
-  padding: ${GUTTER}px ${GUTTER}px ${t.space.lg}px;
+  padding: ${GUTTER}px ${GUTTER}px ${t.space.md}px;
 }
 
 /*
@@ -586,13 +609,15 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * \`css/panels.ts\`, which is what the Design and Design-system tabs already use,
  * so the ladder below is the shell's and this file no longer has an opinion:
  *
- *   heading   ${t.type.body} / ${t.type.weightValue} / textDim     6.5:1   quietest
- *   metadata  ${t.type.body} / ${t.type.weightBody} / textDim     6.5:1
- *   controls  ${t.type.body} / ${t.type.weightValue} / textMuted   9.9:1  → text on hover
- *   row body  ${t.type.body} / ${t.type.weightBody} / text        16.8:1  loudest
+ *   heading   ${t.type.body} / ${t.type.weightSection} / text        17.2:1 / 19.1:1
+ *   metadata  ${t.type.body} / ${t.type.weightBody} / textDim     9.2:1 / 5.8:1   quietest
+ *   controls  ${t.type.body} / ${t.type.weightValue} / textMuted  10.4:1 / 10.5:1 → text on hover
+ *   row body  ${t.type.body} / ${t.type.weightBody} / text        17.2:1 / 19.1:1
+ *
+ * (Ratios dark / light, on the panel ground.)
  *
  * SIZE carries none of it and cannot: \`type\` tops out at ${t.type.body} and the floor for
- * this surface is ${t.icon.row}px, so every run in the file is at the same rung and the
+ * this surface is ${t.icon.marker}px, so every run in the file is at the same rung and the
  * ladder is INK and WEIGHT alone. That is the better ordering here anyway — a
  * 260px column of one size reads as one list, and the eye sorts it by strength.
  */
@@ -628,8 +653,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * other trailing control in the panel sits on.
  */
 .de-ann-detail {
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  margin-bottom: ${t.space.md}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  margin-bottom: ${t.space.sm}px;
 }
 .de-ann-detail-label {
   flex: none;
@@ -661,7 +686,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * scrolled inside it would be two scrollbars a few pixels apart.
  */
 .de-ann-list {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
 }
 
 /*
@@ -687,7 +712,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   /* The head and the body are two lines of one object, so the step between
      them is the tight one; the actions column is a separate thing and takes
      the workhorse step away from the text it must not crowd. */
-  column-gap: ${t.space.md}px; row-gap: ${t.space.sm}px;
+  column-gap: ${t.space.sm}px; row-gap: ${t.space["2xs"]}px;
   /* One inset on all four sides, one under its spacing step because the
      hairline takes that pixel. The leading edge used to be wider than the
      other three — air the frame outside was not providing — and with the frame
@@ -702,7 +727,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
      solid. Every other surface here is single-line and inherits nothing. */
   line-height: ${t.type.leadingBody};
   color: ${t.color.text};
-  transition: background ${t.duration.fast} ${t.ease}, border-color ${t.duration.fast} ${t.ease};
+  transition: background ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease};
 }
 /*
  * THREE ways in, ONE highlight — this rule is the correspondence.
@@ -714,17 +739,22 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * the same note — the highlight would look like two different facts rather than
  * one thing answering.
  *
- * So all three states are declared once, in one rule, and there is deliberately
- * no second place to change one of them:
+ * So all three states are declared once, with one value, and there is
+ * deliberately no second value to change. Hover sits in its own block only
+ * because hover paint is fine-pointer-only (a tap would leave it stuck):
  *   :hover        the pointer is on the row
  *   :focus-within the keyboard is in the row
  *   --hover       the canvas says the pointer is on this note's MARKER
  */
-/* \`bgRaisedHover\`: the item is \`bgRaised\` and \`bgHover\` is the rung below it,
-   so this hover used to darken the card the pointer was on. See the token's own
-   note in \`tokens.ts\` — it was added for this shape and three surfaces were
-   still reaching past it. */
-.de-ann-item:hover,
+/* \`bgRaisedHover\`: the item is \`bgRaised\`, and \`bgHover\` is no lift over it —
+   equal in dark, a rung below in light — so it would leave the card the pointer
+   is on unchanged or darker. */
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-item:hover {
+    background: ${t.color.bgRaisedHover};
+    border-color: ${t.color.borderInteractive};
+  }
+}
 .de-ann-item:focus-within,
 .de-ann-item--hover {
   background: ${t.color.bgRaisedHover};
@@ -752,7 +782,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 /* Metadata rung: the row's quietest line, under the body it introduces. */
 .de-ann-item-head {
   grid-column: 1;
-  display: flex; align-items: center; gap: ${t.space.sm}px; min-width: 0;
+  display: flex; align-items: center; gap: ${t.space["2xs"]}px; min-width: 0;
   font-size: ${t.type.body};
   font-weight: ${t.type.weightBody};
   color: ${t.color.textDim};
@@ -764,9 +794,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * cheapest one to read: an edit has no pin on the canvas, so it has no number,
  * so the column of discs down the list IS the set of things you can go and look
  * at. Same fill as the marker for the same reason, and — since it is the same
- * object — the same dark ink, for the reason spelled out up there: white on the
- * seven presets runs 1.95:1 to 4.35:1 and the numeral on the pale ones is gone.
- * This disc does not even get the pin's ring to fall back on.
+ * object — the same fixed white ink and contact shadow, for the reason spelled
+ * out up there. This disc does not even get the pin's ring to fall back on.
  */
 .de-ann-index {
   flex: none;
@@ -785,8 +814,9 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   font-size: ${t.type.micro}; font-weight: ${t.type.weightSection};
   line-height: ${t.type.leadingFlush};
 }
-/* An edit's row number takes the edit pin's square, so row and pin still read as one object. */
-.de-ann-item--edit .de-ann-index { border-radius: ${t.radius.sm}; }
+/* An edit's row number takes the edit pin's square, so row and pin still read
+   as one object — and the squircle back, since only the disc is round. */
+.de-ann-item--edit .de-ann-index { border-radius: ${t.radius.xs}; corner-shape: ${t.cornerShape}; }
 /*
  * Outlined at rest; the filled version below is reserved for "written".
  *
@@ -798,12 +828,13 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann-badge {
   flex: 0 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis;
-  padding: 0 ${t.space.sm}px;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.sm};
+  padding: 0 ${t.space["2xs"]}px;
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.xs};
   background: transparent;
   color: ${t.color.textDim};
   font-size: ${t.type.body};
-  line-height: 14px;
+  /* The row leading (12/16), where a literal 14px sat off every type role. */
+  line-height: ${t.type.leadingRow};
   white-space: nowrap;
 }
 /*
@@ -835,10 +866,11 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * treatment meaning finished.
  */
 .de-ann-badge[data-de-state="ready"] {
-  /* The BORDER stays \`accent\` — a stroke owes 3:1 and has it in both themes.
-     The WORD takes \`accentText\`, which is the same colour in dark and one rung
-     down in light, where plain \`accent\` measures 4.23:1 against the 4.5 a
-     label owes. The sweep found this; the eye did not. */
+  /* The BORDER stays \`accent\` — a stroke owes 3:1, and on the resting row it
+     is 3.3:1 dark and 6.7:1 light (2.9:1 on a hovered dark row). The WORD takes
+     \`accentText\`, the same indigo in light and a lighter rung in dark, where
+     plain \`accent\` falls short of the 4.5 a label owes: 5.3:1 against 3.3:1
+     on the resting row. */
   border-color: ${t.color.accent};
   background: transparent;
   color: ${t.color.accentText};
@@ -869,7 +901,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * the number, the kind chip, the controls — exists to get them to this line. It
  * was \`textMuted\` while the section titles were shouting in caps above it, so
  * the loudest thing in the column was the word "NOTES" and the quietest was the
- * note. 14.2:1 on the row's own ground, against 8.7:1 before.
+ * note. 12.1:1 dark and 19.1:1 light on the row's own ground, against
+ * \`textMuted\`'s 7.9:1 and 10.5:1.
  */
 .de-ann-item-body {
   grid-column: 1;
@@ -924,7 +957,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * inside a 260px column wraps badly and reads as data.
  */
 .de-ann-item-shared {
-  margin-top: ${t.space.xs}px;
+  margin-top: ${t.space["3xs"]}px;
   font-family: ${t.font.ui};
   color: ${t.color.lintWarning};
   /*
@@ -951,7 +984,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * over the app instead of under its title.
  */
 .de-ann-brief {
-  margin-bottom: ${t.space.md}px;
+  margin-bottom: ${t.space.sm}px;
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
 }
@@ -963,11 +996,11 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * into another program: an ellipsis would make the one useful thing in the
  * block unreadable, and at 260px wrapping is the honest choice.
  */
-.de-mcp-row { display: flex; flex-direction: column; align-items: flex-start; gap: ${t.space.sm}px; }
+.de-mcp-row { display: flex; flex-direction: column; align-items: flex-start; gap: ${t.space["2xs"]}px; }
 .de-mcp-url {
   align-self: stretch; min-width: 0;
-  padding: ${t.space.xs}px ${t.space.sm}px;
-  border-radius: ${t.radius.sm};
+  padding: ${t.space["3xs"]}px ${t.space["2xs"]}px;
+  border-radius: ${t.radius.xs};
   background: ${t.color.bgHover};
   color: ${t.color.text};
   font-family: ${t.font.mono};
@@ -1026,26 +1059,33 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * buttons out of the tab order (or out of layout) between frames, which is how
  * a Tab press ends up somewhere the eye did not follow.
  *
- * \`space.md\`, and the rung below it would break the row: each ${t.size.miniSize}px button
+ * \`space.sm\`, and the rung below it would break the row: each ${t.size.miniSize}px button
  * carries ${(TARGET - t.size.miniSize) / 2}px of invisible hit pad on every side, so any gap under
  * ${TARGET - t.size.miniSize}px leaves a strip down the middle where Resolve and Delete both
- * claim the click. \`sm\` would overlap them by ${TARGET - t.size.miniSize - t.space.sm}px; \`md\` clears them with
- * ${t.space.md - (TARGET - t.size.miniSize)}px to spare.
+ * claim the click. \`2xs\` would overlap them by ${TARGET - t.size.miniSize - t.space["2xs"]}px; \`sm\` clears them with
+ * ${t.space.sm - (TARGET - t.size.miniSize)}px to spare.
+ *
+ * The reveal triggers are the kit's four: row hover on a fine pointer,
+ * keyboard focus inside, a menu open inside, and permanently on a coarse
+ * pointer, where hover does not exist.
  */
 .de-ann-item-actions {
   grid-column: 2; grid-row: 1 / -1;
   align-self: start;
-  display: inline-flex; align-items: center; gap: ${t.space.md}px;
+  display: inline-flex; align-items: center; gap: ${t.space.sm}px;
   opacity: 0;
-  transition: opacity ${t.duration.fast} ${t.ease};
+  transition: opacity ${t.duration.hover} ${t.ease};
 }
-.de-ann-item:hover .de-ann-item-actions,
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-item:hover .de-ann-item-actions { opacity: 1; }
+}
 .de-ann-item:focus-within .de-ann-item-actions,
 .de-ann-item--hover .de-ann-item-actions,
-.de-ann-item-actions:focus-within { opacity: 1; }
-/* No pointer, no hover: on touch the reveal would hide the row's only actions
-   behind a gesture the device cannot make. */
-@media (hover: none) {
+.de-ann-item-actions:focus-within,
+.de-ann-item-actions:has([aria-expanded="true"]) { opacity: 1; }
+/* No fine pointer, no hover: on touch the reveal would hide the row's only
+   actions behind a gesture the device cannot make. */
+@media (hover: none), (pointer: coarse) {
   .de-ann-item-actions { opacity: 1; }
 }
 /*
@@ -1065,29 +1105,30 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 /*
  * A hovered action inside a hovered row needs a ground of its own.
  *
- * \`.de-mini:hover\` paints \`bgHover\`, and \`bgHover\` is also what the ROW is
- * wearing by the time a pointer can be on one of its buttons — the same colour
- * twice, so the button you are about to press looks exactly like the button
- * beside it. That is only visible on the near-black chrome, where the two quiet
- * steps are a tenth of a stop apart; on the old slate the wash was wide enough
- * to get away with it.
+ * \`.de-mini:hover\` paints \`bgHover\`, which sits within 1.15:1 of the
+ * \`bgRaisedHover\` the ROW is wearing by the time a pointer can be on one of its
+ * buttons — near enough the same colour twice, so the button you are about to
+ * press looks like the button beside it.
  *
- * The well is the next rung up and the hairline is the channel that actually
- * reads at ${t.size.miniSize}px — a 1.15:1 change of fill is not something you find with your
- * eye, an edge appearing where there was none is. Nothing here for
- * \`--danger\`: it goes to a filled coral and was never in doubt.
+ * The field-hover well changes the fill a little more (1.23:1 dark, 1.12:1
+ * light), and the hairline is the channel that actually reads at
+ * ${t.size.miniSize}px — a change of fill that small is not something you find
+ * with your eye, an edge appearing where there was none is. Nothing here for
+ * \`--danger\`: it takes the danger wash and ink, which were never in doubt.
  */
-.de-ann-item-actions .de-mini:hover:not(.de-mini--danger) {
-  background: ${t.color.fieldHover};
-  border-color: ${t.color.borderInteractive};
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-item-actions .de-mini:hover:not(.de-mini--danger) {
+    background: ${t.color.fieldHover};
+    border-color: ${t.color.borderInteractive};
+  }
 }
 
 /* Inside the box now, not instead of it, so it is inset from the hairline
    rather than from the panel: 16/12 are the tab's own steps, where the 20/16 it
    carried were sized for an empty state that owned the whole pane. */
 .de-ann-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: ${t.space.md}px;
-  padding: ${t.space["2xl"]}px ${t.space.lg}px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: ${t.space.sm}px;
+  padding: ${t.space.lg}px ${t.space.md}px;
   color: ${t.color.textDim};
   text-align: center;
   line-height: ${t.type.leadingBody};
@@ -1099,7 +1140,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * Outside the section, so folding the list away cannot hide the button that
  * finishes the session. The last row before Settings rather than a footer
  * pinned to the pane. It insets its own sides, because \`.de-ann\` pads to the
- * tab's ${GUTTER}px gutter and every section body pads ${t.space.md} more, so
+ * tab's ${GUTTER}px gutter and every section body pads ${t.space.sm} more, so
  * without this the buttons would start one step left of the rows they act on.
  *
  * Four controls — two glyphs, the primary button and Copy — in the
@@ -1108,9 +1149,9 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * pill. The slack \`space-between\` leaves keeps the bin away from Send.
  */
 .de-ann-ctas {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: ${t.space.md}px;
-  margin-top: ${t.space.lg}px;
-  padding: 0 ${t.space.md}px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: ${t.space.sm}px;
+  margin-top: ${t.space.md}px;
+  padding: 0 ${t.space.sm}px;
 }
 /*
  * The two glyph utilities, at the height of the pills they share a row with.
@@ -1121,9 +1162,9 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * finds either label. Growing the BOX to 24 (the glyph inside stays 12) fixes
  * the line and pays for the pointer target in the same move.
  */
-.de-ann-tools { display: inline-flex; align-items: center; gap: ${t.space.sm}px; }
+.de-ann-tools { display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px; }
 .de-ann-tools .de-mini { width: ${TARGET}px; height: ${TARGET}px; }
-.de-ann-actions { display: inline-flex; align-items: center; gap: ${t.space.sm}px; margin-left: auto; }
+.de-ann-actions { display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px; margin-left: auto; }
 .de-ann-actions button { white-space: nowrap; }
 /*
  * A GLYPH THAT BECOMES A TICK, and the becoming is the whole point.
@@ -1135,8 +1176,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * screen confirming the same gesture two different ways reads as two products.
  * So this is its treatment, matched deliberately: both marks in one box,
  * crossfaded, the outgoing one shrinking to ${SWAP_SCALE} and the incoming one arriving at
- * full size. Its numbers are 200ms and 0.8; ours are \`duration.base\` and the
- * same 0.8, which is the step the rest of this file already presses at.
+ * full size. Its numbers are 200ms and 0.8; ours are \`duration.reveal\` and the
+ * same 0.8.
  *
  * STACKED, not replaced. Swapping the \`<svg>\` gives the browser no previous
  * state to interpolate from, so the tick would appear rather than arrive — and
@@ -1154,21 +1195,14 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   position: relative;
   flex: none;
   display: inline-block;
-  width: ${t.icon.row}px; height: ${t.icon.row}px;
+  width: ${t.icon.marker}px; height: ${t.icon.marker}px;
 }
 /*
- * AND A BLUR, which is the third channel the crossfade was missing.
- *
- * Two drawings of the same size stacked at 50% opacity in the middle of a
- * crossfade read as one glyph struck twice, not as one becoming another. Blur
- * is what separates them during the overlap: the outgoing mark goes soft as it
- * leaves and the incoming one resolves as it lands, so at every frame there is
- * exactly one sharp drawing to look at.
- *
- * 4px, which is the chrome's existing pop blur — \`POP_BLUR\` in
- * \`css/tooltip.ts\` — rather than a fourth number. The SCALE is not moved to
- * match the same sheet's 0.25: 0.8 is argued above from the upstream component
- * this box is matched to, and 0.25 of a 16px glyph is a four-pixel speck.
+ * NO BLUR. There was a 4px one here, softening the outgoing mark and resolving
+ * the incoming one, and the kit's grammar is that nothing blurs in or out. The
+ * scale already separates the two drawings through the overlap — the leaving
+ * one is at ${SWAP_SCALE} while the arriving one is near full size — so at every frame
+ * one of them is visibly the smaller.
  */
 /*
  * The selector carries \`[data-designlayer]\` and \`[data-de-glyph]\` for one
@@ -1191,14 +1225,14 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 [data-designlayer] .de-swap > svg[data-de-glyph] {
   position: absolute; inset: 0;
   transform-origin: center;
-  transition: opacity ${t.duration.base} ${t.ease}, transform ${t.duration.base} ${t.ease},
-    filter ${t.duration.base} ${t.ease}, stroke-width ${t.duration.fast} ${t.ease};
+  transition: opacity ${t.duration.reveal} ${t.easeReveal}, transform ${t.duration.reveal} ${t.easeReveal},
+    stroke-width ${t.duration.hover} ${t.ease};
 }
 .de-swap > .de-swap-done {
-  opacity: 0; transform: scale(${SWAP_SCALE}); filter: blur(4px); color: ${t.color.success};
+  opacity: 0; transform: scale(${SWAP_SCALE}); color: ${t.color.success};
 }
-.de-swap--done > .de-swap-rest { opacity: 0; transform: scale(${SWAP_SCALE}); filter: blur(4px); }
-.de-swap--done > .de-swap-done { opacity: 1; transform: scale(1); filter: blur(0px); }
+.de-swap--done > .de-swap-rest { opacity: 0; transform: scale(${SWAP_SCALE}); }
+.de-swap--done > .de-swap-done { opacity: 1; transform: scale(1); }
 /*
  * A TOGGLE KEEPS ITS OWN INK, and that is the entire difference between the two
  * uses of this box.
@@ -1211,8 +1245,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * So the toggle variant inherits, and takes only the crossfade from the rule
  * above.
  *
- * The box is sized here for the panel's \`icon.row\` glyphs; the toolbar's are
- * \`icon.control\`, and \`core/swap-mark.ts\` writes that one case inline rather
+ * The box is sized here for the panel's \`icon.marker\` glyphs; the toolbar's are
+ * \`icon.action\`, and \`core/swap-mark.ts\` writes that one case inline rather
  * than growing a second class for one number.
  */
 .de-swap--plain > .de-swap-done { color: inherit; }
@@ -1221,9 +1255,9 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  *
  * It wears the hover treatment of \`.de-mini--danger\` without the pointer being
  * there, which is the plainest way to say "this is live now" in a vocabulary
- * the panel already has. The ink flips to the dark fixed tone rather than
- * staying white: \`danger\` is a LIGHT coral on this chrome, and white on it
- * measures about 2.3:1 — the same pairing trap \`accentFill\` exists to close.
+ * the panel already has. The ink is \`onSemantic\`, near-black in dark rather
+ * than white: \`danger\` is a LIGHT coral there, and white on it measures
+ * 2.89:1 — the same pairing trap \`accentFill\` exists to close.
  *
  * The fill is the second channel, never the only one. The glyph itself changes
  * from a bin to a tick, so the armed state survives greyscale and survives a
@@ -1270,24 +1304,16 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * the body is always open, so the only thing this block still needs is its own
  * rhythm under the shared heading.
  */
-.de-ann-settings-body { display: flex; flex-direction: column; padding: ${t.space.xs}px 0 ${t.space.md}px; }
+.de-ann-settings-body { display: flex; flex-direction: column; padding: ${t.space["3xs"]}px 0 ${t.space.sm}px; }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. */
 .de-ann-settings-body[hidden] { display: none; }
 /*
- * Opening fades; it does not unroll.
- *
- * Height is the obvious thing to animate here and the wrong one: the block is
- * pinned to the bottom of a pane that is already scrolling, so a height
- * transition relayouts the list above it on every frame and the rows the user
- * was reading walk up the panel. Opacity is free, and at \`fast\` it is over
- * before the eye finishes travelling to the first row.
+ * NO ENTRANCE. The body used to fade in whenever it was shown, back when it sat
+ * under a fold button. The fold is gone and the body is always open, so the
+ * fade was replaying on every render of the tab — an entrance for restored
+ * state, which the kit rules out: known controls paint on the first frame
+ * (MICRO-INTERACTIONS § 10).
  */
-.de-ann-settings-body:not([hidden]) {
-  animation: de-ann-settings-in ${t.duration.fast} ${t.ease};
-}
-@keyframes de-ann-settings-in {
-  from { opacity: 0; }
-}
 
 /*
  * A run of rows, and space — not a hairline — between two runs.
@@ -1297,7 +1323,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * apart; the rule that used to sit in it was removed at a designer's request.
  */
 .de-ann-setting-group { display: flex; flex-direction: column; }
-.de-ann-setting-group + .de-ann-setting-group { margin-top: ${t.space.md}px; }
+.de-ann-setting-group + .de-ann-setting-group { margin-top: ${t.space.sm}px; }
 
 /*
  * One setting, one line. The whole point of the block.
@@ -1315,7 +1341,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  */
 .de-ann-setting {
   position: relative;
-  display: flex; align-items: center; gap: ${t.space.md}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
   min-height: ${t.size.rowHeight}px;
 }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. */
@@ -1340,8 +1366,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * that the dot is inside the label rather than beside it.
  */
 .de-ann-setting--stacked {
-  flex-wrap: wrap; row-gap: ${t.space.md}px;
-  padding-top: ${t.space.sm}px; padding-bottom: ${t.space.sm}px;
+  flex-wrap: wrap; row-gap: ${t.space.sm}px;
+  padding-top: ${t.space["2xs"]}px; padding-bottom: ${t.space["2xs"]}px;
 }
 .de-ann-setting--stacked > :not(.de-ann-setting-label) { flex: 1 1 100%; }
 
@@ -1400,7 +1426,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * in the markup, not a return to the block.
  *
  * \`overflow: clip\` with a margin rather than \`hidden\`, because the dot is a
- * tabbable \`<button>\` and \`hidden\` shaved 3px off every side of its focus ring.
+ * tabbable \`<button>\` and \`hidden\` shaved its focus ring. The margin is the
+ * ring's full reach — a 1px edge plus the 3px halo.
  * A clip margin keeps the ring and still stops a long label painting over the
  * switch. The tip below is unaffected either way — it is absolutely positioned
  * against the ROW, which is outside this box, and a clip only reaches as far
@@ -1408,12 +1435,12 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  */
 .de-ann-setting-label {
   flex: 0 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: ${t.space.sm}px;
-  overflow: clip; overflow-clip-margin: 3px;
+  display: flex; align-items: center; gap: ${t.space["2xs"]}px;
+  overflow: clip; overflow-clip-margin: ${t.space["2xs"]}px;
   white-space: nowrap;
   color: ${t.color.textMuted};
   font-size: ${t.type.body};
-  transition: color ${t.duration.fast} ${t.ease};
+  transition: color ${t.duration.hover} ${t.ease};
 }
 /*
  * \`.de-ann-setting-label > label\` STOOD HERE and has nothing left to style.
@@ -1452,7 +1479,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * item is centred by its container.
  *
  * THE DISC IS THE CIRCLE, and the glyph inside it is \`InfoMark\` — Lucide's
- * \`Info\` with its ring taken off. It was the ringed \`Info\`, and at ${t.icon.row}px in a
+ * \`Info\` with its ring taken off. It was the ringed \`Info\`, and at ${t.icon.marker}px in a
  * ${CHECK}px disc that put two concentric circles 1.4px apart with a 1.25px stroke
  * over 2px of stem between them: rasterised at 1x the \`i\` is a smudge inside a
  * ring, which is what this dot was reported for. The ring was never adding
@@ -1462,10 +1489,10 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * badge in \`css/lint-markers.ts\` still draws the ringed \`Info\`, because it is
  * a rounded SQUARE plate and there a bare \`i\` is a letter, not a notice.
  *
- * ${CHECK}px and not 13: the glyph inside is ${t.icon.row}px, and a 13px disc left the ringed
+ * ${CHECK}px and not 13: the glyph inside is ${t.icon.marker}px, and a 13px disc left the ringed
  * drawing half a pixel proud of its own circle on every side — the marks of an
  * outline glyph sticking out past the surface they are drawn on. The bare mark
- * no longer reaches the edge, but ${t.icon.row} is still the floor for a glyph anywhere
+ * no longer reaches the edge, but ${t.icon.marker} is still the floor for a glyph anywhere
  * in this shell, so the disc cannot shrink without the mark going with it.
  *
  * No hit pad on this one, unlike the switch and the row actions. It is not an
@@ -1485,10 +1512,17 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
   line-height: ${t.type.leadingFlush};
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease};
 }
-.de-ann-help:hover, .de-ann-help:focus-visible { background: ${t.color.fieldHover}; color: ${t.color.text}; }
-.de-ann-help:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-help:hover { background: ${t.color.fieldHover}; color: ${t.color.text}; }
+}
+.de-ann-help:focus-visible {
+  outline: none;
+  background: ${t.color.fieldHover}; color: ${t.color.text};
+  box-shadow: ${FOCUS_RING};
+}
 
 
 
@@ -1514,6 +1548,10 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * exception.
  *
  * The help dot keeps its own hover tint above; only the card left.
+ *
+ * It keeps \`textDim\` at rest where the kit wants icon-only ACTIONS at full
+ * ink, and deliberately: it is not an action (a press does nothing), and six
+ * full-ink dots down the block would outrank the setting names they annotate.
  */
 
 
@@ -1522,26 +1560,23 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  *
  * \`transform\` on a \`::after\`, never \`left\` — a knob animated on an inset is
  * laid out again on every frame, and this one sits in a block pinned below a
- * scrolling list. The knob also FLIPS its ink as it arrives: white on the dark
- * well, \`onAccent\` on the light indigo, because a white knob on this accent
- * measures 1.9:1 — the pairing \`accentFill\` exists to prevent, and the reason
- * the tick on the old settings checkbox was \`onAccent\` too. That gives the on
- * state two channels
- * — where the knob is, and what colour it is — so it survives greyscale.
+ * scrolling list. The knob is \`text\` on the off well and \`onAccent\` (white) on
+ * the indigo fill, where it measures 4.97:1 dark and 6.70:1 light. That gives
+ * the on state two channels — where the knob is, and what colour it or its
+ * track is — so it survives greyscale.
  *
- * \`base\` rather than the 160ms the reference uses: there is no token between
- * \`fast\` and \`base\`, and for 12px of travel the longer rung is the one that
- * reads as a thing sliding rather than a thing blinking.
+ * The knob travels on \`reveal\` — for 12px of travel the longer rung is the one
+ * that reads as a thing sliding rather than a thing blinking — and every colour
+ * change is on the kit's hover tween.
  *
- * THE OFF TRACK NEEDS A BOUNDARY, and that is what the near-black ground took
- * away. \`field\` is a 10% lift off the chrome: against the old slate it was a
- * visible well, against \`#1c1d21\` it measures 1.35:1 and an off switch is a
- * white dot floating on nothing. \`borderInteractive\` is the token for exactly
- * this — the boundary of a control you can act on, at 2.9:1 on the chrome,
- * which is the 3:1 WCAG 1.4.11 asks of a component boundary. The ON track does
- * not need one (the accent fill is 8.9:1 by itself), but the border stays and
- * only changes colour: dropping it would shrink the padding box by 2px on both
- * axes and the knob would jump a pixel as the switch turned on.
+ * THE OFF TRACK NEEDS A BOUNDARY. \`field\` measures 1.17:1 dark and 1.12:1
+ * light against the panel, so without one an off switch is a dot floating on
+ * nothing. \`borderInteractive\` is the token for exactly this — the boundary of
+ * a control you can act on, at 3.23:1 dark and 3.36:1 light on the panel, past
+ * the 3:1 WCAG 1.4.11 asks of a component boundary. The ON track does not need
+ * one (the accent fill is 3.61:1 and 6.70:1 by itself), but the border stays
+ * and only changes colour: dropping it would shrink the padding box by 2px on
+ * both axes and the knob would jump a pixel as the switch turned on.
  *
  * The knob's 1px insets follow from that border, since \`box-sizing\` is
  * border-box and an absolute child is laid out in the PADDING box: 26x14 of
@@ -1551,45 +1586,48 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 .de-ann-toggle {
   position: relative;
   flex: none;
-  width: 28px; height: 16px;
+  width: ${TRACK_W}px; height: ${TRACK_H}px;
   padding: 0;
-  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius.xl};
+  border: 1px solid ${t.color.borderInteractive}; border-radius: ${t.radius["3xl"]};
   background: ${t.color.field};
   cursor: pointer;
-  transition: background-color ${t.duration.base} ${t.ease}, border-color ${t.duration.base} ${t.ease},
-    transform ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease};
 }
-/* A 28x16 track is the drawing, not the target: 4px a side takes it to ${TARGET}. */
+/* A ${TRACK_W}x${TRACK_H} track is the drawing, not the target: ${(TARGET - TRACK_H) / 2}px a side takes it to ${TARGET}. */
 .de-ann-toggle::before {
   content: "";
-  position: absolute; inset: -4px 0;
+  position: absolute; inset: -${(TARGET - TRACK_H) / 2}px 0;
 }
 .de-ann-toggle::after {
   content: "";
   position: absolute; left: 1px; top: 1px;
-  width: 12px; height: 12px;
+  width: ${KNOB}px; height: ${KNOB}px;
   border-radius: 50%;
   background: ${t.color.text};
   transform: translateX(0);
-  transition: transform ${t.duration.base} ${t.ease}, background-color ${t.duration.base} ${t.ease};
+  transition: transform ${t.duration.reveal} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-ann-toggle:hover { background: ${t.color.fieldHover}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-toggle:hover { background: ${t.color.fieldHover}; }
+}
 .de-ann-toggle[aria-checked="true"] {
   background: ${t.color.accentSurface};
   border-color: ${t.color.accentSurface};
 }
-.de-ann-toggle[aria-checked="true"]:hover {
-  background: ${t.color.accentSurfaceHover};
-  border-color: ${t.color.accentSurfaceHover};
+@media (hover: hover) and (pointer: fine) {
+  .de-ann-toggle[aria-checked="true"]:hover {
+    background: ${t.color.accentSurfaceHover};
+    border-color: ${t.color.accentSurfaceHover};
+  }
 }
 .de-ann-toggle[aria-checked="true"]::after {
-  transform: translateX(12px);
+  transform: translateX(${TRACK_W - KNOB - 4}px);
   background: ${t.color.onAccent};
 }
-/* 3% of 28px is a quarter of a pixel and reads as nothing; at this size the
-   press has to be worth seeing, so the whole switch squeezes. */
-.de-ann-toggle:active { transform: scale(0.96); }
-.de-ann-toggle:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 2px; }
+/* The kit's press, the same 2% dip every button in the chrome takes. */
+.de-ann-toggle:active { transform: scale(0.98); }
+.de-ann-toggle:focus-visible { outline: none; box-shadow: ${FOCUS_RING}; }
 
 /*
  * THE MARKER-COLOUR SWATCHES ARE GONE.
@@ -1606,36 +1644,30 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  */
 
 /*
- * Reduced motion keeps the fade and gives up the travel.
+ * Reduced motion keeps the feedback and gives up the travel.
  *
- * base.ts flattens every duration under the chrome to 0.01ms, which is right
- * for a hover tint and wrong for a card appearing next to the pointer: cut to
- * nothing, the composer materialises out of the page with no frame saying where
- * it came from. So it keeps a crossfade at the same length and drops the 4px
- * rise — fewer and gentler, not none, the same bargain base.ts strikes for the
- * panels. \`!important\` because the blanket rule it is answering carries one.
+ * The kit's trade (MICRO-INTERACTIONS § 20): remove spatial travel, springs and
+ * zoom; keep colour and opacity. \`!important\` because the blanket rule in
+ * base.ts that these answer carries one.
  */
 @media (prefers-reduced-motion: reduce) {
-  .de-ann-composer { animation: de-ann-composer-fade ${t.duration.fast} linear !important; }
+  /* The composer's exit keeps its fade and drops the shrink. */
+  .de-ann-composer--leaving { animation-name: de-ann-composer-exit-fade; }
   /*
-   * The TRANSITION and the TRANSFORM. Zeroing only the first left the pin
-   * jumping to 1.1 instantly on hover instead of easing there, which is the
-   * jump reduced motion is asked to remove, delivered faster.
-   * \`.de-lint-marker\` — the other pin drawn over the app — already does both.
+   * The pin keeps its colour change and loses the grow, on hover and while its
+   * row is pointed at. Zeroing only the transition left the pin jumping to 1.1
+   * instantly, which is the jump reduced motion is asked to remove, delivered
+   * faster. The arrival pop is travel too, so it goes.
    */
-  .de-ann-marker { transition: none !important; }
-  .de-ann-marker:hover { transform: none; }
+  .de-ann-marker { transition: background-color ${t.duration.hover} linear, box-shadow ${t.duration.hover} linear !important; }
+  .de-ann-marker:hover,
+  .de-ann-marker--active { transform: none; }
+  .de-ann-marker--arriving { animation: none; }
   /*
-   * The settings block makes the same trade one level down: the switch keeps
-   * its fill and gives up the slide, the knob is simply already at the other
-   * end, and nothing under a press squeezes. The fold keeps its crossfade,
-   * because it was never movement — it is the only frame saying the rows
-   * arrived rather than appeared.
+   * The switch keeps its fill and gives up the slide: the knob is simply
+   * already at the other end, and nothing under a press squeezes.
    */
-  .de-ann-settings-body:not([hidden]) {
-    animation: de-ann-settings-in ${t.duration.fast} linear !important;
-  }
-  .de-ann-toggle::after { transition: background-color ${t.duration.base} linear !important; }
+  .de-ann-toggle::after { transition: background-color ${t.duration.hover} linear !important; }
   /*
    * Copy's tick keeps the crossfade and gives up the squeeze — the same trade
    * the composer makes two rules up. The fade is the frame that says the mark
@@ -1645,7 +1677,7 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
    * glyph mid-transition at whatever scale the blanket rule froze it at.
    */
   [data-designlayer] .de-swap > svg[data-de-glyph] {
-    transition: opacity ${t.duration.fast} linear !important;
+    transition: opacity ${t.duration.hover} linear !important;
   }
   .de-swap > .de-swap-done,
   .de-swap--done > .de-swap-rest { transform: none; }
@@ -1655,16 +1687,12 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
      selector every reader of this block has to rule out. */
   .de-ann-toggle:active { transform: none; }
   /*
-   * Nothing here for the row actions or the setting tip, for the reason
-   * toolbar.ts gives about its own: the blanket rule above clamps DURATION and
-   * leaves DELAY alone, which is exactly the trade these two want — the fade
-   * goes, the 400ms wait before a tip appears stays. Writing \`transition: none\`
-   * for them would zero the property list and take the wait with it, handing
-   * the reader most disturbed by flicker six labels flashing as the pointer
-   * crosses the block.
+   * Nothing here for the row actions or the setting tip: the actions' fade is
+   * clamped by the blanket rule, and the tip is \`css/tooltip.ts\`'s card, which
+   * opens instantly and restates its own reduced-motion rule.
    */
 }
-@keyframes de-ann-composer-fade {
-  from { opacity: 0; }
+@keyframes de-ann-composer-exit-fade {
+  to { opacity: 0; }
 }
 `

@@ -113,7 +113,7 @@ const SCENES = [
     why:
       "The panel said error-or-warning with hue alone. Its own sibling, the canvas badge in " +
       "css/lint-markers.ts, states the rule it was breaking: severity is 'hue AND corner, never " +
-      "hue alone'. The badge's 4px/8px corners cannot be borrowed at 8px — radius.sm IS 50% at " +
+      "hue alone'. The badge's 4px/8px corners cannot be borrowed at 8px — radius.xs IS 50% at " +
       "that size — so the pair is the two endpoints instead: a square and a disc.",
     scene: "lintRows",
     theme: "dark",
@@ -405,7 +405,7 @@ const VERDICTS = [
   ["UI-3", "Icon-side padding", "changed", ""],
   ["UI-4", "Layered shadow over a border", "changed", ""],
   ["UI-5", "1px outline on images", "n/a", "The chrome renders no raster images. The report pages this tool writes now do carry it."],
-  ["UI-6", "Icon stroke matches its text", "blocked", "Five field-label glyphs stroke at 1.5px beside 1.0px text. Moving them to icon.row was tried; icon-cases.mjs rejected it, because the native family only lands on whole pixels at 16, 24 and 32 and resolves to four or six ink levels at 12. A blurrier glyph is a worse answer than a heavier one. The fix is a 12px redrawing."],
+  ["UI-6", "Icon stroke matches its text", "blocked", "Five field-label glyphs stroke at 1.5px beside 1.0px text. Moving them to icon.marker was tried; icon-cases.mjs rejected it, because the native family only lands on whole pixels at 16, 24 and 32 and resolves to four or six ink levels at 12. A blurrier glyph is a worse answer than a heavier one. The fix is a 12px redrawing."],
   ["AN-1", "Animate from the trigger", "changed", ""],
   ["AN-2", "Skip the open on frequent menus", "changed", "The layer menu opens AT THE POINTER, so the question an entrance answers — where did this come from — was never asked, and 180ms of spring sat in front of a list you are about to arrow through. Its entrance is deleted; the three cards that genuinely travel keep theirs, and keep the origin that now aims it. One class not added."],
   ["AN-3", "Exits subtler than entrances", "argued", "css/base.ts argues there are no exits at all, and why building them broke twelve cases across four surfaces. Where exits do exist they are already subtler."],

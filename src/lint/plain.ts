@@ -27,7 +27,7 @@
  *
  * ## Why the plain names are a table and not a transform
  *
- * `no-raw-colors` → "Hardcoded colors" cannot be derived. Dropping `no-` and
+ * `no-raw-colors` → "Hard-coded colors" cannot be derived. Dropping `no-` and
  * unhyphenating gets there for that one rule and produces "Declaration property
  * value no unknown" for the next, which is worse than the id it replaced: an id
  * is at least recognisably an id, and a mangled phrase reads like English that
@@ -38,6 +38,7 @@
  */
 
 import type { LintFinding } from "./store"
+import { plural } from "../core/format"
 
 /**
  * Plain English for the rules the three supported checkers emit, keyed on the
@@ -50,7 +51,7 @@ import type { LintFinding } from "./store"
  * project is one heading, which is right: it is one problem.
  */
 const RULE_NAMES: Record<string, string> = {
-  "no-raw-colors": "Hardcoded colors",
+  "no-raw-colors": "Hard-coded colors",
   "no-undeclared-token": "Undefined tokens",
   "duplicate-token-values": "Duplicate tokens",
   "no-inline-styles": "Inline styles",
@@ -148,11 +149,11 @@ function nearCount(message: string): number {
 export function hintFor(finding: LintFinding): string | null {
   if (finding.fix) return null
   const near = nearCount(finding.message)
-  if (near) return `${near} near match${near === 1 ? "" : "es"} — pick one in the inspector`
+  if (near) return `${plural(near, "near match", "near matches")}. Pick one in the inspector`
   const suffix = finding.rule.includes("/")
     ? finding.rule.slice(finding.rule.lastIndexOf("/") + 1)
     : finding.rule
-  if (suffix === "no-raw-colors") return "No token is close — declare one"
+  if (suffix === "no-raw-colors") return "No token is close. Declare one"
   if (suffix === "no-undeclared-token") return "Showing the fallback value"
   /*
    * The generic last resort, and it is not nothing.

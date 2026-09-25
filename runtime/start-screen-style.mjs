@@ -23,7 +23,7 @@ try {
   throw new Error("designlayer: the token bundle is missing — run `npm run build` in the package")
 }
 
-const { color, radius, shadow, font, type, ease, duration } = tokens
+const { color, radius, shadow, font, type, ease, easeReveal, duration, cornerShape } = tokens
 
 export function startScreenStyle() {
   return `
@@ -63,28 +63,43 @@ export function startScreenStyle() {
   --field-hover: ${color.fieldHover};
   --row-selected: ${color.rowSelected};
   --danger: ${color.danger};
-  --radius: ${radius.lg};
-  --radius-sm: ${radius.md};
-  --radius-card: ${radius.xl};
+  --bg-hover: ${color.bgHover};
+  --segment-selected: ${color.segmentSelected};
+  /*
+   * The kit's radius ladder, by role. Fields and cards take the card rung (16)
+   * — this is a full-size form, not a dense panel, so the kit's own field
+   * corner applies — action buttons the one button corner (14), and list rows
+   * the row-highlight rung (12).
+   */
+  --radius-field: ${radius["3xl"]};
+  --radius-button: ${radius["2xl"]};
+  --radius-row: ${radius.lg};
+  --radius-card: ${radius["3xl"]};
+  --corner: ${cornerShape};
   --shadow: ${shadow.float};
   --font: ${font.ui};
   --mono: ${font.mono};
   --ease: ${ease};
-  /* The bottom rung, for a press: a change you register without watching it
-     happen. Out of the same bundle as the other two, so this page and the
-     chrome it is about to open keep one clock. */
-  --snap: ${duration.snap};
-  --fast: ${duration.fast};
-  --base: ${duration.base};
+  --ease-reveal: ${easeReveal};
+  /* The kit's hover tween, for every wash, press and colour change. Out of the
+     same bundle as the chrome, so this page and the editor it is about to open
+     keep one clock. */
+  --hover: ${duration.hover};
   --weight-body: ${type.weightBody};
   --weight-value: ${type.weightValue};
   --weight-section: ${type.weightSection};
+  --weight-title: ${type.weightTitle};
+  --tracking-eyebrow: ${type.trackingEyebrow};
 
   /*
-   * The token type scale is 12/11/10px because it was cut for a 240px docked
-   * panel. This card is the full window and its field is the primary control of
-   * the whole product, so it carries product-scale type. The label rung is
-   * still the token's, which is what keeps the two surfaces related.
+   * The token type scale is the editor's density — the kit's caption and badge
+   * roles — because it was cut for a 240px docked panel. This card is the full
+   * window and its field is the primary control of the whole product, so it
+   * carries the kit's PRODUCT roles: body-sm (14) is the UI workhorse and body
+   * (16) the lede and the address field, which is also the size iOS will not
+   * zoom a field at. The label rung is still the token's caption size, which is
+   * what keeps the two surfaces related. The tokens carry no body-sm/body
+   * sizes, so the two kit values are written here.
    *
    * (It read "11/10/9" until this pass, which is what the ramp was two moves
    * ago. A comment describing a scale by its numbers is a comment that goes
@@ -92,8 +107,8 @@ export function startScreenStyle() {
    * depends on is interpolated below rather than written out.)
    */
   --size-label: ${type.body};
-  --size-body: 13px;
-  --size-lede: 15px;
+  --size-body: 14px;
+  --size-lede: 16px;
   --size-url: 16px;
 
   /*
@@ -111,6 +126,11 @@ export function startScreenStyle() {
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+/* Every corner is the kit's squircle; a true circle opts back out (\`.pulse\`). */
+@supports (corner-shape: round) {
+  *, *::before, *::after { corner-shape: var(--corner); }
+  .pulse { corner-shape: round; }
+}
 [hidden] { display: none !important; }
 
 /*
@@ -236,7 +256,7 @@ body {
   margin: 0;
   font-family: var(--mono);
   font-size: var(--size-lede);
-  letter-spacing: 0.04em;
+  font-weight: var(--weight-body);
   color: var(--text-dim);
 }
 /* The name of the app currently open in the editor, and since the lede under
@@ -246,7 +266,7 @@ body {
 .lede {
   margin: 6px 0 0;
   font-size: var(--size-lede);
-  font-weight: var(--weight-value);
+  font-weight: var(--weight-title);
   text-wrap: balance;
 }
 
@@ -310,7 +330,8 @@ form { display: contents; }
   gap: 12px;
   font-size: var(--size-label);
   font-weight: var(--weight-section);
-  letter-spacing: 0.03em;
+  /* The kit's eyebrow: caption strong, uppercase, 0.08em. */
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--text-dim);
 }
@@ -393,18 +414,34 @@ code { font-family: var(--mono); color: var(--text); }
  */
 #url, .path {
   width: 100%;
-  padding: 10px 12px;
+  /* The kit's 36px field: a fixed height rather than padding around a line
+     box, so the two boxes and the select are the same height whatever face
+     and size each one's string is set in. */
+  height: 36px;
+  padding: 0 12px;
   color: var(--text);
-  background: var(--bg-sunken);
+  background: var(--field);
   border: 1px solid var(--border-interactive);
-  border-radius: var(--radius);
-  transition: border-color var(--fast) var(--ease);
+  border-radius: var(--radius-field);
+  transition: border-color var(--hover) var(--ease), background-color var(--hover) var(--ease);
 }
 #url { font: var(--weight-value) var(--size-url) var(--mono); }
 #url::placeholder, .path::placeholder { color: var(--text-dim); }
-#url:hover, .path:hover { border-color: var(--accent-soft); }
+@media (hover: hover) and (pointer: fine) {
+  #url:hover, .path:hover { background: var(--field-hover); }
+}
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/*
+ * Buttons take the kit's action focus instead: the edge in the accent and a
+ * 3px halo of it at 30%. Drawn with \`outline\` for the edge, so the fill-only
+ * primary has one too.
+ */
+button:focus-visible, a.primary:focus-visible, .app:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
 /*
  * \`:focus-visible\`, and the ring is KEPT.
  *
@@ -415,8 +452,8 @@ code { font-family: var(--mono); color: var(--text); }
  * \`#url\` carries \`autofocus\`, so the bare \`:focus\` also spent the accent on
  * every mouse user the instant the page loaded.
  *
- * The tint stays as a supplement — it is the same signal the hover gives, one
- * rung brighter — and the platform ring does the work it was already doing.
+ * The kit's field focus is the edge taking the accent; the ring stays on top
+ * of it here because these are the two controls the whole screen is for.
  */
 #url:focus-visible, .path:focus-visible { border-color: var(--accent); }
 
@@ -456,7 +493,7 @@ code { font-family: var(--mono); color: var(--text); }
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 7px 10px;
+  padding: 8px 12px;
   /* The one physical property this stylesheet had. Logical, so a mirrored
      locale moves the label to the edge the reading starts at. */
   text-align: start;
@@ -470,11 +507,13 @@ code { font-family: var(--mono); color: var(--text); }
   /* At rest, and visible: a row with a transparent edge on a near-matching fill
      is a control that does not read as one. 3.07:1 on the card. */
   border: 1px solid var(--border-interactive);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-row);
   cursor: pointer;
-  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  transition: background-color var(--hover) var(--ease), border-color var(--hover) var(--ease);
 }
-.app:hover { background: var(--field-hover); border-color: var(--accent-soft); }
+@media (hover: hover) and (pointer: fine) {
+  .app:hover { background: var(--field-hover); }
+}
 /*
  * CHOSEN, SAID THREE WAYS, BECAUSE IT USED TO BE SAID ZERO.
  *
@@ -529,43 +568,57 @@ code { font-family: var(--mono); color: var(--text); }
 
 button { font: inherit; cursor: pointer; }
 .ghost {
-  padding: 6px 10px;
-  color: var(--text-muted);
+  /* The kit's outline button at its 32px size: transparent at rest, the
+     ghost-hover wash on a pointer. */
+  height: 32px;
+  padding: 0 12px;
+  color: var(--text);
   background: transparent;
   border: 1px solid var(--border-interactive);
-  border-radius: var(--radius-sm);
-  font-size: var(--size-label);
-  transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease),
-    transform var(--snap) var(--ease);
+  border-radius: var(--radius-button);
+  font-size: var(--size-body);
+  font-weight: var(--weight-value);
+  transition: background-color var(--hover) var(--ease), border-color var(--hover) var(--ease),
+    color var(--hover) var(--ease), transform var(--hover) var(--ease);
 }
-.ghost:hover { color: var(--text); border-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) {
+  .ghost:hover { background: var(--bg-hover); }
+}
 
 /* The third row of the same grid as the two fields above it, so it takes the
    same box: it used to be a short, differently-tinted, differently-rounded
    control in a section of its own, which was defensible while it stood alone
    and reads as a mismatch the moment it lines up under two text fields. */
 select {
-  padding: 10px 12px;
+  height: 36px;
+  padding: 0 12px;
   font: inherit;
   color: var(--text);
-  background: var(--bg-sunken);
+  background: var(--field);
   border: 1px solid var(--border-interactive);
-  border-radius: var(--radius);
-  transition: border-color var(--fast) var(--ease);
+  border-radius: var(--radius-field);
+  transition: border-color var(--hover) var(--ease), background-color var(--hover) var(--ease);
 }
-select:hover { border-color: var(--accent-soft); }
+@media (hover: hover) and (pointer: fine) {
+  select:hover { background: var(--field-hover); }
+}
 
 .primary {
-  padding: 11px 16px;
+  /* The kit's primary action at its 40px size: the page's one loud control. */
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 40px;
+  padding: 0 16px;
   font-size: var(--size-body);
-  font-weight: var(--weight-section);
+  font-weight: var(--weight-value);
   color: var(--on-accent);
   background: var(--accent-surface);
   border: 0;
-  border-radius: var(--radius);
-  transition: background var(--fast) var(--ease), transform var(--snap) var(--ease);
+  border-radius: var(--radius-button);
+  transition: background-color var(--hover) var(--ease), transform var(--hover) var(--ease);
 }
-.primary:hover:not(:disabled) { background: var(--accent-surface-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover:not(:disabled) { background: var(--accent-surface-hover); }
+}
 /*
  * THE PRESS, WHICH THE BUTTON THAT STARTS THE PRODUCT DID NOT ANSWER.
  *
@@ -575,8 +628,8 @@ select:hover { border-color: var(--accent-soft); }
  * later and through a different channel, so the gap between "I clicked" and
  * "something is happening" was carried by nothing.
  *
- * 0.96 and \`snap\`, which is the depth and the clock the editor's own controls
- * use — this page borrows the chrome's \`--ease\` and durations already, so the
+ * The kit's press — 0.98 over the \`hover\` tween — which is the depth and the
+ * clock the editor's own controls use — this page borrows the chrome's \`--ease\` and durations already, so the
  * press feels like the same product it is about to open. \`:not(:disabled)\`
  * because a button that will not act must not answer as though it had.
  *
@@ -584,7 +637,7 @@ select:hover { border-color: var(--accent-soft); }
  * answers with its own tick and the field it fills in; a row that also shrank
  * would be claiming to be a button that does something.
  */
-.primary:active:not(:disabled), .ghost:active { transform: scale(0.96); }
+.primary:active:not(:disabled), .ghost:active { transform: scale(0.98); }
 /*
  * Still here, and it should be — but it is now reached by exactly one state.
  *
@@ -617,7 +670,7 @@ a.primary { flex: 1 1 12rem; text-decoration: none; text-align: center; }
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: var(--size-lede);
   font-weight: var(--weight-value);
 }

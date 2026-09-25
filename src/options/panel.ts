@@ -133,7 +133,7 @@ function styleRow(
         apply()
       },
     },
-    [icon("Grid2x2", tokens.icon.row), name]
+    [icon("Grid2x2", tokens.icon.marker), name]
   )
 
   const beginRename = () =>
@@ -154,10 +154,10 @@ function styleRow(
       "aria-label": `Rename ${option.name}`,
       onclick: beginRename,
     },
-    [icon("Pencil", tokens.icon.row)]
+    [icon("Pencil", tokens.icon.marker)]
   )
 
-  const update = verb(icon("ArrowUpToLine", tokens.icon.row), {
+  const update = verb(icon("ArrowUpToLine", tokens.icon.marker), {
     className: "de-option-rename",
     label: `Update ${option.name} from this element`,
     title: active
@@ -176,7 +176,7 @@ function styleRow(
       "aria-label": `Delete ${option.name}`,
       onclick: () => store.removeStyle(selection, option.id),
     },
-    [icon("X", tokens.icon.row)]
+    [icon("X", tokens.icon.marker)]
   )
 
   return el("div", { class: "de-option-row" }, [choice, rename, update, remove])
@@ -208,7 +208,7 @@ export function scopedStyles(
   // is open the checked radio says the same, so this row steps aside.
   const appliedRow = applied
     ? el("div", { class: "de-style-applied", title: `${label}: ${applied.name}` }, [
-        icon("Grid2x2", tokens.icon.row),
+        icon("Grid2x2", tokens.icon.marker),
         el("span", { class: "de-option-name" }, [applied.name]),
         el("span", { class: "de-style-applied-kind" }, [label]),
       ])
@@ -260,7 +260,7 @@ export function scopedStyles(
   }
   const action = miniButton({
     label: plural,
-    glyph: icon("Grid2x2", tokens.icon.row),
+    glyph: icon("Grid2x2", tokens.icon.marker),
     onClick: () => {
       const next = !openScopes.has(scope)
       if (next) openScopes.add(scope)

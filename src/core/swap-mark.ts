@@ -45,7 +45,7 @@ export interface SwapMark {
 }
 
 export interface SwapMarkOptions {
-  /** Box and glyph size. Defaults to `icon.row`, the panel rung. */
+  /** Box and glyph size. Defaults to `icon.marker`, the panel rung. */
   size?: IconSize
   /** The glyph swapped TO. Defaults to `Check`, i.e. a confirmation. */
   done?: IconName
@@ -62,7 +62,7 @@ export interface SwapMarkOptions {
 }
 
 export function swapMark(resting: IconName, options: SwapMarkOptions = {}): SwapMark {
-  const size = options.size ?? tokens.icon.row
+  const size = options.size ?? tokens.icon.marker
   const rest = icon(resting, size, options.restWeight)
   const done = icon(options.done ?? "Check", size, options.doneWeight)
   rest.classList.add("de-swap-rest")
@@ -72,10 +72,10 @@ export function swapMark(resting: IconName, options: SwapMarkOptions = {}): Swap
     {
       class: options.tint === "inherit" ? "de-swap de-swap--plain" : "de-swap",
       "aria-hidden": "true",
-      // The box is `icon.row` in the stylesheet, which is right for the three
+      // The box is `icon.marker` in the stylesheet, which is right for the three
       // panel call sites and wrong for the toolbar's 16px squares. Written
       // inline only when it differs, so the common case stays in CSS.
-      ...(size === tokens.icon.row ? {} : { style: `width:${size}px;height:${size}px` }),
+      ...(size === tokens.icon.marker ? {} : { style: `width:${size}px;height:${size}px` }),
     },
     [rest, done]
   )

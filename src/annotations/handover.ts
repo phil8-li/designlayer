@@ -24,6 +24,7 @@ import { clearEdits } from "./journal"
 import { buildAnnotationBrief, outboxItems } from "./output"
 import { annotationSettings, clearAnnotations } from "./store"
 import type { OutboxItem } from "./types"
+import { plural } from "../core/format"
 
 type Toast = (message: string, kind?: "info" | "error") => void
 
@@ -32,8 +33,8 @@ export function outboxSummary(items: OutboxItem[]): string {
   const notes = items.filter((item) => item.type === "note").length
   const edits = items.length - notes
   return [
-    notes ? `${notes} note${notes === 1 ? "" : "s"}` : null,
-    edits ? `${edits} edit${edits === 1 ? "" : "s"}` : null,
+    notes ? plural(notes, "note") : null,
+    edits ? plural(edits, "edit") : null,
   ]
     .filter((part): part is string => part !== null)
     .join(" and ")
@@ -76,12 +77,12 @@ export function clearIfAsked(): void {
 export function copyHandover(toast: Toast, onRefused?: () => void): boolean {
   const items = outboxItems()
   if (!items.length) {
-    toast("Nothing to copy")
+    toast("Nothing to copy. Pin a note or make an edit first.")
     return false
   }
   const refuse = (): void => {
     onRefused?.()
-    toast("Could not copy — clipboard access was blocked", "error")
+    toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
   }
   try {
     void navigator.clipboard.writeText(buildAnnotationBrief(items)).then(clearIfAsked).catch(refuse)

@@ -549,7 +549,7 @@ export function selectField(options: SelectFieldOptions): HTMLElement {
   return el("span", { class: "de-select-shell" }, [
     select,
     el("span", { class: "de-select-caret", "aria-hidden": "true" }, [
-      icon("ChevronDown", tokens.icon.row),
+      icon("ChevronDown", tokens.icon.marker),
     ]),
   ])
 }
@@ -762,7 +762,7 @@ export function section(
     toggle,
     el("span", { class: "de-section-title" }, [title]),
     actions ? el("span", { class: "de-section-actions" }, [actions]) : null,
-    el("span", { class: "de-chevron", "aria-hidden": "true" }, [icon("ChevronRight", tokens.icon.row)]),
+    el("span", { class: "de-chevron", "aria-hidden": "true" }, [icon("ChevronRight", tokens.icon.marker)]),
   ])
 
   /*

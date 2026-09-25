@@ -44,7 +44,7 @@ export const insertCss = `/* ---------- component placement ---------- */
 .de-insert-indicator {
   position: absolute;
   background: ${t.color.accent};
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   pointer-events: none;
   transition: none;
   animation: none;
@@ -69,7 +69,7 @@ export const insertCss = `/* ---------- component placement ---------- */
 .de-insert-indicator--outline {
   background: ${t.color.selectionSurface};
   box-shadow: inset 0 0 0 ${t.size.hairline}px ${t.color.accent};
-  border-radius: ${t.radius.md};
+  border-radius: ${t.radius.sm};
 }
 /*
  * The write is in flight, and the element will not appear when it lands.
@@ -81,13 +81,14 @@ export const insertCss = `/* ---------- component placement ---------- */
  * missed. The mark stays put and breathes so that window reads as "working"
  * rather than as "nothing happened", and the toast carries the words.
  *
- * A 1.1s cycle rather than something faster: this is a progress hint, not
- * feedback on an action, and a quick pulse over someone's live page is
- * agitation. \`prefers-reduced-motion\` drops to a flat mid-opacity, which still
+ * Four reveals to a cycle (one second) rather than something faster: this is a
+ * progress hint, not feedback on an action, and a quick pulse over someone's
+ * live page is agitation. Read off the duration ramp rather than written as a
+ * literal, so it keeps its proportion to everything else that moves. \`prefers-reduced-motion\` drops to a flat mid-opacity, which still
  * distinguishes pending from resolved without animating anything.
  */
 .de-insert-indicator--pending {
-  animation: de-insert-pending 1.1s ${t.ease} infinite;
+  animation: de-insert-pending calc(${t.duration.reveal} * 4) ${t.ease} infinite;
 }
 @keyframes de-insert-pending {
   0%, 100% { opacity: 1; }
@@ -112,6 +113,10 @@ export const insertCss = `/* ---------- component placement ---------- */
  *
  * Reduced opacity is the whole convention here: a drag ghost that is fully
  * opaque reads as an element that has already been placed.
+ *
+ * Drawn as the kit's floating card: the card rung (\`radius['3xl']\`) and the
+ * modal elevation, which is the cast \`shadow.float\` is for — a surface held in
+ * mid-screen over the product.
  */
 .de-insert-ghost {
   position: fixed;
@@ -120,8 +125,8 @@ export const insertCss = `/* ---------- component placement ---------- */
   z-index: 1;
   max-width: 220px;
   max-height: 180px;
-  padding: ${t.space.md}px;
-  border-radius: ${t.radius.lg};
+  padding: ${t.space.sm}px;
+  border-radius: ${t.radius["3xl"]};
   corner-shape: ${t.cornerShape};
   background: ${t.color.bgRaised};
   box-shadow: ${t.shadow.float};

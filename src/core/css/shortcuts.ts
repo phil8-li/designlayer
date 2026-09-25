@@ -7,14 +7,15 @@
  * cannot live inside the overlay layer, which is a stacking context pinned
  * below the rail.
  *
- * It borrows the popover vocabulary the rest of the chrome uses — `bgRaised`, a
- * hairline, `shadow.popover` — because a designer should not be able to tell
- * from the surface which lane drew a card. What it adds is the `kbd`, which
+ * It is the kit's modal (MICRO-INTERACTIONS § 8): `radius["5xl"]`, the
+ * `shadow.float` elevation, a hairline, 24px side insets, and the shared
+ * `.de-arrive` entrance — scale 0.96 to 1 in place, never a slide. What it adds is the `kbd`, which
  * nothing else in this editor prints: a key is a thing you press, so it is
  * drawn as a key rather than as a code span.
  */
 
 import { tokens as t, nest } from "../tokens"
+import { FOCUS_OUTLINE, PRESS } from "./panels"
 
 /*
  * THERE IS NO `SHEET_Z` ANY MORE, and the deletion is worth the paragraph.
@@ -35,17 +36,27 @@ import { tokens as t, nest } from "../tokens"
 /**
  * The card's corner and the close button's, derived from one inset.
  *
- * `radius['2xl']` over a `space['2xl']` gap: 20 − 16 lands the button on 4,
- * which is `radius.sm` and what every other small control in the chrome draws.
- * The padding is one pixel under the spacing step because the card's hairline
- * is counted as part of the gap between the two curves rather than added to it.
+ * The content sits the kit's 24px in from every edge, and at 24 an 18px modal
+ * corner erodes to nothing: a close button tucked into that corner would be a
+ * square in a round card. So the close button does not sit at the content's
+ * inset. It sits 8px from the card's edge in its own top-right corner, where
+ * 18 − 8 lands it on `radius.md` — the same pairing the kit's menus use for
+ * their items — and the header and body pad themselves out to the 24px line.
+ *
+ * The card's own padding is therefore asymmetric: the nest's 7px (8 less the
+ * hairline) on the top and right, which forms the corner the button lives in,
+ * and 23px (24 less the hairline) on the bottom and left.
  */
 const SHEET = nest({
   of: ".de-shortcuts",
-  outer: t.radius["2xl"],
-  inset: t.space["2xl"],
+  outer: t.radius["5xl"],
+  inset: t.space.sm,
   hairline: 1,
 })
+/** The rest of the way from the close button's corner to the 24px content line. */
+const CONTENT_REST = t.space["2xl"] - t.space.sm
+/** Close button plus the gap the title keeps from it, measured from the content line. */
+const TITLE_CLEAR = t.space.sm + t.size.toolSize + t.space.sm - t.space["2xl"]
 
 export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- */
 /*
@@ -57,15 +68,14 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
  * by hand is what left the sheet claiming a modality it did not enforce — see
  * the note in \`shell/shortcuts.ts\`.
  *
- * \`::backdrop\` is the dim. Same value it always had: dark enough to say the
- * page behind is out of play, light enough to keep reading it, because the
- * sheet is a reference held up against the thing you were doing rather than a
- * context switch away from it.
+ * \`::backdrop\` is the dim: the kit's static 70% scrim (\`color.scrim\`),
+ * never blurred, the same in both appearances.
  *
  * The centring is \`margin: auto\` on the dialog itself, which is what a browser
  * already applies to a modal and what the flex parent was re-implementing. The
- * \`5xl\` gutter the scrim used as padding survives as \`max-height\`/\`max-width\`
- * arithmetic, so the card still never touches the viewport edge.
+ * gutter the scrim used as padding survives as \`max-height\`/\`max-width\`
+ * arithmetic on \`space["2xl"]\`, the kit's modal side inset, so the card still
+ * never touches the viewport edge.
  *
  * No \`z-index\` either. A modal dialog is in the TOP LAYER, which is above every
  * stacking context in the document — including the 2147483400 this sheet used
@@ -73,19 +83,19 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
  * in the module for the comment that explains the ordering it used to buy.
  */
 .de-shortcuts::backdrop {
-  background: rgba(0, 0, 0, 0.45);
+  background: ${t.color.scrim};
 }
 
 .de-shortcuts {
   display: flex; flex-direction: column;
-  width: min(760px, 100% - ${t.space["5xl"] * 2}px);
-  max-height: calc(100% - ${t.space["5xl"] * 2}px);
+  width: min(760px, 100% - ${t.space["2xl"] * 2}px);
+  max-height: calc(100% - ${t.space["2xl"] * 2}px);
   margin: auto;
-  padding: ${SHEET.padding};
-  border: 1px solid ${t.color.border};
+  padding: ${SHEET.padding} ${SHEET.padding} ${t.space["2xl"] - SHEET.hairline}px ${t.space["2xl"] - SHEET.hairline}px;
+  border: ${SHEET.hairline}px solid ${t.color.border};
   border-radius: ${SHEET.outer};
   background: ${t.color.bgRaised};
-  box-shadow: ${t.shadow.popover};
+  box-shadow: ${t.shadow.float};
   color: ${t.color.text};
   font-family: inherit;
   font-size: ${t.type.body};
@@ -101,16 +111,26 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
 /* Not shown is not displayed. Without this a closed dialog still lays out. */
 .de-shortcuts:not([open]) { display: none; }
 
+/*
+ * The header starts in the close button's corner and pads out to the content
+ * line: \`CONTENT_REST\` above and to the right, so the title's top and the
+ * divider's right end both sit 24px in, like the body's left edge. Its right
+ * padding clears the button plus a \`space.sm\` gap. The button hangs back out
+ * into the corner with a negative offset the size of that margin.
+ */
 .de-shortcut-head {
   position: relative;
   flex: none;
-  padding: 0 ${t.size.toolSize + t.space.md}px ${t.space.lg}px 0;
+  margin-right: ${CONTENT_REST}px;
+  padding: ${CONTENT_REST}px ${TITLE_CLEAR}px ${t.space.md}px 0;
   border-bottom: 1px solid ${t.color.border};
 }
+/* The kit's heading weight and tracking, at the editor's 12px title size. */
 .de-shortcut-title {
   margin: 0;
   font-size: ${t.type.body};
-  font-weight: ${t.type.weightSection};
+  font-weight: ${t.type.weightTitle};
+  letter-spacing: ${t.type.trackingTitle};
   color: ${t.color.text};
 }
 /*
@@ -120,7 +140,7 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
  * survive a skim.
  */
 .de-shortcut-note {
-  margin: ${t.space.sm}px 0 0;
+  margin: ${t.space["2xs"]}px 0 0;
   /* The measure this chrome picked by hand first, now the token everything
      else reads. See \`type.measure\`. */
   max-width: ${t.type.measure};
@@ -129,20 +149,28 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   color: ${t.color.textMuted};
 }
 .de-shortcut-close {
-  position: absolute; top: 0; right: 0;
+  position: absolute; top: 0; right: -${CONTENT_REST}px;
   display: inline-flex; align-items: center; justify-content: center;
   width: ${t.size.toolSize}px; height: ${t.size.toolSize}px;
   padding: 0;
   border: none;
   border-radius: ${SHEET.radius};
   background: transparent;
-  color: ${t.color.textMuted};
+  /* Icon-only, so full ink in every state (MICRO-INTERACTIONS § 5). */
+  color: ${t.color.text};
   cursor: pointer;
+  transition:
+    background-color ${t.duration.hover} ${t.ease},
+    box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
-/* The sheet is \`bgRaised\`, so its close button lifts to \`bgRaisedHover\`.
-   \`bgHover\` is darker than the surface it sits on, so the one control that
-   dismisses this overlay receded under the pointer. */
-.de-shortcut-close:hover { background: ${t.color.bgRaisedHover}; color: ${t.color.text}; }
+/* The sheet is \`bgRaised\`, so its close button lifts to \`bgRaisedHover\`;
+   \`bgHover\` would do nothing in dark and recede under the pointer in light. */
+@media (hover: hover) and (pointer: fine) {
+  .de-shortcut-close:hover { background: ${t.color.bgRaisedHover}; }
+}
+.de-shortcut-close:active { ${PRESS} }
+.de-shortcut-close:focus-visible { ${FOCUS_OUTLINE} }
 
 /*
  * Two columns where they fit, one below that.
@@ -156,21 +184,23 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  margin-top: ${t.space.lg}px;
+  margin-top: ${t.space.md}px;
+  /* Out to the same 24px line on the right as the header's divider. */
+  margin-right: ${CONTENT_REST}px;
   columns: 2;
-  column-gap: ${t.space["5xl"]}px;
+  column-gap: ${t.space["2xl"]}px;
 }
 @media (max-width: 720px) { .de-shortcut-body { columns: 1; } }
 
 .de-shortcut-group {
   break-inside: avoid;
-  margin: 0 0 ${t.space["4xl"]}px;
+  margin: 0 0 ${t.space.xl}px;
 }
 .de-shortcut-heading {
-  margin: 0 0 ${t.space.md}px;
+  margin: 0 0 ${t.space.sm}px;
   font-size: ${t.type.micro};
   font-weight: ${t.type.weightSection};
-  letter-spacing: 0.06em;
+  letter-spacing: ${t.type.trackingEyebrow};
   text-transform: uppercase;
   color: ${t.color.textDim};
 }
@@ -183,19 +213,19 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
 .de-shortcut-row {
   display: grid;
   grid-template-columns: 92px 1fr;
-  gap: ${t.space.md}px;
+  gap: ${t.space.sm}px;
   align-items: baseline;
-  padding: ${t.space.sm}px 0;
+  padding: ${t.space["2xs"]}px 0;
 }
-.de-shortcut-keys { display: flex; flex-wrap: wrap; gap: ${t.space.xs}px; }
+.de-shortcut-keys { display: flex; flex-wrap: wrap; gap: ${t.space["3xs"]}px; }
 
 .de-kbd {
   display: inline-block;
-  min-width: ${t.space["3xl"]}px;
-  padding: ${t.space.xs}px ${t.space.sm}px;
+  min-width: ${t.space.lg}px;
+  padding: ${t.space["3xs"]}px ${t.space["2xs"]}px;
   border: 1px solid ${t.color.border};
   border-bottom-width: 2px;
-  border-radius: ${t.radius.sm};
+  border-radius: ${t.radius.xs};
   background: ${t.color.bgSunken};
   color: ${t.color.text};
   /* The token, not a retyped stack. The literal here was \`font.mono\` with
@@ -208,7 +238,7 @@ export const shortcutsCss = `/* ---------- keyboard shortcuts sheet ---------- *
   white-space: nowrap;
 }
 
-.de-shortcut-text { display: flex; flex-direction: column; gap: ${t.space.xs}px; min-width: 0; }
+.de-shortcut-text { display: flex; flex-direction: column; gap: ${t.space["3xs"]}px; min-width: 0; }
 .de-shortcut-label { color: ${t.color.text}; line-height: ${t.type.leadingRow}; }
 /*
  * The Figma lineage, and it is deliberately quiet.

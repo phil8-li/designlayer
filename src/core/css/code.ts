@@ -9,8 +9,8 @@ export const codeCss = `/* ---------- code tab ---------- */
 }
 .de-code-header {
   flex: none;
-  display: flex; align-items: center; gap: ${t.space.md}px;
-  padding: ${t.space.md}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
+  padding: ${t.space.sm}px;
   border-bottom: 1px solid ${t.color.border};
 }
 /* The picker takes the row; the file reference keeps whatever is left. */
@@ -29,7 +29,7 @@ export const codeCss = `/* ---------- code tab ---------- */
   /* The slab's inset is the header's and the footer's, so the first character
      of code sits on the same column as the file picker above it; at 10 it was
      two pixels inboard of both and the panel had three left edges. */
-  margin: 0; padding: ${t.space.md}px;
+  margin: 0; padding: ${t.space.sm}px;
   overflow: auto;
   background: ${t.color.bgSunken};
   color: ${t.color.text};
@@ -59,7 +59,7 @@ export const codeCss = `/* ---------- code tab ---------- */
   /* The tight step, not the group one: this gutter is 260px of panel away from
      the code it numbers, and every pixel spent parting the two columns is a
      character the wrapped line loses. 8 still reads as a gutter. */
-  display: grid; grid-template-columns: minmax(2ch, auto) 1fr; gap: ${t.space.md}px;
+  display: grid; grid-template-columns: minmax(2ch, auto) 1fr; gap: ${t.space.sm}px;
 }
 .de-code-line::before {
   content: attr(data-line);
@@ -68,15 +68,10 @@ export const codeCss = `/* ---------- code tab ---------- */
   user-select: none; -webkit-user-select: none;
 }
 /*
- * The tints, re-measured against the ground they are tuned to.
- *
- * \`bgSunken\` moved with the chrome — \`#25292e\` to \`#121316\` — and the obvious
- * worry was that a palette picked for the old one had gone flat. It went the
- * other way: every tint gained about 2 points of contrast because the ground
- * dropped, and the set now runs 9.8:1 (number) to 13.2:1 (string), with
- * punctuation the floor at 6.8:1. Nothing here needs re-cutting, and the note
- * is the useful part — the next person to move the ground should re-measure
- * rather than re-derive, and the value that goes first is the punctuation.
+ * The tints are the kit's decorative hues, tuned per theme against \`bgSunken\`
+ * in \`tokens.ts\` (the code well is the kit's \`--doc-code-bg\` decision). The
+ * next person to move that ground should re-measure rather than re-derive, and
+ * the value that goes first is the punctuation.
  */
 .de-code-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .de-code-tag { color: ${t.code.tag}; }
@@ -86,12 +81,12 @@ export const codeCss = `/* ---------- code tab ---------- */
 .de-code-punctuation { color: ${t.code.punctuation}; }
 .de-code-footer {
   flex: none;
-  display: flex; align-items: center; justify-content: space-between; gap: ${t.space.md}px;
-  padding: ${t.space.md}px;
+  display: flex; align-items: center; justify-content: space-between; gap: ${t.space.sm}px;
+  padding: ${t.space.sm}px;
   border-top: 1px solid ${t.color.border};
 }
 .de-code-status { font-size: ${t.type.body}; color: ${t.color.textDim}; }
 .de-code-status--success { color: ${t.color.success}; }
 .de-code-status--error { color: ${t.color.danger}; }
-.de-code-actions { display: inline-flex; align-items: center; gap: ${t.space.sm}px; }
+.de-code-actions { display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px; }
 `

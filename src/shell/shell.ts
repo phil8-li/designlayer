@@ -136,6 +136,30 @@ function holdTextInFields(): () => void {
 }
 
 /**
+ * Mark a chrome scroller while it scrolls, so its scrollbar can ink in.
+ *
+ * The other half of the auto-hiding scrollbar in `css/base.ts`
+ * (MICRO-INTERACTIONS § 13, the kit's `js/scroll-autohide.js`): the thumb is
+ * clear at rest and shows while `data-scrolling` is on, which is cleared 700ms
+ * after the last scroll event. Capturing and passive, because a scroll does not
+ * bubble and this never cancels one; and it ignores every scroller that is not
+ * the chrome's, so the app being edited gets no attribute written into it.
+ */
+const SCROLL_IDLE_MS = 700
+function markScrolling(): () => void {
+  const timers = new WeakMap<Element, ReturnType<typeof setTimeout>>()
+  const onScroll = (event: Event): void => {
+    const node = event.target
+    if (!(node instanceof Element) || !node.hasAttribute(CHROME_ATTR)) return
+    node.setAttribute("data-scrolling", "")
+    clearTimeout(timers.get(node))
+    timers.set(node, setTimeout(() => node.removeAttribute("data-scrolling"), SCROLL_IDLE_MS))
+  }
+  document.addEventListener("scroll", onScroll, { capture: true, passive: true })
+  return () => document.removeEventListener("scroll", onScroll, true)
+}
+
+/**
  * Who wants to know when the app area changes width.
  *
  * The two panel flags are store state and anything can subscribe to them, but
@@ -223,7 +247,7 @@ export function mountShell(): Shell {
   const toolbar = el("div", { class: "de-toolbar", role: "toolbar", "aria-label": "DesignLayer" })
 
   const left = el("div", { class: "de-panel-body" })
-  const leftPanel = el("aside", { class: "de-panel de-panel--left", "aria-label": "Layers" }, [left])
+  const leftPanel = el("aside", { class: "de-panel de-panel--left", "aria-label": "Left panel" }, [left])
 
   const right = el("div", { class: "de-panel-body" })
   const rightPanel = el(
@@ -345,6 +369,7 @@ export function mountShell(): Shell {
   const releaseFocusModality = installFocusModality()
   const releaseChromeFocus = restoreChromeFocus()
   const releaseFieldText = holdTextInFields()
+  const releaseScrolling = markScrolling()
 
   /**
    * Which panels exist right now. Separate from the insets below, because a
@@ -493,6 +518,7 @@ export function mountShell(): Shell {
       unsubscribe()
       releaseChromeFocus()
       releaseFieldText()
+      releaseScrolling()
       releaseFocusModality()
       resize.destroy()
       launcher.destroy()

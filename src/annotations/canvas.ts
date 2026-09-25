@@ -100,7 +100,7 @@ const MARKER_ACTIVE = "de-ann-marker--active"
 const MARKER_ARRIVING = "de-ann-marker--arriving"
 /** Read off the ramp rather than restated, so the class and the timer agree. */
 const ARRIVE_MS = (): number =>
-  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.reveal)
 
 /** A viewport-space box: what a gesture produced and what the composer anchors to. */
 interface Box {
@@ -148,6 +148,51 @@ interface Gesture {
   /** The live node the note is about, or `null` for a region over empty space. */
   element: Element | null
   selectedText: string | null
+}
+
+
+/** The kit's popover dismissal, parsed once from the ramp it is written on. */
+const EXIT_MS = Number.parseFloat(tokens.duration.exit)
+
+/**
+ * Plays the composer's 150ms exit on an inert COPY, in a sibling layer.
+ *
+ * The composer has to be gone the instant it is saved or cancelled — its
+ * Escape handler is released, the pin it made is already landing, and every
+ * caller (and suite) treats "closed" as "not in the layer". The kit still asks
+ * for a bounded fade so the card does not vanish in the frame of the click, so
+ * the fade plays on a clone: typed text copied over (a clone keeps a
+ * textarea's default value, not its current one), ids and the dialog role
+ * stripped, `inert` and `aria-hidden`, in a shallow copy of the layer placed
+ * after it so it lands on the same coordinates without being a child of the
+ * real one. Both go when the animation ends, or on the timer when it never
+ * does (jsdom, a background tab). Skipped under reduced motion, where the base
+ * blanket takes the fade to nothing anyway.
+ */
+function playExit(card: HTMLElement, layer: HTMLElement): void {
+  if (prefersReducedMotion() || !card.isConnected || !layer.parentElement) return
+  const ghost = card.cloneNode(true) as HTMLElement
+  const typed = card.querySelector("textarea")
+  const copy = ghost.querySelector("textarea")
+  if (typed && copy) copy.value = typed.value
+  ghost.removeAttribute("role")
+  ghost.removeAttribute("aria-label")
+  for (const node of ghost.querySelectorAll("[id]")) node.removeAttribute("id")
+  ghost.classList.add("de-ann-composer--leaving")
+  const stage = layer.cloneNode(false) as HTMLElement
+  stage.removeAttribute("id")
+  stage.setAttribute("aria-hidden", "true")
+  stage.inert = true
+  stage.append(ghost)
+  layer.after(stage)
+  let gone = false
+  const remove = (): void => {
+    if (gone) return
+    gone = true
+    stage.remove()
+  }
+  ghost.addEventListener("animationend", remove, { once: true })
+  window.setTimeout(remove, EXIT_MS + 50)
 }
 
 export function installAnnotations(context: EditorContext): void {
@@ -415,6 +460,7 @@ export function installAnnotations(context: EditorContext): void {
 
     const close = (): void => {
       window.removeEventListener("keydown", onKey, true)
+      if (composer) playExit(composer, layer)
       composer?.remove()
       composer = null
       dismiss = () => {}
@@ -473,7 +519,7 @@ export function installAnnotations(context: EditorContext): void {
         el("div", { class: "de-ann-composer-actions" }, [
           el("button", { class: "de-button", type: "button", onclick: close }, ["Cancel"]),
           el("button", { class: "de-button de-button--primary", type: "button", onclick: save }, [
-            "Save",
+            "Save note",
           ]),
         ]),
       ]
@@ -934,7 +980,7 @@ export function installAnnotations(context: EditorContext): void {
     showing = true
     if (!hint) {
       hint = el("div", { class: "de-ann-hint", role: "status" }, [
-        icon("MessageSquare", tokens.icon.control),
+        icon("MessageSquare", tokens.icon.action),
         "Click, drag an area, or select text to add a note",
       ])
       layer.append(hint)

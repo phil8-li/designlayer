@@ -289,7 +289,7 @@ await check("the seam paints nothing at rest and the accent only once it is touc
   assert.match(editor.shellCss, /\.de-separator::before \{[^}]*background: transparent;/)
   assert.match(
     editor.shellCss,
-    /\.de-separator:hover::before,\n\.de-separator:focus-visible::before,\n\.de-separator\[data-resizing\]::before \{ background: [^;]+; \}/,
+    /@media \(hover: hover\) and \(pointer: fine\) \{\s*\.de-separator:hover::before \{ background: [^;]+; \}\s*\}\s*\.de-separator:focus-visible::before,\n\.de-separator\[data-resizing\]::before \{ background: [^;]+; \}/,
     "the accent is not bound to hover, focus and drag alike"
   )
   assert.match(

@@ -1145,7 +1145,7 @@ export function createDesignLint(config) {
       for (const id of ids) {
         const finding = known.get(id)
         if (!finding) {
-          failed.push({ id, reason: "This finding is no longer reported — re-run the audit." })
+          failed.push({ id, reason: "This finding is no longer reported. Run Audit again." })
           continue
         }
         if (!finding.fix) {
@@ -1194,7 +1194,7 @@ export function createDesignLint(config) {
           if (edit.start < previousEnd) {
             failed.push({
               id: edit.id,
-              reason: "This overlaps another fix in the same place — apply them one at a time.",
+              reason: "This overlaps another fix in the same place. Apply them one at a time.",
             })
             continue
           }

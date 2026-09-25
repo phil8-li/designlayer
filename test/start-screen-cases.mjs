@@ -46,6 +46,7 @@ import { startScreenPage } from "../runtime/start-screen-page.mjs"
 // module from the page and imports the built token bundle, so it is read here
 // directly rather than scraped back out of the `<style>` the page inlines.
 import { startScreenStyle } from "../runtime/start-screen-style.mjs"
+import { tokens } from "../dist/tokens.mjs"
 import { PREFERRED_START_SCREEN_PORT, createStartScreen } from "../runtime/start-screen.mjs"
 
 let passed = 0
@@ -1405,8 +1406,10 @@ await check("the screen's leading comes from the same scale as the chrome's", as
    * on it. The roles come from `tokens.type` now, so the two surfaces cannot
    * drift apart on what "body leading" means.
    */
-  assert.match(css, /--leading-body: 1\.5;/)
-  assert.match(css, /--leading-row: 1\.4;/)
+  // The kit's reading leading (body 16/26) and caption leading (12/16), read
+  // from the token bundle rather than restated, so a retune moves both.
+  assert.match(css, new RegExp(`--leading-body: ${tokens.type.leadingBody};`))
+  assert.match(css, new RegExp(`--leading-row: ${tokens.type.leadingRow};`))
   assert.match(css, /font: var\(--weight-body\) var\(--size-body\)\/var\(--leading-body\)/)
   // No bare numeric leading left anywhere: a literal here is the start of the
   // scale coming apart again.

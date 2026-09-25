@@ -94,7 +94,7 @@ export function sizeControls({ selection, writer, invalidate }: SectionContext):
       {
         class: "de-field-trailing",
         type: "button",
-        title: `${title}: ${MODE_WORD[mode]} — press to set ${MODE_MEANING[next]}`,
+        title: `${title}: ${MODE_WORD[mode]}. Press to set ${MODE_MEANING[next]}`,
         "aria-label": `${title} sizing: ${MODE_WORD[mode]}. Press to set ${MODE_MEANING[next]}`,
         onclick: () => {
           if (next === "hug") write(axis, HUG, `Hug ${axis}`)
@@ -105,7 +105,7 @@ export function sizeControls({ selection, writer, invalidate }: SectionContext):
       // The word only where it carries something. `Fixed` beside a number is the
       // number said twice, so that case draws the chevron Figma draws and the
       // two interesting modes spend the space on their own name.
-      [mode === "fixed" ? icon("ChevronDown", tokens.icon.row) : MODE_WORD[mode]]
+      [mode === "fixed" ? icon("ChevronDown", tokens.icon.marker) : MODE_WORD[mode]]
     )
 
     return numberField({

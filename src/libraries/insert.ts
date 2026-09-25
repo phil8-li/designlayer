@@ -517,7 +517,7 @@ function currentIndicator(): HTMLElement | null {
 
 /** How long a finished mark holds still before it goes. One rung, read off the ramp. */
 const SETTLE_MS = (): number =>
-  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.base)
+  prefersReducedMotion() ? 0 : Number.parseFloat(tokens.duration.reveal)
 
 /* ---------- the drag ---------- */
 
@@ -872,7 +872,7 @@ export async function insertComponent(
   rememberOverlay(editor)
   const placement = target ?? clickTarget(editor)
   if (!placement) {
-    editor.toast(`Nowhere to place ${component.name} — select a container first`, "error")
+    editor.toast(`Nowhere to place ${component.name}. Select a container first`, "error")
     return
   }
 
@@ -911,11 +911,11 @@ export async function insertComponent(
       // The wording is load-bearing. Nothing visible changes at this moment —
       // see the header — and a bare "Inserted" over an unchanged page reads as
       // a lie until the reload lands a second later.
-      editor.toast(`Inserted ${component.name} — it appears when the page reloads`)
+      editor.toast(`Inserted ${component.name}. It appears when the page reloads`)
       return
     }
     const reason = result.failed[0]?.reason ?? "the server wrote nothing"
-    editor.toast(`Could not insert ${component.name} — ${reason}`, "error")
+    editor.toast(`Could not insert ${component.name}: ${reason}`, "error")
   } catch (error) {
     editor.toast(error instanceof Error ? error.message : `Could not insert ${component.name}`, "error")
   } finally {

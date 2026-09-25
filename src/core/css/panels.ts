@@ -4,9 +4,9 @@
  * ## The rank ladder every surface in the chrome is written against
  *
  * Four ranks, and INK carries them. Weight marks only the top rank and the
- * chosen one. Size marks nothing, because it cannot: the type scale's three
- * rungs are 11 / 10 / 9px and the two below `body` are under the 12px floor,
- * so there is exactly one usable size in the whole shell.
+ * chosen one. Size marks nothing: the editor keeps its 12px density, so body
+ * and caption are both the kit's 12px caption role and `micro` (10) is for
+ * marks only.
  *
  *   1 heading    `text` (a sub-heading: `textMuted`)  + `weightSection`
  *   2 value      `text`                               + `weightBody`,
@@ -15,68 +15,53 @@
  *   3 control    `textMuted`                          + `weightBody`
  *   4 secondary  `textDim`                            + `weightBody`
  *
- * One carve-out, and it is the one the layer tree already argued for: a
- * GLYPH-ONLY control rests at rank 4 and steps to `text` on hover. A column of
- * row actions is texture until you reach for it; a column of rank-3 glyphs is a
- * second list competing with the names beside them.
+ * GLYPH-ONLY ACTIONS ARE NOT ON THE LADDER. The kit is explicit that an
+ * icon-only action wears full ink (`text`) at rest and in every state, because
+ * its glyph is its whole label and a muted glyph reads as disabled. Status
+ * marks (a chevron, a type glyph) are not actions and keep `textDim`.
  *
- * On the mid-slate ground the ladder did not have to be stated, because the
- * ground was light enough that a rung either side of the right one still read.
- * On near-black the distances compress at the dim end — `textDim` and a faded
- * `textDim` are three points of lightness apart — so the ranks have to be
- * assigned rather than felt.
+ * ## The hover and interaction rules
  *
- * ## And the hover rule, since hover is a rank too
- *
- * Hover lifts ONE rung from the element's own resting ground: a row on `bg`
- * goes to `bgHoverQuiet`, a row on `bgRaised` (a popover) goes to `bgHover`, a
- * field in its `bgSunken` well goes to `bgHoverQuiet`. The exception is size —
- * anything 24px or under takes `bgHover` whatever it rests on, because the
- * same value step over 18 square pixels is not the same signal as over a
- * 232px band.
+ * Hover lands on an existing rung: a band on `bg` goes to `bgHoverQuiet`, a
+ * row in a popover to `bgRaisedHover`, a field well to `fieldHover`, anything
+ * 24px or under to `bgHover`. Hover paint only fires on a fine pointer
+ * (`@media (hover: hover) and (pointer: fine)`), an open menu holds its
+ * trigger's hover paint, a press is `scale(0.98)` except on menu triggers, and
+ * focus rings are `:focus-visible` only (MICRO-INTERACTIONS § 1–3).
  */
 
 import { tokens as t } from "../tokens"
 
 /**
- * THE CONTROL RADIUS, and the one number this file changed most widely.
+ * The corner every INPUT-SHAPED control in the chrome draws: fields, selects,
+ * segmented tracks and the segments riding flush inside them, the align pad,
+ * mini buttons.
  *
- * Measured off Figma's own right panel at 2x (see `.harness/figma-spec.md`):
- * every control in it — field, track, chip, alignment pad, action cell — draws
- * a corner whose arc spans about seven device pixels, so 3.5px, and `radius.sm`
- * is the step on our ramp that lands there. The chrome was drawing `radius.md`
- * on all of them, twice as round, which is the single difference that most made
- * a column of our controls read as a different product beside a column of
- * Figma's.
+ * `radius.sm` (8), and that is the kit's ladder adapted to the editor's
+ * density. The kit gives fields `radius["3xl"]` (16) on a 36px box; a 16px
+ * corner on a 24px field is a pill, so a dense row takes the rung the kit
+ * gives its small controls and glyph plates instead. Kit segmented tracks pad
+ * 4px around an 8px segment; ours carry no padding (a 16px segment in a 24px
+ * row is too small to hit), so the segment shares the rail's curve exactly.
  *
- * Named rather than written out at each rule because it is now asserted in
- * three places at once: the field, the segmented track, and the segment riding
- * inside it have to agree, or the chip stops being parallel to the rail it sits
- * in.
- *
- * The segmented control no longer declares a `nest()`. Figma's track carries NO
- * padding — the selected chip runs flush to the rail's own edge, sharing its
- * curve exactly (measured: the chip's border begins at the same device column
- * the track does). Two curves with nothing between them are concentric at an
- * inset of zero, which is not a nest; it is the same corner drawn twice. The
- * old 4px rail is what forced the segments down to `radius.sm` inside a
- * `radius.md` track, and with both now at `sm` there is no offset left to
- * compute.
- */
-/**
- * The corner every INPUT-SHAPED control in the chrome draws.
- *
- * Exported because four controls outside this file were drawing `radius.md`
- * instead — the token field, the layers filter, the Controls filter and the
- * library field — so a filter box and the field two inches below it in the same
- * panel had visibly different corners. Each was independently reasonable and
- * the set was not a system.
- *
- * Cards and popovers keep `radius.lg` / `radius.xl`; this is the control rung
- * alone, and importing the constant rather than re-typing `t.radius.sm` is what
- * makes the next move of the rung reach all ten call sites.
+ * Exported so the token field, the layers filter, the Controls filter and the
+ * library field all move with it.
  */
 export const CONTROL_RADIUS = t.radius.sm
+
+/**
+ * The kit's keyboard-focus recipe (MICRO-INTERACTIONS § 3): the edge takes the
+ * accent, plus a 3px halo of the accent at 30%. `FOCUS_RING` is for a control
+ * with a 1px transparent border to recolour; `FOCUS_OUTLINE` paints the same
+ * 1px edge with an inset outline for a control without one; `FOCUS_INSET` keeps
+ * edge and halo inside the box, for cells in a clipped rail or full-bleed bands.
+ */
+const HALO = t.color.accentHalo
+export const FOCUS_RING = `outline: none; border-color: ${t.color.accent}; box-shadow: 0 0 0 3px ${HALO};`
+export const FOCUS_OUTLINE = `outline: 1px solid ${t.color.accent}; outline-offset: -1px; box-shadow: 0 0 0 3px ${HALO};`
+export const FOCUS_INSET = `outline: none; box-shadow: inset 0 0 0 1px ${t.color.accent}, inset 0 0 0 4px ${HALO};`
+/** The kit's press (MICRO-INTERACTIONS § 1): a 2% dip, never on a menu trigger. */
+export const PRESS = "transform: scale(0.98);"
 
 /**
  * THE CURSOR RULE, stated once because it was being decided per file.
@@ -186,13 +171,14 @@ export const panelsCss = `/* ---------- panels ---------- */
  * do not control, so it is the STRONG rung and not the divider one.
  *
  * Every other rule in this file separates two surfaces we painted. This one
- * separates the editor from the product, and since the ground went near-black
- * it can no longer lean on a value step to do that: a dark-mode app sits within
- * a point or two of \`bg\` — \`#1a1a1a\` is squarely in the range other people's
- * dark themes pick from — and at \`border\` the boundary was the faintest line on
- * the screen, thinner-looking than the divider between two rows of the same
- * panel, for the one edge that has to say where the tool stops. Against a light
- * app the step is enormous either way, so the heavier rung costs nothing there.
+ * separates the editor from the product, and it cannot lean on a value step to
+ * do that: an app in the same appearance as the chrome sits within a point or
+ * two of \`bg\` — \`#171717\` is squarely in the range other people's dark themes
+ * pick from, and \`#ffffff\` is most light ones — and at \`border\` the boundary
+ * would be the faintest line on the screen, no heavier than the divider between
+ * two rows of the same panel, for the one edge that has to say where the tool
+ * stops. Against an app in the other appearance the step is enormous either
+ * way, so the heavier rung costs nothing there.
  */
 /*
  * The widths here are the ones the panel MOUNTS with, and after that the resize
@@ -286,11 +272,13 @@ export const panelsCss = `/* ---------- panels ---------- */
   bottom: 0;
   width: ${t.size.hairline}px;
   background: transparent;
-  transition: background ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease};
 }
 .de-separator--left::before { right: ${t.size.separatorHit / 2}px; }
 .de-separator--right::before { left: ${t.size.separatorHit / 2}px; }
-.de-separator:hover::before,
+@media (hover: hover) and (pointer: fine) {
+  .de-separator:hover::before { background: ${t.color.accent}; }
+}
 .de-separator:focus-visible::before,
 .de-separator[data-resizing]::before { background: ${t.color.accent}; }
 /*
@@ -323,7 +311,7 @@ export const panelsCss = `/* ---------- panels ---------- */
  */
 .de-panel {
   transition:
-    transform ${t.duration.drawer} ${t.ease},
+    transform ${t.duration.resize} ${t.ease},
     visibility 0s;
 }
 html.designlayer-chrome-hidden .de-panel {
@@ -331,22 +319,19 @@ html.designlayer-chrome-hidden .de-panel {
   /*
    * 60ms behind the toolbar on the way out, level with it on the way back —
    * the delay lives on this rule, so it applies to the exit only. The
-   * visibility flip is the sum: 60 of waiting plus the slide itself.
+   * visibility flip is the sum: 60 of waiting plus the slide itself, computed
+   * so it cannot fall out of step with the resize rung again (it said 300
+   * against a 320 slide, and flipped the panel hidden 20ms early).
    */
   transition:
-    transform ${t.duration.drawer} ${t.ease} 60ms,
-    visibility 0s linear 300ms;
+    transform ${t.duration.resize} ${t.ease} 60ms,
+    visibility 0s linear ${60 + Number.parseFloat(t.duration.resize)}ms;
 }
 html.designlayer-chrome-hidden .de-panel--left { transform: translateX(-100%); }
 html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 
 .de-panel-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
-.de-panel-body::-webkit-scrollbar { width: 8px; }
-.de-panel-body::-webkit-scrollbar-thumb {
-  background: transparent; border-radius: ${t.radius.md};
-  border: 2px solid transparent; background-clip: content-box;
-}
-.de-panel-body:hover::-webkit-scrollbar-thumb { background: ${t.color.borderStrong}; background-clip: content-box; }
+/* No scrollbar skin of its own: the kit's auto-hiding bar in css/base.ts. */
 
 .de-section { border-bottom: 1px solid ${t.color.border}; }
 /*
@@ -372,7 +357,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
      column of its own: the body below pads to 8, so every section title sat two
      pixels right of the rows it heads and the left edge of the panel read as
      bent. One step, both sides. */
-  padding: 0 ${t.space.md}px;
+  padding: 0 ${t.space.sm}px;
   color: ${t.color.text};
   font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
 }
@@ -380,8 +365,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    above the first row, and the 12 below the last one is the whole rest between
    this section's rows and the next section's hairline. */
 .de-section-body {
-  padding: ${t.space.sm}px ${t.space.md}px ${t.space.lg}px;
-  display: flex; flex-direction: column; gap: ${t.space.md}px;
+  padding: ${t.space["2xs"]}px ${t.space.sm}px ${t.space.md}px;
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
 }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. This is the
    fold for a body that has NO \`.de-section-fold\` around it, and the wrapped
@@ -391,7 +376,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 /*
  * THE FOLD, AND IT USED TO BE A \`display\` SWAP.
  *
- * Pressing a section header turned the chevron over 120ms and replaced the
+ * Pressing a section header turned the chevron over and replaced the
  * body between two frames. The mark said a section was closing and the section
  * said it had always been shut; everything below it jumped by the height of
  * whatever had just ceased to exist, and the eye had nothing to follow to work
@@ -432,9 +417,9 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * a floor of zero is what lets the track actually close; the body's
  * \`min-height: 0\` below is the other half and is just as load-bearing.
  *
- * \`base\` and not \`drawer\`: 240ms is a whole panel crossing the screen edge,
- * and this is a disclosure opening inside one — the same rung \`.de-entering\`
- * and the libraries drawer take for the same statement.
+ * \`reveal\` and not \`resize\`: 320ms is a whole panel changing width, and
+ * this is a disclosure settling in inside one — the kit's surface-reveal tween
+ * on its reveal curve.
  *
  * The column needs the same floor. With no \`grid-template-columns\` the one
  * implicit track is \`auto\`, which grows to the body's min-content width — and
@@ -450,7 +435,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  transition: grid-template-rows ${t.duration.base} ${t.ease};
+  /* A disclosure settling in: the kit's surface-reveal tween, 250ms reveal curve. */
+  transition: grid-template-rows ${t.duration.reveal} ${t.easeReveal};
 }
 /*
  * Driven by the body's own \`hidden\`, not by the toggle's \`aria-expanded\`.
@@ -481,7 +467,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * And no fade rides along. One was tried: content dimming ahead of the box
  * left an empty dark band closing on its own for the back half of the gesture,
  * which is a worse artefact than the hard edge it was meant to soften. A clip
- * that travels this far over 180ms does not need help reading as a clip.
+ * that travels this far over 250ms does not need help reading as a clip.
  *
  * \`min-height: 0\`: see \`.de-section-fold\`. A grid item's automatic minimum is
  * its content, and without a floor of zero on the item as well as on the track
@@ -500,24 +486,26 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * takes a shut section's fields out of the tab order and off the accessibility
  * tree. Delayed by the length of the close, so the content is still there to
  * be seen going; immediate on the way back, or the section would open onto
- * nothing for 180ms.
+ * nothing for the length of the fold.
  */
 .de-section-fold > .de-section-body[hidden] {
   display: flex;
   visibility: hidden;
-  transition: visibility 0s linear ${t.duration.base};
+  transition: visibility 0s linear ${t.duration.reveal};
 }
 
 /*
  * Hover is one rung up from the element's OWN resting ground, and a full-bleed
  * band takes the quiet rung.
  *
- * This said \`bgRaised\`, which is the same pixel value as \`bgHoverQuiet\` and the
- * wrong name for it: \`bgRaised\` is the surface a popover is BUILT from, not a
- * state a panel row enters. Naming the state means the two can be re-cut apart
- * later without a header silently following a popover.
+ * This said \`bgRaised\`, which is the wrong name for it: \`bgRaised\` is the
+ * surface a popover is BUILT from, not a state a panel row enters. Naming the
+ * state means the two are cut separately — they already differ in both themes
+ * — without a header silently following a popover.
  */
-.de-section-header--collapsible:hover { background: ${t.color.bgHoverQuiet}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-section-header--collapsible:hover { background: ${t.color.bgHoverQuiet}; }
+}
 /*
  * Three tracks: the title, then the add button, then the chevron on the
  * trailing edge.
@@ -530,7 +518,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-section-header--collapsible {
   grid-template-columns: minmax(0, 1fr) auto auto;
-  column-gap: ${t.space.md}px;
+  column-gap: ${t.space.sm}px;
   /* On the bar rather than on the button: the whole bar folds, and the hand has
      to follow the pointer over the chevron and the empty middle too, neither of
      which is the button. */
@@ -553,7 +541,9 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   border: none; background: transparent;
   cursor: pointer;
 }
-.de-section-toggle:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
+/* A full-bleed band, so the ring stays inside it rather than clipping at the
+   panel edge. */
+.de-section-toggle:focus-visible { ${FOCUS_INSET} }
 /* A title longer than the panel wrapped to a second line inside a 32px header
    and got sliced through the x-height. Now that the title is a span of its own
    it can end in an ellipsis rather than a hard cut. */
@@ -565,14 +555,14 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-section-actions {
   grid-column: 2;
   /*
-   * \`space.md\`, matching the layers row's action strip, and it was
-   * \`space.xs\`. These are 18px \`miniSize\` plates whose \`::after\` pads them
+   * \`space.sm\`, matching the layers row's action strip, and it was
+   * \`space["3xs"]\`. These are 18px \`miniSize\` plates whose \`::after\` pads them
    * out to a 24px target; at a 2px gap two adjacent targets are 20px apart and
    * their pads overlap, so the pointer lands on whichever the cascade happens
    * to put on top. The chrome has four of these strips and had solved the
    * spacing on two of them.
    */
-  display: inline-flex; align-items: center; justify-content: flex-end; gap: ${t.space.md}px;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: ${t.space.sm}px;
   /* The one thing in the bar that takes its clicks back off the fold layer: a
      press on \`+\` must add a fill, not collapse the section it would land in. */
   position: relative; z-index: 1;
@@ -598,30 +588,26 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   /*
    * The quarter turn, on the same clock as the thing it describes.
    *
-   * This was \`fast\` while the body it discloses was a \`display\` swap, and the
-   * comment here said so: the chevron carried the whole statement because
-   * nothing else could. The body animates now (\`.de-section-fold\` above), so
-   * the two are one gesture and have to take one duration — at 120 against 180
-   * the mark finished its turn while the section was still two thirds open,
-   * which reads as the chevron being a separate little control that happens to
-   * sit in the bar.
+   * The body animates (\`.de-section-fold\` above), so the two are one gesture
+   * and take one duration and curve; a chevron that finishes its turn early
+   * reads as a separate little control that happens to sit in the bar.
    *
-   * \`base\` is the fold's rung, and it is still well clear of \`snap\`: 90
-   * degrees is a larger visual move than a tint, and at 70ms the turn reads as
-   * a substitution rather than a rotation.
+   * The chevron is a status mark, not an action (the whole bar is the
+   * action), so it keeps \`textDim\` rather than the full ink of icon-only
+   * buttons.
    *
    * One rule reaches every collapsible section in the chrome, and the blanket in
    * \`css/base.ts\` already clamps it for reduced motion.
    */
-  transition: transform ${t.duration.base} ${t.ease};
+  transition: transform ${t.duration.reveal} ${t.easeReveal};
 }
 /* The fold state lives on the header now, not on the button: the chevron is no
    longer a child of the button that turns it. */
 .de-section-header--collapsed .de-chevron { transform: rotate(0deg); }
 
 /* Vertical rhythm inside a section body — one rule instead of an inline style. */
-.de-stack { display: flex; flex-direction: column; gap: ${t.space.md}px; }
-.de-layout-group { display: flex; flex-direction: column; gap: ${t.space.md}px; }
+.de-stack { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-layout-group { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
 /* The step above the rule is the tight one and the step below it the group one:
    this is a boundary between two runs of controls, so it has to out-measure the
    gap inside either run or the rule is doing the separating on its own. */
@@ -640,30 +626,27 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * runs of controls inside one section is not.
  */
 .de-layout-group + .de-layout-group {
-  margin-top: ${t.space.sm}px;
-  padding-top: ${t.space.lg}px;
+  margin-top: ${t.space["2xs"]}px;
+  padding-top: ${t.space.md}px;
 }
 /*
  * ─────────────────────────────────────────────────────────────────────────
  * THE FOUR LABEL RANKS, and every label in the panel is exactly one of them.
  * ─────────────────────────────────────────────────────────────────────────
  *
- * Measured off Figma's own panel at 2x (\`.harness/figma-spec.md\`), which uses
- * four and only four:
+ * Four and only four:
  *
- *   rank      Figma            here                      example
- *   section   11px 600 #1A1A1A body / weightSection / text      "Position"
- *   caption   10px 400 #7F7F7F caption / weightBody / textDim   "Alignment"
- *   label     11px 400 #7A7A7A body / weightBody / textMuted    the "W" in a field
- *   value     11px 400 #191919 body / weightBody / text         the "708" beside it
+ *   rank      here                                  example
+ *   section   body / weightSection / text           "Position"
+ *   caption   caption / weightValue / textDim       "Alignment"
+ *   label     body / weightBody / textMuted         the "W" in a field
+ *   value     body / weightBody / text              the "708" beside it
  *
- * Our sizes sit one rung higher than Figma's throughout — 12/11 against their
- * 11/10 — and that is deliberate rather than drift. What has to match is the
- * RELATION: a caption one step under the body size, a section header at body
- * size carrying the weight, and the label/value pair separated by ink alone at
- * the same size and weight. All three hold. Matching Figma's absolute pixels
- * would put our caption on 10px, which is \`micro\`, documented in tokens.ts as
- * the floor for a MARK rather than for words you read.
+ * All four are the kit's 12px caption role (the editor keeps its density), so
+ * the ranks are carried by ink and weight: a section header carries the
+ * strong weight, the caption the kit caption weight in the quietest ink, and
+ * the label/value pair is separated by ink alone. \`micro\` (10px) is the
+ * floor for a MARK rather than for words you read.
  *
  * The audit that produced this block found three collisions, all invisible in
  * review and all obvious in a table:
@@ -676,8 +659,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  *     only by a shade of grey.
  *   - \`.de-hint\` and \`.de-group-caption\` were both textDim, at two sizes. They
  *     are different things — one names the control below it, the other explains
- *     what a write will do — so the caption keeps the smaller rung and the hint
- *     stays on body, where a sentence belongs.
+ *     what a write will do — so the caption takes the caption weight and the
+ *     hint takes the reading leading, where a sentence belongs.
  *   - \`.de-field-suffix\` sat at textDim beside a textMuted label, so a unit
  *     printed on a field outranked nothing and read as disabled. It is the same
  *     rank as the label it shares a box with.
@@ -689,12 +672,12 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * A heading BINDS DOWN to the block it names, and it did not.
  *
  * \`.de-group-caption\` a few hundred lines below already argues this exact
- * asymmetry one rung lower: a caption sits \`space.sm\` above the control it
- * names and \`space.md\` from the next group, so it reads as belonging to what
+ * asymmetry one rung lower: a caption sits \`space["2xs"]\` above the control it
+ * names and \`space.sm\` from the next group, so it reads as belonging to what
  * follows rather than floating between two things. The rule was never applied
  * to the rung above it.
  *
- * So a sub-heading was the bare first child of a \`space.md\` stack — 8px above,
+ * So a sub-heading was the bare first child of a \`space.sm\` stack — 8px above,
  * 8px below, a ratio of 1.0 where the grouping rule wants at least 2. On the
  * Responsive section that put a title, three lines of prose and a field all at
  * the same 8px, and the NEXT block's title at 8px too: five things in one
@@ -702,20 +685,20 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  *
  * A negative bottom margin rather than restructuring the sections, because the
  * stack that owns the gap is shared by six call sites and three of them have no
- * heading at all. This closes the gap under the heading to \`space.sm\` and
- * leaves the \`space.md\` between blocks standing, which is the 2x the rule
+ * heading at all. This closes the gap under the heading to \`space["2xs"]\` and
+ * leaves the \`space.sm\` between blocks standing, which is the 2x the rule
  * asks for, without any of those call sites changing.
  */
 .de-layout-group-title {
   color: ${t.color.text};
   font-size: ${t.type.body};
   font-weight: ${t.type.weightSection};
-  margin-bottom: -${t.space.sm}px;
+  margin-bottom: -${t.space["2xs"]}px;
 }
 /* A sentence, not a name — so it keeps the body size a caption gives up, and
    the quietest ink, because it is the one thing in a section you can finish
    reading and never look at again. */
-.de-hint { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
+.de-hint { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody}; }
 
 /* Where something lives in the source — a file:line under a responsive measure,
    and the owner of a breakpoint. \`.de-tagname\` sat beside this and drew the
@@ -724,11 +707,11 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    what it repeated. Nothing wears the class now. */
 .de-source { font-size: ${t.type.body}; color: ${t.color.textDim}; word-break: break-all; }
 
-.de-row { display: flex; align-items: center; gap: ${t.space.md}px; }
+.de-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
 /*
  * TWO GAPS, NOT ONE, and the shorthand was quietly saying the wrong thing.
  *
- * \`gap: \${t.space.md}px\` sets the row gap AND the column gap to 8. Eight is
+ * \`gap: \${t.space.sm}px\` sets the row gap AND the column gap to 8. Eight is
  * also what \`.de-section-body\` and \`.de-stack\` put BETWEEN groups. So in the
  * Position section the gutter between the X and Y fields — two items inside one
  * captioned group — was 8px, and the distance from the whole Position group to
@@ -736,7 +719,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * belonged together; the grouping rule wants twice as much between groups as
  * within one, and this measured 1.0.
  *
- * The column gap drops to \`space.sm\`, which makes it 8/4 = 2.0 and is not a new
+ * The column gap drops to \`space["2xs"]\`, which makes it 8/4 = 2.0 and is not a new
  * number: 4px between two adjacent wells is what \`.de-paint-row\` already uses a
  * few rules down. It also hands 4px of width back to a 260px column, where
  * every pixel is spoken for.
@@ -755,11 +738,11 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-row--split {
   display: grid; grid-template-columns: 1fr 1fr;
-  gap: ${t.space.md}px ${t.space.sm}px;
+  gap: ${t.space.sm}px ${t.space["2xs"]}px;
 }
 .de-row--quad {
   display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: ${t.space.md}px ${t.space.sm}px;
+  gap: ${t.space.sm}px ${t.space["2xs"]}px;
 }
 
 /*
@@ -779,43 +762,33 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * be a full-height strip you can grab anywhere rather than a word with dead
  * space above and below it.
  *
- * The well sinks BELOW the panel, and that is what the near-black ground
- * changed. \`field\` is a 10% lift, which on the old mid-slate was a quiet plate
- * and on this ground is ten points of lightness above everything around it —
- * so a column of eight of them read as eight raised chips laid on the panel,
- * with as much weight each as a selected row in the layer tree. Sinking is the
- * reading a field wants and the one the ground now affords: there is a rung
- * below \`bg\` where there was none before, and it is the same rung the code
- * view is already drawn on, so every recess in the chrome is one surface.
- *
- * Hover crosses back over the panel ground on the way up, which is the point —
- * the well fills in. Nothing between \`bgSunken\` and \`lift(6)\` exists to make
- * that step smaller, and \`bg\` itself cannot be it: a field at exactly the
- * panel's value has no edge, so it would vanish under the pointer that is
- * looking for it.
+ * The well is the kit's field (\`.ui-field\`): filled, borderless at rest, the
+ * \`field\` role with \`fieldHover\` one rung on. The border is spent only on
+ * keyboard focus, where it takes the accent.
  */
 .de-field {
   display: flex; align-items: center;
   height: ${t.size.rowHeight}px;
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken};
+  background: ${t.color.field};
   border: 1px solid transparent;
   overflow: hidden;
-  transition: border-color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
+  transition: border-color ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-field:hover { background: ${t.color.bgHoverQuiet}; }
-.de-field:focus-within { background: ${t.color.bgHoverQuiet}; border-color: ${t.color.accent}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-field:hover { background: ${t.color.fieldHover}; }
+}
+.de-field:has(:focus-visible) { border-color: ${t.color.accent}; }
 /*
  * The label is a CONTROL, not metadata, so it takes the label ink and not the
  * secondary one.
  *
  * It was \`textDim\` — the same ink as the unit suffix two boxes to its right —
  * and the two are not the same kind of thing: you can grab this one and scrub
- * the value with it, and \`px\` is a word printed on the field. On the near-black
- * ground that collapse was the visible one in a row of eight fields, where the
- * only ranked things are the label, the number and the unit and two of the
- * three were identical. \`textMuted\` on the well measures 10.7:1 against the
- * old 6.8:1, and now sits a clear step above the suffix that kept \`textDim\`.
+ * the value with it, and \`px\` is a word printed on the field. In a row of
+ * eight fields the only ranked things are the label, the number and the unit,
+ * and two of the three were identical. \`textMuted\` on the well measures 9.2:1
+ * dark and 9.7:1 light, against \`textDim\`'s 8.2:1 and 5.2:1.
  */
 .de-field-label {
   flex: none; align-self: stretch;
@@ -823,15 +796,15 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   min-width: 12px;
   /* The tight step, where the gaps AROUND the field take the workhorse one.
      Two fields share a 240px panel on a split row, leaving about 108px each for
-     a label strip, a number and a unit; at ${t.space.md} a side the strip alone
+     a label strip, a number and a unit; at ${t.space.sm} a side the strip alone
      eats 28 of them and a four-digit value starts clipping. Inside a control
      this dense, the difference between 4 and 8 is a digit. */
-  padding: 0 ${t.space.sm}px;
+  padding: 0 ${t.space["2xs"]}px;
   color: ${t.color.textMuted};
   font-size: ${t.type.body};
   user-select: none;
   cursor: ew-resize;
-  transition: background ${t.duration.snap} ${t.ease}, color ${t.duration.snap} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease};
 }
 /*
  * THE SCRUB SAYS SO WHILE IT IS HAPPENING.
@@ -844,10 +817,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * interaction in the inspector is also the least discovered.
  *
  * The lit state is the same pair a pressed \`.de-mini\` takes, so "this control
- * is engaged" is one appearance in the panel rather than two. \`snap\`, because
- * it has to land inside the first few pixels of the drag or it is describing a
- * gesture that already started; and because the reverse — letting go — must not
- * still be fading while the value sits finished.
+ * is engaged" is one appearance in the panel rather than two, on the kit's
+ * 150ms hover tween.
  *
  * The class is written by \`field.ts\` on pointerdown and cleared on pointerup,
  * so it also survives the pointer leaving the label mid-drag, which capture
@@ -856,17 +827,16 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 /*
  * The ink is \`text\`, not \`accent\`, and the tint alone carries the accent.
  *
- * This was accent-on-\`accentSoft\`, which is 3.76:1 in dark and 3.77:1 in
- * light. A tinted plate under a MARK owes 3:1 and would have been fine; this
- * plate is under a WORD — the field's label, "W" or "Opacity" — and a word owes
- * 4.5:1. The one thing the reader needs while dragging is which field is moving,
- * and it was the least legible text in the panel for exactly as long as the
- * drag lasted.
+ * Accent-on-\`accentSoft\` is 3.53:1 in dark (5.92:1 in light). A tinted plate
+ * under a MARK owes 3:1 and would be fine; this plate is under a WORD — the
+ * field's label, "W" or "Opacity" — and a word owes 4.5:1. The one thing the
+ * reader needs while dragging is which field is moving, and it would be the
+ * least legible text in the panel for exactly as long as the drag lasted.
  *
  * Found by the contrast sweep in \`tools/contrast.ts\`, not by eye, and it is
  * the kind of pair that is hard to see: accent-on-accent-wash looks deliberate,
  * reads as a system, and is a ratio nobody checks because both halves came out
- * of the palette. \`text\` is 7.1:1 dark and 15.51:1 light; the wash still says
+ * of the palette. \`text\` is 12.9:1 dark and 16.9:1 light; the wash still says
  * "accent", so nothing about the treatment's meaning moved.
  */
 .de-field-label--scrubbing {
@@ -876,7 +846,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-field--scrubbing { border-color: ${t.color.accent}; }
 .de-field input {
   flex: 1; min-width: 0; width: 100%;
-  padding: 0 ${t.space.sm}px 0 0;
+  padding: 0 ${t.space["2xs"]}px 0 0;
   border: none; background: transparent; outline: none;
   color: ${t.color.text}; font-family: inherit; font-size: ${t.type.body};
 }
@@ -885,7 +855,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-field input[disabled] { color: ${t.color.textDim}; cursor: default; }
 .de-field input::placeholder { color: ${t.color.textDim}; }
 /*
- * Pushed to the far edge by the flexed input, the way Figma parks a unit.
+ * Pushed to the far edge by the flexed input.
  *
  * The LABEL rank, not the dim one. A unit and the letter at the other end of
  * the same box are the same kind of thing — printed on the field, naming what
@@ -894,7 +864,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-field-suffix {
   flex: none;
-  padding-right: ${t.space.sm}px;
+  padding-right: ${t.space["2xs"]}px;
   color: ${t.color.textMuted}; font-size: ${t.type.body};
 }
 /*
@@ -917,7 +887,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-field-value {
   flex: 1; min-width: 0;
-  padding-right: ${t.space.sm}px;
+  padding-right: ${t.space["2xs"]}px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: ${t.color.text}; font-size: ${t.type.body};
 }
@@ -937,9 +907,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * two stacked shadows — a \`bg\` spacer then the ring proper — so it reads
  * against both a light fill and a dark one without knowing which it is on.
  *
- * The press is the \`0.92\` every other pressed control in the chrome uses, and
- * the focus ring is the panel's standard so a keyboard reaches it the same way
- * it reaches everything else.
+ * The press is the kit's 2% dip and the focus ring its accent edge plus halo,
+ * so a keyboard reaches it the same way it reaches everything else.
  *
  * \`data-de-unparsed\` is the honest case: a colour this editor cannot convert
  * shows as black because \`<input type=color>\` can hold nothing else, so the
@@ -950,14 +919,17 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   cursor: pointer;
   background: transparent;
   border: 1px solid ${t.color.border};
-  border-radius: ${t.radius.sm};
-  transition: box-shadow ${t.duration.fast} ${t.ease}, transform ${t.duration.snap} ${t.ease};
+  border-radius: ${t.radius.xs};
+  transition: box-shadow ${t.duration.hover} ${t.ease}, border-color ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
-.de-color-well:hover {
-  box-shadow: 0 0 0 2px ${t.color.bg}, 0 0 0 3px ${t.color.borderInteractive};
+@media (hover: hover) and (pointer: fine) {
+  .de-color-well:hover {
+    box-shadow: 0 0 0 2px ${t.color.bg}, 0 0 0 3px ${t.color.borderInteractive};
+  }
 }
-.de-color-well:active { transform: scale(0.96); }
-.de-color-well:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-color-well:active { ${PRESS} }
+.de-color-well:focus-visible { ${FOCUS_RING} }
 .de-color-well[data-de-unparsed] { border-style: dashed; border-color: ${t.color.borderInteractive}; }
 
 /*
@@ -977,21 +949,21 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 .de-class-chip {
   overflow: hidden;
   transition:
-    max-width ${t.duration.base} ${t.ease},
-    opacity ${t.duration.fast} ${t.ease},
-    padding ${t.duration.base} ${t.ease},
-    margin ${t.duration.base} ${t.ease};
+    max-width ${t.duration.reveal} ${t.ease},
+    opacity ${t.duration.hover} ${t.ease},
+    padding ${t.duration.reveal} ${t.ease},
+    margin ${t.duration.reveal} ${t.ease};
 }
 .de-chip--leaving {
   max-width: 0 !important;
   opacity: 0;
   padding-left: 0 !important;
   padding-right: 0 !important;
-  margin-right: calc(-1 * ${t.space.sm}px) !important;
+  margin-right: calc(-1 * ${t.space["2xs"]}px) !important;
   pointer-events: none;
 }
 
-.de-paint-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-paint-row { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
 .de-paint-row .de-field { flex: 1; min-width: 0; }
 .de-paint-row .de-select { flex: 1; min-width: 0; }
 /* The third cell that can hold the row's value, and the newest. A paint row now
@@ -1014,16 +986,16 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    card's first child is a ROW, and the 20px swatch at its left end is centred
    in a 24px band, so it sits 4px in horizontally and 6px down. Nothing here
    reaches a corner, so there is no curve for anything to be parallel to. */
-/* Every other card in the chrome pairs a hairline with a fill — \`.de-lib-card\`
-   on \`bgRaised\`, \`.de-lint-ignored-row\` on \`bgSunken\`. This one was a border
-   alone on the panel ground, so at a glance it read as a rule someone had drawn
-   around four fields rather than as a thing containing them. \`bgSunken\` matches
-   the other "grouped box inside a section body". */
+/* The kit's card surface (\`.card-surface\`): the panel ground inside one
+   structural hairline, no shadow because it is docked. It was filled with
+   \`bgSunken\`, which is the same rung as the fields it holds, so the wells
+   inside it disappeared. \`radius.lg\` with a 4px inset puts the fields' 8px
+   corner concentric with the card's, as the kit's segmented track does. */
 .de-paint-card {
-  display: flex; flex-direction: column; gap: ${t.space.sm}px;
-  padding: ${t.space.sm}px;
-  background: ${t.color.bgSunken};
-  border: 1px solid ${t.color.border}; border-radius: ${t.radius.md};
+  display: flex; flex-direction: column; gap: ${t.space["2xs"]}px;
+  padding: ${t.space["2xs"]}px;
+  background: ${t.color.bg};
+  border: 1px solid ${t.color.border}; border-radius: ${t.radius.lg};
 }
 
 /*
@@ -1041,20 +1013,22 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   position: relative;
   width: ${t.size.miniSize}px; height: ${t.size.miniSize}px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid transparent; border-radius: ${t.radius.sm};
-  background: transparent; color: ${t.color.textDim};
+  border: 1px solid transparent; border-radius: ${CONTROL_RADIUS};
+  /* Icon-only, so full ink at rest and in every state (kit § 6). */
+  background: transparent; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease},
-    border-color ${t.duration.fast} ${t.ease}, transform ${t.duration.snap} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    border-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
 /*
- * The press, at the depth \`.de-tool\` and \`.de-button\` use. These are the
- * smallest pressable things in the chrome and several of them are destructive —
- * the row bin, the swatch clear — so the press landing is precisely the frame
- * that matters. \`:not([disabled])\` for the reason the shared button gives.
+ * The kit's press. These are the smallest pressable things in the chrome and
+ * several of them are destructive — the row bin, the swatch clear — so the
+ * press landing is precisely the frame that matters. Not on a menu trigger,
+ * whose opening menu is the feedback.
  */
-.de-mini:active:not([disabled]) { transform: scale(0.96); }
+.de-mini:active:not([disabled], [aria-haspopup]) { ${PRESS} }
 /*
  * The drawing is 18px; the target is the full row height.
  *
@@ -1062,7 +1036,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * 24px a pointer is entitled to — but growing the box would grow the plate a
  * hover paints, and a row of 24px plates in a 32px section header reads as a
  * toolbar. A hit pad is the way to have both. Vertical only: these sit two and
- * three to a row on a 2px gap, so three pixels of horizontal reach each would
+ * three to a row on gaps as tight as 4px, so three pixels of horizontal reach each would
  * overlap, and a click landing on the neighbour of a destructive button is a
  * worse defect than the one being fixed. 18x24 until \`miniSize\` itself moves.
  *
@@ -1074,57 +1048,49 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  *
  * So this stays a literal while every other inset in this file moved onto
  * \`space\`. The number is not rhythm, it is what is left of the row once the
- * plate and its border are taken out — write \`space.sm\` here and the next edit
+ * plate and its border are taken out — write \`space["2xs"]\` here and the next edit
  * to \`miniSize\` or to the scale silently resizes a hit target instead of
  * respacing a gap.
  */
 .de-mini::after {
   content: ""; position: absolute; inset: -4px 0;
 }
-.de-mini:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
-/* The same tinted plate a standalone \`.de-tool\` takes, for the same reason —
-   this is an on/off with no group around it. Smaller, so the tint does more of
-   the work and the ring is dropped entirely: an 18px box with both reads as a
-   badge. */
-.de-mini[aria-pressed="true"] { background: ${t.color.accentSoft}; color: ${t.color.accent}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-mini:hover { background: ${t.color.bgHover}; }
+  .de-mini--danger:hover { background: ${t.color.dangerWash}; color: ${t.color.danger}; }
+}
+/* An open menu holds its trigger's hover paint. */
+.de-mini:is([aria-expanded="true"], [data-state="open"]) { background: ${t.color.bgHover}; }
+/* The same tinted plate a standalone \`.de-tool\` takes: selection is a hue
+   fill, and the glyph keeps full ink like every other state of an icon-only
+   action. */
+.de-mini[aria-pressed="true"] { background: ${t.color.accentSoft}; }
 /*
- * Dark ink on the fill, never white. \`danger\` is a LIGHT coral on this chrome
- * and white on it measures 2.31:1, so the glyph disappears at exactly the
+ * Dark ink on a danger fill, never white. \`danger\` is a LIGHT coral in dark
+ * and white on it measures 2.89:1, so the glyph disappears at exactly the
  * moment the button becomes destructive.
  *
- * \`onSemantic\`, where this used to say \`onAccent\`. That was the same fix,
- * written against a role that then moved underneath it: \`onAccent\` was
- * near-black in dark until the accent became a Figma blue, at which point it
- * went white in both themes — right for the blues, and a silent regression
- * here and at four other semantic fills, every one of which carried a comment
- * like this one claiming the bug was already closed. It measured 2.31:1 again,
- * to the hundredth.
- *
- * \`onSemantic\` is the flipping ink this rule always wanted, split back out of
- * \`onAccent\` and owning nothing else. 7.52:1 here; the full table is in its
- * note in \`tokens.ts\`.
+ * \`onSemantic\` is the flipping ink for that, not \`onAccent\`, which is white in
+ * both themes. 6.61:1 on the dark coral; see its note in \`tokens.ts\`.
  */
-.de-mini--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 /*
  * Disabled is quieter, not gone.
  *
- * At \`opacity: 0.35\` the glyph was \`textDim\` faded to an effective 20% white,
- * which on the near-black ground measures 1.9:1 — the section header's second
- * \`+\` was not a dim button, it was an empty square, and this is the state the
- * "labels the same colour as the button" report was pointing at. WCAG exempts
- * disabled controls from contrast, which is exactly how it got here; a control
- * you cannot see is still a control you cannot find, and the user has to know
- * the affordance exists before "it is off right now" means anything.
+ * At \`opacity: 0.35\` the glyph was \`textDim\` faded to a fraction of itself —
+ * the section header's second \`+\` was not a dim button, it was an empty
+ * square, and this is the state the "labels the same colour as the button"
+ * report was pointing at. WCAG exempts disabled controls from contrast, which
+ * is exactly how it got here; a control you cannot see is still a control you
+ * cannot find, and the user has to know the affordance exists before "it is off
+ * right now" means anything.
  *
- * It said \`opacity: 0.6\` for that reason and measured 3.2:1, which cleared the
- * floor by a tenth. It is the \`textDisabled\` role now, at 3.8:1 — the same
- * decision with margin, and stated as a colour rather than as a fraction of
- * one. The fraction was the fragile part: it is computed against whatever the
- * button is sitting on, so the ratio moved when the row under it did, and
- * nothing recomputed the number in this comment when that happened.
+ * It is the \`textDisabled\` role, 7.44:1 dark and 5.77:1 light on the panel,
+ * stated as a colour rather than as a fraction of one. The fraction was the
+ * fragile part: it is computed against whatever the button is sitting on, so
+ * the ratio moved when the row under it did.
  */
 .de-mini[disabled] { color: ${t.color.textDisabled}; cursor: default; background: transparent; }
-.de-mini:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-mini:focus-visible { ${FOCUS_RING} }
 
 /*
  * The toolbar's icon button, borrowed by inspector sections (align, direction).
@@ -1139,17 +1105,16 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * A panel tool said "on" with an accent ring and accent ink; a segment said it
  * with a neutral fill; a mini said it with an accent ring at a different size
  * and radius. All three sit inside the same section, within 8px of one another,
- * and all three mean exactly "this one is chosen". Figma has two treatments and
- * assigns them by what KIND of choice it is: one-of-several takes the raised
- * chip (\`.de-segment\`, \`.de-iseg\`, \`.de-agroup\` above), and a standalone
- * on/off takes a tinted plate with accent ink — measured as \`#E5F4FF\` under a
- * blue glyph on the padding split toggle.
+ * and all three mean exactly "this one is chosen". There are two treatments,
+ * assigned by what KIND of choice it is: one-of-several takes the
+ * \`segmentSelected\` fill (\`.de-segment\`, \`.de-iseg\`, \`.de-agroup\` below), and
+ * a standalone on/off takes a tinted plate.
  *
  * This rule is that second one, and it is the right one for a bare \`.de-tool\`
  * precisely because a bare tool is the case with no rail around it: there is no
  * group for a chip to be one-of, so the button has to carry the whole signal
- * itself. \`accentSoft\` is the tint in both themes and \`accent\` the ink, which
- * keeps the pairing a token decision rather than a per-theme literal.
+ * itself. The kit's selection is a HUE (\`accentSoft\`), and the glyph keeps
+ * full ink, because an icon-only action wears full ink in every state.
  *
  * A tool INSIDE \`.de-agroup\` or \`.de-iseg\` is overridden back to the chip by
  * those rules, which are more specific. That is the whole taxonomy: tinted when
@@ -1159,15 +1124,20 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   width: ${t.size.rowHeight}px; height: ${t.size.rowHeight}px;
   border: 1px solid transparent;
   border-radius: ${CONTROL_RADIUS};
-  color: ${t.color.textDim};
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease},
-    border-color ${t.duration.fast} ${t.ease};
+  color: ${t.color.text};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease},
+    border-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease},
+    transform ${t.duration.hover} ${t.ease};
 }
-.de-panel .de-tool:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-panel .de-tool:hover { background: ${t.color.bgHover}; color: ${t.color.text}; }
+}
+.de-panel .de-tool:active:not([disabled], [aria-haspopup]) { ${PRESS} }
+.de-panel .de-tool:focus-visible { ${FOCUS_RING} }
 .de-panel .de-tool[aria-pressed="true"] {
   background: ${t.color.accentSoft};
   border-color: transparent;
-  color: ${t.color.accent};
+  color: ${t.color.text};
 }
 /* Disabled outranks pressed: an arrange arrow at the end of its list is still
    drawn in whatever state it was holding, and a tinted plate under dead ink
@@ -1188,47 +1158,22 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * row beside real fields without looking like a different species. The
  * selection was a filled accent, which at this size — three of them stacked in
  * Auto layout — turned the section into a wall of indigo and shouted about
- * defaults nobody chose. A step UP off the rail says "this one" quietly, and
- * the ink going from dim to full carries the rest of the message.
- *
- * Three rungs, evenly spaced, and they had to be re-cut for the dark ground:
- * the rail on the same sunken step every other well uses, hover at the panel's
- * own value, selection one lift above that. The old set put the rail and the
- * hover within two points of lightness of each other — pointing at a segment
- * you had not chosen yet did visibly nothing — while the rail itself matched
- * the fields above it exactly, so the track stopped reading as a track.
- *
- * Then the rungs were measured rather than reasoned about, and "evenly spaced"
- * turned out not to be true of the values chosen: sunken-to-\`bg\` is 1.10:1, the
- * smallest step anywhere in the chrome, spent on the state a pointer is sitting
- * on. Shifting both up one — hover to \`bgHoverQuiet\`, selection to \`bgHover\` —
- * gives 1.31 then 1.21, which is the even ladder the paragraph above describes.
- * Selection stays the lightest rung, which is the constraint that orders them:
- * a hover that out-lifts the chosen segment makes the control lie about its
- * value for as long as the pointer is in it.
+ * defaults nobody chose. A neutral step off the rail says "this one" quietly,
+ * and the ink going from muted to full carries the rest of the message.
  */
 /*
  * THE RAIL LOST ITS PADDING, and that is the whole shape change.
  *
- * It was 4px, for the arithmetic reason recorded in the \`nest()\` note this
- * replaces: at 2px the segment could not land on the radius ramp, so the rail
- * was widened a step to make the nesting come out. That reasoning was sound and
- * it was answering the wrong question, because Figma's track has no rail at
- * all. Measured at 2x, the chosen chip's border begins on the same device
- * column the track's own edge does — the chip IS the cell, edge to edge, and
- * the two curves coincide rather than nest.
+ * The kit's track pads 4px around its segments; at editor density that leaves
+ * a 16px segment inside a 24px box, too small to hit. So the chosen chip IS the
+ * cell, edge to edge, the two curves coincide rather than nest, and a segment is
+ * the full \`rowHeight\` like every other control in the panel.
  *
- * Losing the rail gives the segment back the 4px of height it was paying for
- * the nest, so a segment is now the full \`rowHeight\` like every other control
- * in the panel instead of 16px inside a 24px box.
- *
- * WHAT MARKS THE CHOSEN ONE: a step UP to \`bgRaised\` plus a hairline. On the
- * light theme that resolves to white on the sunken rail, which is exactly what
- * Figma draws; on the dark theme it is the lift above the panel's own ground,
- * which is the same RELATION — the chip is the lightest thing in the control
- * and the only part of it wearing an edge. The hairline is what the old
- * treatment was missing: \`bgHover\` alone is a 1.21:1 step, and at segment size
- * that is a chip you have to hunt for. An edge is legible at any contrast.
+ * WHAT MARKS THE CHOSEN ONE: the kit's \`segmentSelected\` FILL, darker than
+ * its track in light, with no shadow and no hairline (MICRO-INTERACTIONS § 9).
+ * It used to be a white raised chip with an edge, which claimed an elevation
+ * the chosen segment does not have. Hover changes the ink only, so the fill
+ * means one thing.
  *
  * Still neutral rather than accent-filled, for the reason the previous note
  * gives and this one keeps: three of these stack in Auto layout, and an indigo
@@ -1238,7 +1183,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   display: flex; align-items: stretch;
   height: ${t.size.rowHeight}px;
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken};
+  background: ${t.color.field};
   /* The containing block for the chip below. */
   position: relative;
 }
@@ -1251,14 +1196,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * control's whole affordance is that the choice is a thing you can watch move
  * along the rail.
  *
- * Exactly the values the segment drew — \`bgRaised\` and a hairline — so the
- * control is identical at rest and differs only in transit. The hairline is an
- * inset shadow rather than a border because this box is written from a
- * measurement, and a real border would make it one pixel wider than the segment
- * it is covering at every position.
- *
- * \`fast\`, not \`snap\`: the travel is a whole segment where the tab pill's is a
- * label's width, and at 70ms this outruns the eye instead of leading it.
+ * Exactly the fill the segment draws, so the control is identical at rest and
+ * differs only in transit, on the kit's 150ms tween.
  *
  * Behind the words — \`.de-segment\` takes an index below — and
  * \`pointer-events: none\`, so the chip can never take a click meant for the
@@ -1274,14 +1213,13 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   width: var(--de-thumb-w, 0px);
   transform: translateX(var(--de-thumb-x, 0px));
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgRaised};
-  box-shadow: inset 0 0 0 1px ${t.color.border};
+  background: ${t.color.segmentSelected};
   opacity: 0;
   pointer-events: none;
   transition:
-    transform ${t.duration.fast} ${t.ease},
-    width ${t.duration.fast} ${t.ease},
-    opacity ${t.duration.fast} ${t.ease};
+    transform ${t.duration.hover} ${t.ease},
+    width ${t.duration.hover} ${t.ease},
+    opacity ${t.duration.hover} ${t.ease};
 }
 .de-segmented[data-de-thumb] .de-segment-thumb { opacity: 1; }
 /* Once the chip is real it owns the surface and the segment stops drawing one:
@@ -1301,20 +1239,22 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
      grows 2px and shoves its neighbours along the rail. */
   border: 1px solid transparent; border-radius: ${CONTROL_RADIUS};
   background: transparent; color: ${t.color.textMuted};
-  font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
+  /* One weight for every segment, as the kit's segmented control has: a weight
+     that changes with selection reflows the label it marks. */
+  font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
+  line-height: ${t.type.leadingFlush};
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease},
-    border-color ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease};
 }
-.de-segment:hover { background: ${t.color.bgHoverQuiet}; color: ${t.color.text}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-segment:hover { color: ${t.color.text}; }
+}
 .de-segment[aria-pressed="true"] {
-  background: ${t.color.bgRaised};
-  border-color: ${t.color.border};
+  background: ${t.color.segmentSelected};
   color: ${t.color.text};
-  font-weight: ${t.type.weightValue};
 }
-.de-segment:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -1px; }
+.de-segment:focus-visible { ${FOCUS_INSET} }
 
 /* ---------- captioned control groups ---------- */
 /*
@@ -1334,21 +1274,22 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * eyebrow, a numeral in a chip — and these are words you read. One rung up costs
  * a pixel of density and keeps the scale's own rule intact.
  *
- * The gap under a caption is \`space.sm\` against \`space.md\` between groups, so a
+ * The gap under a caption is \`space["2xs"]\` against \`space.sm\` between groups, so a
  * caption binds DOWN to the control it names rather than floating between two.
  * That asymmetry is the whole job: at an equal gap the caption reads as
  * belonging to the control above it, which is the one it is not about.
  */
-.de-group { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-group { display: flex; flex-direction: column; gap: ${t.space["2xs"]}px; }
 /* Selectable, like every other word in the chrome. It carried
    \`user-select: none\` and nothing here drags: the caption sits ABOVE the row of
    fields, and the only gesture surface in the group is \`.de-field-label\` two
    elements down, which keeps its suppression for the reason written there. */
+/* The kit's caption role, 12/16 at weight 500 — "every 12px label". */
 .de-group-caption {
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
-  font-weight: ${t.type.weightBody};
-  line-height: ${t.type.leadingFlush};
+  font-weight: ${t.type.weightValue};
+  line-height: ${t.type.leadingRow};
 }
 
 /* ---------- joined action group ---------- */
@@ -1364,9 +1305,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * div with \`flex: 1\` on it.
  *
  * Here the cells share one surface and are cut apart by a hairline GAP rather
- * than a rule — \`space.xs\` of panel ground showing through, which is what
- * Figma does (measured: two device columns of the panel's own white between
- * cells, full height). A gap rather than a border because a border would need a
+ * than a rule — \`space["3xs"]\`, the kit's micro gap for a tight icon cluster,
+ * of panel ground showing through. A gap rather than a border because a border would need a
  * colour, and any colour is a third value competing with the cell and the
  * ground; the ground itself is free.
  *
@@ -1376,13 +1316,13 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-agroup {
   display: flex; align-items: stretch;
-  gap: ${t.space.xs}px;
+  gap: ${t.space["3xs"]}px;
   min-width: 0;
 }
 .de-agroup > .de-tool {
   flex: 1; min-width: 0;
   width: auto;
-  background: ${t.color.bgSunken};
+  background: ${t.color.field};
   border-radius: 0;
 }
 .de-agroup > .de-tool:first-child {
@@ -1393,17 +1333,19 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   border-top-right-radius: ${CONTROL_RADIUS};
   border-bottom-right-radius: ${CONTROL_RADIUS};
 }
-.de-agroup > .de-tool:hover { background: ${t.color.bgHoverQuiet}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-agroup > .de-tool:hover { background: ${t.color.fieldHover}; }
+}
 /*
- * A cell that is HOLDING a state takes the segmented control's chip, not the
- * toolbar's accent ring.
+ * A cell that is HOLDING a state takes the segmented control's fill, not the
+ * toolbar's tint.
  *
  * Figma's align buttons carry no state at all — they are one-shot geometry, so
  * there is nothing to show. Ours are not: they write \`justify-content\` and
  * \`align-items\` on the parent, which is a setting that stays set, and a control
  * that silently holds a value it will not show is worse than either. So the
- * state is kept and only its VOICE changes, to the one Figma uses for every
- * other chosen-one-of-several in the panel.
+ * state is kept and only its VOICE changes, to the one \`.de-segment\` uses for
+ * every other chosen-one-of-several in the panel.
  *
  * That collapse is the point. The panel had three pressed languages within
  * 8px of each other — an accent outline on \`.de-tool\`, a neutral fill on
@@ -1411,11 +1353,11 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * what is, every time, the same claim.
  */
 .de-agroup > .de-tool[aria-pressed="true"] {
-  background: ${t.color.bgRaised};
-  border-color: ${t.color.border};
+  background: ${t.color.segmentSelected};
+  border-color: transparent;
   color: ${t.color.text};
 }
-.de-agroup > .de-tool[disabled] { background: ${t.color.bgSunken}; }
+.de-agroup > .de-tool[disabled] { background: ${t.color.field}; }
 
 /* ---------- icon segmented control ---------- */
 /*
@@ -1432,16 +1374,14 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  *
  * No gaps between cells, unlike the action group, and that is the same
  * distinction drawn in geometry: a continuous rail is one control, three
- * separated pills are three buttons that happen to be adjacent. Measured off
- * Figma, which draws its text-align track as unbroken grey and its Position
- * align triple with the ground showing through.
+ * separated pills are three buttons that happen to be adjacent.
  */
 .de-iseg {
   display: flex; align-items: stretch;
   min-width: 0;
   height: ${t.size.rowHeight}px;
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken};
+  background: ${t.color.field};
   /* Containing block for the chip below. */
   position: relative;
 }
@@ -1466,14 +1406,13 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   width: var(--de-thumb-w, 0px);
   transform: translateX(var(--de-thumb-x, 0px));
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgRaised};
-  box-shadow: inset 0 0 0 1px ${t.color.border};
+  background: ${t.color.segmentSelected};
   opacity: 0;
   pointer-events: none;
   transition:
-    transform ${t.duration.fast} ${t.ease},
-    width ${t.duration.fast} ${t.ease},
-    opacity ${t.duration.fast} ${t.ease};
+    transform ${t.duration.hover} ${t.ease},
+    width ${t.duration.hover} ${t.ease},
+    opacity ${t.duration.hover} ${t.ease};
 }
 .de-iseg[data-de-thumb] .de-iseg-thumb { opacity: 1; }
 .de-iseg > .de-tool {
@@ -1485,10 +1424,14 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   position: relative;
   z-index: 1;
 }
-.de-iseg > .de-tool:hover { background: ${t.color.bgHoverQuiet}; }
+/* Hover is ink only, as on \`.de-segment\`: the fill means "chosen". */
+@media (hover: hover) and (pointer: fine) {
+  .de-iseg > .de-tool:hover { background: transparent; }
+}
+.de-iseg > .de-tool:focus-visible { ${FOCUS_INSET} }
 .de-iseg > .de-tool[aria-pressed="true"] {
-  background: ${t.color.bgRaised};
-  border-color: ${t.color.border};
+  background: ${t.color.segmentSelected};
+  border-color: transparent;
   color: ${t.color.text};
 }
 /* Once the chip is real it owns the plate, for the reason \`.de-segment\` gives:
@@ -1505,29 +1448,28 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * It was nine bare 20x18 buttons each drawing a 10px \`Circle\` outline, on a
  * 2px grid gap with no surface behind them. Three things were wrong with that
  * and only one was cosmetic: the cells were off the 24px rhythm every other
- * control in the panel keeps, the mark was a ring at the \`mark\` rung where
- * Figma draws a 2px dot, and — the one that actually cost the user something —
+ * control in the panel keeps, the mark was a ring where a rest wants a dot,
+ * and — the one that actually cost the user something —
  * with no container the nine buttons did not read as ONE control with nine
  * positions, they read as nine small buttons.
  *
  * So the block takes the field's own well and the cells go transparent inside
- * it. 88x56 in Figma; here it is the column width by three rows of \`space.4xl\`,
- * which keeps it proportional at whatever width the panel is dragged to.
+ * it. It is the column width by \`space["2xl"] * 2 + space.sm\` (56px) tall,
+ * so it spans whatever width the panel is dragged to.
  *
  * The chosen cell is the ACCENT, and this is the one place in the panel that
  * gets it. Everywhere else "chosen" is the neutral chip, because everywhere
  * else the control is a row of alternatives you read left to right. This is a
  * two-dimensional field where the answer is a POSITION, and a neutral chip in a
- * 3x3 grid of neutral dots is a chip you have to look for. Figma reaches for
- * its blue here too, and for the same reason.
+ * 3x3 grid of neutral dots is a chip you have to look for.
  */
 .de-pad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  height: ${t.space["5xl"] * 2 + t.space.md}px;
+  height: ${t.space["2xl"] * 2 + t.space.sm}px;
   border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken};
+  background: ${t.color.field};
 }
 .de-pad-cell {
   display: flex; align-items: center; justify-content: center;
@@ -1539,22 +1481,24 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   background: transparent;
   color: ${t.color.textDim};
   cursor: pointer;
-  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+  transition: background-color ${t.duration.hover} ${t.ease}, color ${t.duration.hover} ${t.ease};
 }
 /* The dot is drawn here rather than asked of the icon set, because it is not an
    icon: it is the absence of a mark, sized so nine of them read as a grid of
-   rests. 2px is what Figma draws and it is below the icon ramp's floor. */
+   rests. 2px, the kit's micro step, and below the icon ramp's floor. */
 .de-pad-cell::before {
   content: "";
-  width: ${t.space.xs}px; height: ${t.space.xs}px;
+  width: ${t.space["3xs"]}px; height: ${t.space["3xs"]}px;
   border-radius: 50%;
   background: currentColor;
 }
-.de-pad-cell:hover { background: ${t.color.bgHoverQuiet}; color: ${t.color.textMuted}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-pad-cell:hover { background: ${t.color.fieldHover}; color: ${t.color.textMuted}; }
+}
 .de-pad-cell[aria-pressed="true"] { color: ${t.color.accent}; }
 /*
- * Chosen, the dot gives way to a drawn mark — the same swap Figma makes, and
- * the reason the cell can carry a glyph child at all.
+ * Chosen, the dot gives way to a drawn mark — the reason the cell can carry a
+ * glyph child at all.
  *
  * THE SWAP IS A CROSSFADE NOW, and it took a markup change to become one. It
  * was \`display: none\` on the dot and a glyph that was only appended to the
@@ -1578,16 +1522,16 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * is untouched by that rule and keeps the plain selector.
  */
 .de-pad-cell::before {
-  transition: opacity ${t.duration.fast} ${t.ease}, transform ${t.duration.fast} ${t.ease};
+  transition: opacity ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease};
 }
 [data-designlayer] .de-pad-cell > svg[data-de-glyph] {
-  transition: opacity ${t.duration.fast} ${t.ease}, transform ${t.duration.fast} ${t.ease},
-    stroke-width ${t.duration.fast} ${t.ease};
+  transition: opacity ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease},
+    stroke-width ${t.duration.hover} ${t.ease};
 }
 .de-pad-cell > svg { position: absolute; opacity: 0; transform: scale(0.6); }
 .de-pad-cell[aria-pressed="true"]::before { opacity: 0; transform: scale(0.4); }
 .de-pad-cell[aria-pressed="true"] > svg { opacity: 1; transform: scale(1); }
-.de-pad-cell:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
+.de-pad-cell:focus-visible { ${FOCUS_INSET} }
 
 /* ---------- field trailing slot ---------- */
 /*
@@ -1606,60 +1550,47 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-field-trailing {
   flex: none; align-self: stretch;
-  display: inline-flex; align-items: center; justify-content: center; gap: ${t.space.xs}px;
-  padding: 0 ${t.space.sm}px;
+  display: inline-flex; align-items: center; justify-content: center; gap: ${t.space["3xs"]}px;
+  padding: 0 ${t.space["2xs"]}px;
   border: none; background: transparent;
   color: ${t.color.textDim};
   font-family: inherit; font-size: ${t.type.body}; line-height: ${t.type.leadingFlush};
   white-space: nowrap;
   cursor: pointer;
-  transition: color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
+  transition: color ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-field-trailing:hover { color: ${t.color.text}; background: ${t.color.bgHover}; }
-.de-field-trailing:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .de-field-trailing:hover { color: ${t.color.text}; background: ${t.color.fieldHover}; }
+}
+.de-field-trailing:focus-visible { ${FOCUS_INSET} }
 /* The field owns the caret's colour so a disabled axis reads as one dead
    control rather than a dead number beside a live menu. */
 .de-field input[disabled] ~ .de-field-trailing { color: ${t.color.textDisabled}; }
 
 /* The same well as \`.de-field\`, since a select is a field you pick from — and
-   the same three rungs, for the reason spelled out there. */
+   the same rungs and focus, for the reason spelled out there. */
 .de-select {
   height: ${t.size.rowHeight}px;
   width: 100%;
-  padding: 0 ${t.space.sm}px;
+  padding: 0 ${t.space["2xs"]}px;
   border: 1px solid transparent; border-radius: ${CONTROL_RADIUS};
-  background: ${t.color.bgSunken}; color: ${t.color.text};
+  background: ${t.color.field}; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body};
   appearance: none; cursor: pointer;
-  transition: border-color ${t.duration.fast} ${t.ease}, background ${t.duration.fast} ${t.ease};
+  transition: border-color ${t.duration.hover} ${t.ease}, background-color ${t.duration.hover} ${t.ease};
 }
-.de-select:hover { background: ${t.color.bgHoverQuiet}; }
+@media (hover: hover) and (pointer: fine) {
+  .de-select:hover { background: ${t.color.fieldHover}; }
+  .de-select-shell:hover > .de-select-caret { color: ${t.color.textMuted}; }
+}
 /*
- * \`outline: none\` WITH A REPLACEMENT, which is the half this rule was missing.
- *
- * It used to remove the platform's focus ring and offer a border hue as the
- * substitute. A 1px border going from \`transparent\` to \`accent\` is not a focus
- * indicator: it is thinner than the 2px the rest of this chrome draws, it is
- * the same channel the control already uses for hover and validity, and it is
- * the only thing a keyboard user gets to tell them where they are — on a
- * control that \`appearance: none\` has already stripped of every other native
- * affordance.
- *
- * The start screen met this exact bug on its own \`<select>\` and fixed it there,
- * with the argument left in \`runtime/start-screen-style.mjs\`. The inspector's
- * dropdowns never got the same pass. This is that pass: the ring is the 2px
- * \`accent\` outline every other focusable thing in the chrome wears
- * (\`.de-lint-select\`, \`.de-token-row\`, the tab strip), so focus looks the same
- * wherever it lands.
- *
- * Split across two selectors rather than one: the background and border lift
- * belong on \`:focus\`, because a select opened with the pointer should still
- * look engaged, while the RING belongs on \`:focus-visible\`, because a ring
- * painted after a mouse click is noise. That split is the cheat sheet's rule
- * and it is also what the platform does on its own.
+ * The kit's field focus (MICRO-INTERACTIONS § 3): on \`:focus-visible\` the
+ * border takes the accent, plus the button halo, because \`appearance: none\`
+ * has stripped this control of every other native affordance. Pointer focus
+ * paints nothing: the open menu is the feedback.
  */
-.de-select:focus { outline: none; background: ${t.color.bgHoverQuiet}; border-color: ${t.color.accent}; }
-.de-select:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+.de-select:focus { outline: none; }
+.de-select:focus-visible { ${FOCUS_RING} }
 .de-select option { background: ${t.color.bgRaised}; color: ${t.color.text}; }
 
 /*
@@ -1683,16 +1614,15 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  */
 .de-select-shell { position: relative; display: block; min-width: 0; }
 /* Room for the mark, so a long option never runs under it. */
-.de-select-shell > .de-select { padding-right: ${t.space["4xl"]}px; }
+.de-select-shell > .de-select { padding-right: ${t.space.xl}px; }
 .de-select-caret {
-  position: absolute; top: 50%; right: ${t.space.sm}px;
+  position: absolute; top: 50%; right: ${t.space["2xs"]}px;
   transform: translateY(-50%);
   display: inline-flex;
   color: ${t.color.textDim};
   pointer-events: none;
 }
 [data-designlayer] .de-select-caret svg { pointer-events: none; }
-.de-select-shell:hover > .de-select-caret { color: ${t.color.textMuted}; }
 
 /*
  * \`.de-inspector-footer\` was here: a padded column at the foot of the Design
@@ -1730,7 +1660,7 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
  * already be the wrong copy for an empty state.
  */
 .de-empty {
-  padding: ${t.space["5xl"]}px ${t.space["2xl"]}px;
+  padding: ${t.space["2xl"]}px ${t.space.lg}px;
   /* Centred, so the cap needs \`margin-inline: auto\` to stay centred with it.
      An empty state is the longest prose in the panel and the one a wide window
      stretches furthest. */

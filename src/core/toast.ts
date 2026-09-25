@@ -207,10 +207,10 @@ export function installToaster(): () => void {
          */
         position: "bottom-right",
         offset: {
-          bottom: LAUNCHER_CLEARANCE + t.space.md,
+          bottom: LAUNCHER_CLEARANCE + t.space.sm,
           right: t.size.panelInset,
         },
-        gap: t.space.md,
+        gap: t.space.sm,
         visibleToasts: VISIBLE_TOASTS,
         /*
          * On, and it was off for a reason that only held while every toast

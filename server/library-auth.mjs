@@ -190,8 +190,8 @@ const HINTS = {
     "This site redirected to a sign-in page. Paste a bearer token it accepts, or its session " +
     "cookie from a browser that can already open it.",
   forbidden:
-    "This site reached the editor and refused it. A credential may not be the problem — the " +
-    "account may simply not have access — but a token or cookie with access will get through.",
+    "This site reached the editor and refused it. A credential may not be the problem: the " +
+    "account may simply not have access, but a token or cookie with access will get through.",
 }
 
 /**

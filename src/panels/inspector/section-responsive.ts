@@ -267,7 +267,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
         label: showAllContainers ? "Show fewer container sizes" : "Show all container sizes",
         // The same show-more pair as the per-side token rows: this lengthens a
         // LIST of container steps rather than splitting one value into four.
-        glyph: icon(showAllContainers ? "ChevronsDownUp" : "ChevronsUpDown", tokens.icon.row),
+        glyph: icon(showAllContainers ? "ChevronsDownUp" : "ChevronsUpDown", tokens.icon.marker),
         pressed: showAllContainers,
         onClick: () => {
           setExpanded(CONTAINER_EXPANDER, !showAllContainers)

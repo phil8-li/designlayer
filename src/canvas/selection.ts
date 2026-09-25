@@ -144,7 +144,7 @@ let hoverOutlineNode: HTMLElement | null = null
 /** The class `css/canvas.ts` pins to zero opacity for the length of a dip. */
 const DIP_CLASS = "de-outline--dip"
 /** Read off the token rather than restated, the way `core/leave.ts` does it. */
-const DIP_MS = Number.parseFloat(tokens.duration.snap)
+const DIP_MS = Number.parseFloat(tokens.duration.exit)
 let dipTimer = 0
 /** While true the painter leaves the hover outline where it is. See below. */
 let dipHeld = false

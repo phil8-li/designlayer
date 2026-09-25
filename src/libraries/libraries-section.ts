@@ -84,6 +84,7 @@ import type {
   LibrarySourceKind,
 } from "./types"
 import type { EditorContext } from "../core/context"
+import { formatDate } from "../core/format"
 
 /**
  * A library as this section reads it: the wire record, plus the two fields the
@@ -399,7 +400,7 @@ type ProviderSignInAnswer = Awaited<ReturnType<typeof openProviderSignIn>>
 
 /** The 403's version: it got in and was turned away, which is a different fix. */
 const REFUSED_NOTE =
-  "The site refused access. Signing in again will not help — the account needs permission."
+  "The site refused access. Signing in again will not help, because the account needs permission."
 
 /**
  * The facts a refusal named that a designer has nowhere else to read.
@@ -418,7 +419,7 @@ const WALL_FACTS: ReadonlyArray<{
   label: string
   copy: string
 }> = [
-  { key: "audience", label: "OAuth client id", copy: "OAuth client id" },
+  { key: "audience", label: "OAuth client ID", copy: "OAuth client ID" },
   { key: "realm", label: "Realm", copy: "realm" },
 ]
 
@@ -636,7 +637,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
   const urlField = el("input", {
     class: "de-lib-field",
     type: "url",
-    placeholder: "https://…",
+    placeholder: "https://",
     // A design system OR a Storybook, because those are two different things a
     // designer has a link to and the field takes either. Naming only one of
     // them would make the other look unsupported.
@@ -790,9 +791,9 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib-id": fact.key,
         onclick: () => copyLibrarySnippet(editor, value.textContent ?? "", fact.copy),
       },
-      // `icon.control` because every `.de-mini` in this section carries one at
+      // `icon.action` because every `.de-mini` in this section carries one at
       // that size — the remove button on a library row is the same 18px box.
-      [icon("Copy", tokens.icon.control)]
+      [icon("Copy", tokens.icon.action)]
     )
     const row = el(
       "div",
@@ -938,11 +939,12 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
        * says "elsewhere" without a sentence.
        *
        * The body says a window opens; this is the same statement in the place a
-       * reader's eye actually lands, which is the primary button. `icon.control`
-       * because that is what every glyph inside a `.de-button` in this chrome
-       * draws at, and the stroke is the set's single weight — see `icons.ts`.
+       * reader's eye actually lands, which is the primary button. `icon.marker`
+       * because `.de-button` is the kit's 24px action size, whose glyph is the
+       * marker role — the same 12px the lint panel's Audit glyph draws at — and
+       * the stroke is the set's single weight — see `icons.ts`.
        */
-      icon("ExternalLink", tokens.icon.control),
+      icon("ExternalLink", tokens.icon.marker),
       signInOpenLabel,
     ]
   ) as HTMLButtonElement
@@ -1099,9 +1101,9 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     },
     [
       el("span", { class: "de-lib-twisty", "aria-hidden": "true" }, [
-        icon("ChevronRight", tokens.icon.row),
+        icon("ChevronRight", tokens.icon.marker),
       ]),
-      "I have an access token",
+      "Use an access token",
     ]
   )
 
@@ -1291,7 +1293,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     },
     [
       el("span", { class: "de-lib-twisty", "aria-hidden": "true" }, [
-        icon("ChevronRight", tokens.icon.row),
+        icon("ChevronRight", tokens.icon.marker),
       ]),
       "Add a file from this project",
     ]
@@ -1340,7 +1342,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       // and this fold is then an empty list claiming the project has nothing in
       // it, which is a different and much worse statement than "the scan
       // failed". The path box below is still the way in either way.
-      scanError = "Could not scan this project for design-system files."
+      scanError = "Could not scan this project for design-system files. Add one by path below."
       editor.toast(scanError, "error")
     } finally {
       scanning = false
@@ -1434,7 +1436,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     // Cleared rather than left for a second press: adding it again is a no-op
     // the store answers idempotently, but a box still holding a link that is
     // now a row above it reads as unfinished.
-    if (await addFrom({ url }, urlAdd, "Could not read that link")) clearUrlField({ url })
+    if (await addFrom({ url }, urlAdd, "Could not read that link. Check the address, then add it again")) clearUrlField({ url })
   }
 
   async function addManual(): Promise<void> {
@@ -1473,7 +1475,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     reveal.setAttribute("title", label)
     reveal.setAttribute("aria-label", label)
     clear(reveal)
-    reveal.append(icon(shown ? "EyeOff" : "Eye", tokens.icon.control))
+    reveal.append(icon(shown ? "EyeOff" : "Eye", tokens.icon.action))
   }
 
   /**
@@ -2040,7 +2042,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
 
     const answer = settled.answer
     if (!answer.ok) {
-      const said = answer.reason || "That sign-in did not complete."
+      const said = answer.reason || "That sign-in did not complete. Try signing in again."
       if (mine) {
         signInProblem = said
         paintSignIn()
@@ -2070,7 +2072,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       // question has been answered and the add that follows is the editor
       // finishing the errand rather than something still waiting on the reader.
       closeSignIn(urlField)
-      if (replay && (await addFrom(replay, urlAdd, "Could not read that link"))) {
+      if (replay && (await addFrom(replay, urlAdd, "Could not read that link. Check the address, then add it again"))) {
         clearUrlField(replay)
       }
       return
@@ -2094,7 +2096,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       editor.toast(`Signed in. Add ${replay.url || replay.path} again to finish it.`)
       return
     }
-    if (await addFrom(replay, urlAdd, "Could not read that link")) clearUrlField(replay)
+    if (await addFrom(replay, urlAdd, "Could not read that link. Check the address, then add it again")) clearUrlField(replay)
   }
 
   async function submitSignIn(): Promise<void> {
@@ -2161,7 +2163,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
        * be disabled for the length of that request.
        */
       closeSignIn(urlField)
-      if (replay && (await addFrom(replay, urlAdd, "Could not read that link"))) {
+      if (replay && (await addFrom(replay, urlAdd, "Could not read that link. Check the address, then add it again"))) {
         clearUrlField(replay)
       }
     } catch (error) {
@@ -2175,7 +2177,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
        * and it does it at the exact moment they are most likely to give up on
        * the feature.
        */
-      signInProblem = messageOf(error, "That credential was refused")
+      signInProblem = messageOf(error, "The site refused that credential. Check that it has not expired, then try again")
       focusControl(credentialField, { preventScroll: true })
     } finally {
       // Both paths, and painted from here rather than from each of them: the
@@ -2228,7 +2230,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       const forget = row?.querySelector<HTMLElement>('[data-de-lib="forget"]')
       if (!row || !nameEl || !forget) continue
       const { name, link } = signedLabel(entry)
-      const when = entry.addedAt > 0 ? new Date(entry.addedAt).toLocaleDateString() : ""
+      const when = entry.addedAt > 0 ? formatDate(entry.addedAt) : ""
       const word = SCHEME_WORDS[entry.scheme] ?? entry.scheme
       nameEl.textContent = name
       nameEl.title = `${link}\n${when ? `A ${word}, saved ${when}` : `A ${word}`}`
@@ -2254,7 +2256,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "forget",
         "data-de-lib-id": entry.origin,
       },
-      [icon("X", tokens.icon.control)]
+      [icon("X", tokens.icon.action)]
     ) as HTMLButtonElement
     forget.addEventListener("click", () => {
       forget.disabled = true
@@ -2288,7 +2290,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         })
         .catch((error: unknown) => {
           forget.disabled = false
-          editor.toast(messageOf(error, `Could not forget ${entry.origin}`), "error")
+          editor.toast(messageOf(error, `Could not forget ${entry.origin}. Try again.`), "error")
         })
     })
 
@@ -2329,7 +2331,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         class: "de-button",
         type: "button",
         disabled: candidate.installed,
-        title: candidate.installed ? "Already installed" : `Add ${candidate.path}`,
+        title: candidate.installed ? "Already added" : `Add ${candidate.path}`,
         "aria-label": candidate.installed
           ? `${candidate.name} is already added`
           : `Add ${candidate.name}`,
@@ -2479,7 +2481,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
           toggle.setAttribute("aria-pressed", String(library.enabled))
           toggle.disabled = false
           editor.toast(
-            messageOf(error, `Could not turn ${library.name} ${next ? "on" : "off"}`),
+            messageOf(error, `Could not turn ${library.name} ${next ? "on" : "off"}. Try again.`),
             "error"
           )
         })
@@ -2516,7 +2518,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "remove",
         "data-de-lib-id": library.id,
       },
-      [icon("X", tokens.icon.control)]
+      [icon("X", tokens.icon.action)]
     ) as HTMLButtonElement
     remove.addEventListener("click", () => {
       remove.disabled = true
@@ -2543,7 +2545,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         })
         .catch((error: unknown) => {
           remove.disabled = false
-          editor.toast(messageOf(error, `Could not remove ${library.name}`), "error")
+          editor.toast(messageOf(error, `Could not remove ${library.name}. Try again.`), "error")
         })
     })
 

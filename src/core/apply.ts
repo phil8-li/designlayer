@@ -39,6 +39,7 @@ import {
 } from "./removal"
 import { untranslatedProperties } from "./writer"
 import type { RewriteBridge } from "./bridge"
+import { formatCount, plural } from "./format"
 
 /**
  * One refused Angular write, filed as a change that still wants making.
@@ -204,10 +205,10 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyAngular = async (): Promise<void> => {
     const operations = buildAngularOperations()
     if (!operations.length) {
-      toast("Could not find the source files for these changes", "error")
+      toast("Could not find the source files for these changes. Send them to your agent instead", "error")
       return
     }
-    toast(`Applying ${operations.length} change${operations.length === 1 ? "" : "s"}…`)
+    toast(`Applying ${plural(operations.length, "change")}…`)
     try {
       const result = await applyAngularOperations(operations)
       // Cleared on any reply, including a partial one: what failed is reported
@@ -222,7 +223,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
       if (!result.failed.length) {
         const files = new Set(result.applied.map((entry) => entry.filePath))
         toast(
-          `Wrote ${result.applied.length} change${result.applied.length === 1 ? "" : "s"}` +
+          `Wrote ${plural(result.applied.length, "change")}` +
             ` to ${[...files].join(", ")}`
         )
         return
@@ -246,12 +247,12 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
       const [first] = result.failed
       const others = result.failed.length - 1
       toast(
-        `Wrote ${result.applied.length}, skipped ${result.failed.length}` +
-          ` — ${first.reason}${others > 0 ? ` (+${others} more)` : ""}. Queued in Changes.`,
+        `Wrote ${formatCount(result.applied.length)}, skipped ${formatCount(result.failed.length)}` +
+          `: ${first.reason}${others > 0 ? ` (+${others} more)` : ""}. Queued in Changes.`,
         "error"
       )
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Apply failed", "error")
+      toast(error instanceof Error ? error.message : "Could not write the changes. Check the designlayer terminal, then try again", "error")
     }
   }
 
@@ -272,7 +273,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     try {
       result = await applyRemovals(operations)
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Delete failed", "error")
+      toast(error instanceof Error ? error.message : "Could not delete the element in code. Check the designlayer terminal, then try again", "error")
       return
     }
     // Cleared on any reply, including a partial one, for the same reason the
@@ -283,14 +284,14 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     const count = result.applied.length
     if (!result.failed.length) {
       const files = new Set(result.applied.map((entry) => entry.filePath))
-      toast(`Deleted ${count} element${count === 1 ? "" : "s"} in ${[...files].join(", ")}`)
+      toast(`Deleted ${plural(count, "element")} in ${[...files].join(", ")}`)
       return
     }
     const [first] = result.failed
     const others = result.failed.length - 1
     toast(
-      `Deleted ${count}, skipped ${result.failed.length}` +
-        ` — ${first.reason}${others > 0 ? ` (+${others} more)` : ""}`,
+      `Deleted ${formatCount(count)}, skipped ${formatCount(result.failed.length)}` +
+        `: ${first.reason}${others > 0 ? ` (+${others} more)` : ""}`,
       "error"
     )
   }
@@ -299,7 +300,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyReactBatch = (): void => {
     const operations = bridge.store.buildBatchOperations()
     if (!operations.length) {
-      toast("Could not find the source files for these changes", "error")
+      toast("Could not find the source files for these changes. Send them to your agent instead", "error")
       return
     }
     bridge.send({ type: "commitBatch", operations })
@@ -320,7 +321,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     // on the next hot reload, so the commit message has to name it rather than
     // report an unqualified success.
     const lost = untranslatedProperties()
-    const applying = `Applying ${operations.length} change${operations.length === 1 ? "" : "s"}…`
+    const applying = `Applying ${plural(operations.length, "change")}…`
     if (lost.length === 0) {
       toast(applying)
     } else {

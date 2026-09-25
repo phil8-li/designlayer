@@ -100,7 +100,7 @@ export const fillSection: InspectorSection = (context) => {
 
   const add = miniButton({
     label: painted || stored ? "Fill already set" : "Add fill",
-    glyph: icon("Plus", tokens.icon.row),
+    glyph: icon("Plus", tokens.icon.marker),
     onClick: () => {
       parked.delete(selection.key)
       apply(DEFAULT_FILL, "Add fill")
@@ -143,7 +143,7 @@ export const fillSection: InspectorSection = (context) => {
       context,
       "fill",
       "Fill",
-      el("div", { class: "de-stack" }, [el("div", { class: "de-hint" }, ["No fill."]), svgFill]),
+      el("div", { class: "de-stack" }, [el("div", { class: "de-hint" }, ["No fill"]), svgFill]),
       add
     )
   }
@@ -235,7 +235,7 @@ export const fillSection: InspectorSection = (context) => {
     }),
     miniButton({
       label: "Remove fill",
-      glyph: icon("Minus", tokens.icon.row),
+      glyph: icon("Minus", tokens.icon.marker),
       danger: true,
       onClick: (event: Event) => {
         parked.delete(selection.key)

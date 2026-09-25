@@ -143,8 +143,8 @@ check("every colour role is a reference, so one stylesheet can carry two themes"
   }
   // The shadows keep their geometry and theme only the tint: an offset and a
   // blur are not a colour, and a theme must not be able to move them.
-  assert.match(chrome.tokens.shadow.float, /^0 8px 30px var\(--de-shadow-cast-soft, /)
-  assert.match(chrome.tokens.shadow.popover, /^0 6px 22px var\(--de-shadow-cast, /)
+  assert.match(chrome.tokens.shadow.float, /^0 18px 56px var\(--de-shadow-cast-soft, /)
+  assert.match(chrome.tokens.shadow.popover, /^0 14px 44px var\(--de-shadow-cast, /)
   // The pairing export has to go through the tokens too, or every accent-filled
   // surface in the chrome stays on the dark theme's light indigo.
   assert.equal(
@@ -211,6 +211,8 @@ check("the light theme is a recomputation, not the dark one copied across", () =
     "--de-color-on-user-color",
     "--de-color-focus-halo",
     "--de-color-focus-core",
+    // The modal veil: the kit's static 70% scrim, the same in both appearances.
+    "--de-color-scrim",
     /*
      * `onAccent` joined this list when the palette moved to Figma's blues, and
      * for a related reason rather than the same one.
@@ -237,20 +239,16 @@ check("the light theme is a recomputation, not the dark one copied across", () =
     )
   }
   /*
-   * And the DIRECTION is the point: each theme cuts its quiet steps out of the
-   * other's ground. Dark mixes white in, light mixes the near-black ink in.
-   *
-   * Asserted as "light mixes its INK in" rather than the old "light does not
-   * mention `#ffffff`". That negative worked only while the light ground was
-   * the off-white `#f4f5f7`; the ground is plain `#ffffff` now, so every light
-   * step legitimately names white as the base it is mixing INTO and the old
-   * form failed on a palette that is correct. What actually matters — and what
-   * the "muddy grey" note was reaching for — is which substance is being mixed,
-   * not which string appears.
+   * And the DIRECTION is the point. Dark cuts its quiet steps out of the ground
+   * with paper — the design foundations kit's chrome-wash recipe — while light
+   * takes the kit's near-white ladder, which are literal cool rungs rather
+   * than a mix: `#f0f2f5`, `#e9edf0` and friends carry the kit's faint blue
+   * cast, which no percentage of near-black over white can reproduce.
    */
+  const LADDER = new Set(["#f0f2f5", "#dce0e5", "#f8f9f9", "#e9edf0"])
   for (const property of ["--de-color-bg-hover", "--de-color-field", "--de-color-field-hover"]) {
     assert.match(DARK_BLOCK.get(property), /#ffffff \d+%/, `dark ${property} stopped lifting`)
-    assert.match(LIGHT_BLOCK.get(property), /#1a1a1a \d+%/, `light ${property} stopped pressing`)
+    assert.ok(LADDER.has(LIGHT_BLOCK.get(property)), `light ${property} left the kit's near-white ladder`)
   }
 })
 
@@ -278,56 +276,40 @@ check("the dark block still carries the contrast-tuned values it shipped with", 
     ),
     {
       /*
-       * The palette these pin is Figma's, measured off its own chrome at 2x
-       * and recorded in `.harness/figma-colour-spec.md`. The values this case
-       * carried before were the near-black `#1c1d21` ground and the light
-       * indigo `#a1bbff` accent the editor shipped with.
+       * The palette these pin is the design foundations kit's, at the
+       * editor's density. `bg` is the kit's dark `--card` (oklch 0.205), the
+       * control surface is its `--chrome-shelf` wash (paper 6%) over that
+       * ground, the accent is its dark `--ring` indigo. This case pins the
+       * ground and the mix TOGETHER on purpose — `bg-sunken` interpolates from
+       * `bg`, so a ground changed in one place and not the other is exactly
+       * the drift the assertion exists to catch.
        *
-       * Two of them are the whole shape of that change. `bg-sunken` is the
-       * control surface and now LIFTS in dark — `#ffffff 6%` over the ground —
-       * where it used to sink to `#121316`. Figma draws its fields lighter
-       * than its panels; we drew them darker.
-       *
-       * `bg` itself is no longer Figma's neutral panel grey. The editor is
-       * chrome around someone else's product rather than a panel inside one,
-       * and the ground dropped to `#1a1a1a` so it recedes behind whatever it
-       * frames; `tokens.ts` argues it on the `CHROME` constant, including why
-       * it stops there rather than at `#000`. This case pins the ground and
-       * the mix TOGETHER on purpose — `bg-sunken` interpolates from `bg`, so a
-       * ground changed in one place and not the other is exactly the drift the
-       * assertion exists to catch.
-       *
-       * The three inks all went up because a lighter ground costs a
-       * white-alpha ink its contrast: at the old 0.58, `text-dim` measured
-       * 3.94:1 on a hovered control, under the 4.5:1 this project holds for
-       * body text. 0.70 restores it to 5.35:1.
+       * The inks stay white washes (75% is the kit's
+       * `--chrome-muted-foreground`), tuned so `text-dim` keeps 4.5:1 on a
+       * hovered control and a clear step above `text-disabled`.
        */
-      "--de-color-bg": "#1a1a1a",
-      "--de-color-bg-sunken": "color-mix(in srgb, #ffffff 6%, #1a1a1a)",
-      "--de-color-text": "#ffffff",
+      "--de-color-bg": "#171717",
+      "--de-color-bg-sunken": "color-mix(in srgb, #ffffff 6%, #171717)",
+      "--de-color-text": "#fafafa",
       "--de-color-text-muted": "rgba(255,255,255,0.75)",
       "--de-color-text-dim": "rgba(255,255,255,0.70)",
-      "--de-color-accent": "#7cc4f8",
+      "--de-color-accent": "#798cff",
       "--de-color-on-accent": "#ffffff",
       "--de-color-border-interactive": "color-mix(in srgb, #ffffff 35%, transparent)",
     }
   )
   /*
-   * The light ground is plain white now, not the off-white `#f4f5f7` it was.
-   *
-   * That followed Figma, whose light panel measures `#ffffff` with its controls
-   * a step DOWN at `#f5f5f5`. The old ground was picked to leave `#ffffff` free
-   * to mean "raised"; with the control surface doing the stepping instead, the
-   * ground can be white and `bgRaised` can stay white with it — a popover is
-   * told apart by its shadow, which is what a shadow is for.
-   *
-   * Both accent fills are saturated blue now, so `onAccent` is white in both
-   * themes rather than swapping ends. The case above lists it as a deliberate
-   * cross-theme match.
+   * The light ground is the kit's white page with its controls a step down on
+   * `--secondary`; a popover is told apart by its shadow. Ink is the kit's
+   * near-black `#0c1014`, never pure black, and the accent is its `--ring`
+   * indigo, which carries white at 6.7:1 — so `onAccent` is white in both
+   * themes, a deliberate cross-theme match listed above.
    */
   assert.equal(LIGHT_BLOCK.get("--de-color-bg"), "#ffffff")
   assert.equal(LIGHT_BLOCK.get("--de-color-bg-raised"), "#ffffff")
-  assert.equal(LIGHT_BLOCK.get("--de-color-text"), "#1a1a1a")
+  assert.equal(LIGHT_BLOCK.get("--de-color-bg-sunken"), "#f0f2f5")
+  assert.equal(LIGHT_BLOCK.get("--de-color-text"), "#0c1014")
+  assert.equal(LIGHT_BLOCK.get("--de-color-accent"), "#3849da")
   assert.equal(LIGHT_BLOCK.get("--de-color-on-accent"), "#ffffff")
 })
 
@@ -385,7 +367,7 @@ check("the palette is declared where every chrome root can inherit it", () => {
 /*
  * What must NOT have become a variable.
  *
- * Two of these scales are read by JavaScript as numbers — `tokens.icon.control`
+ * Two of these scales are read by JavaScript as numbers — `tokens.icon.action`
  * is handed to `icon()` and `tokens.size.panelInset` to the drag clamp — so a
  * `var()` there is not a slower colour, it is `NaN` pixels. The rest simply do
  * not vary by theme, and a token that cannot answer "which value in which
@@ -420,9 +402,9 @@ check("every spacing value in the shipped stylesheet is on the kit's scale", () 
    *
    * Empty today, and the entry it used to hold is worth recording. The seam's
    * hairline has to measure what a plain break between two clusters measures, so
-   * it is the cluster margin minus the bar's own flex gap. That was `space.md`
+   * it is the cluster margin minus the bar's own flex gap. That was `space.sm`
    * minus 2, which is 6 and off the scale; the toolbar's two gaps have since
-   * moved up a rung each, and `space.lg` minus `space.sm` lands on `space.md`.
+   * moved up a rung each, and `space.md` minus `space["2xs"]` lands on `space.sm`.
    * The subtraction is unchanged — it stopped needing an exemption because both
    * of its operands moved, which is the outcome this set exists to wait for.
    */
@@ -446,7 +428,7 @@ check("every spacing value in the shipped stylesheet is on the kit's scale", () 
   /*
    * A hairline-adjusted step is still a step, and every SIDE is checked rather
    * than the shorthand being waved through whole. `.de-ann-item` writes
-   * `3px 3px 3px 7px` — a `space.sm` gap on three sides and a `space.md` one on
+   * `3px 3px 3px 7px` — a `space["2xs"]` gap on three sides and a `space.sm` one on
    * the leading edge, each a pixel under because the row's own border sits in
    * the gap. Matching the declaration as a literal string would have meant
    * regenerating this exemption every time a side moved, and would have let a
@@ -549,14 +531,14 @@ check("every line-height in the shipped stylesheet is one of the type scale's le
     "a leading off the scale — use tokens.type.leadingFlush / leadingRow / leadingBody / leadingCode"
   )
 
-  // And the roles themselves clear the floor `better-typography` sets for text
-  // that wraps to three lines. `leadingFlush` is the deliberate exception and
-  // is only ever set on a single line that cannot wrap.
+  // And the roles themselves clear the kit's tightest wrapping leading: its
+  // caption role, 12/16. `leadingFlush` is the deliberate exception and is
+  // only ever set on a single line that cannot wrap.
   for (const [value, role] of roles) {
     if (role === "leadingFlush") continue
     assert.ok(
-      Number.parseFloat(value) >= 1.4,
-      `type.${role} is ${value}, under the 1.4 floor for anything that wraps`
+      Number.parseFloat(value) >= 16 / 12 - 0.001,
+      `type.${role} is ${value}, under the kit's caption leading (12/16)`
     )
   }
   // Unitless, all of them, or a line box stops tracking the size it sits on:
@@ -949,20 +931,20 @@ check("the literal scales are still literal", () => {
   }
   assert.deepEqual(
     { ...icon },
-    { mark: 10, row: 12, control: 16, launcher: 20, display: 24, hero: 32 }
+    { marker: 12, inline: 14, action: 16, chrome: 18, header: 20, feature: 24 }
   )
   /*
-   * The design kit's own scales, asserted as sets rather than as a floor.
-   *
-   * Radius and spacing are enumerations the kit hands over — 4/8/12/… and
-   * 2/4/8/12/14/… — so a value that is merely "big enough" is still wrong here.
+   * The design foundations kit's own ladders, asserted as sets rather than as
+   * a floor: radius 4/8/10/12/14/16/18/22/26 and spacing
+   * 2/4/6/8/12/16/20/24/28/32/40, so a value that is merely "big enough" is
+   * still wrong here.
    * Type is the exception and is checked as a floor above, because its three
    * steps are ours to place and only the bottom of the ramp was specified.
    */
   assert.deepEqual(Object.values(radius), [
-    "4px", "8px", "12px", "16px", "20px", "24px", "28px", "32px", "36px",
+    "4px", "8px", "10px", "12px", "14px", "16px", "18px", "22px", "26px",
   ])
-  assert.deepEqual(Object.values(chrome.tokens.space), [2, 4, 8, 12, 14, 16, 18, 20, 24, 30, 36])
+  assert.deepEqual(Object.values(chrome.tokens.space), [2, 4, 6, 8, 12, 16, 20, 24, 28, 32, 40])
   for (const [role, value] of Object.entries(chrome.tokens.space)) {
     assert.equal(typeof value, "number", `space.${role} must stay a number for arithmetic`)
   }
@@ -984,7 +966,8 @@ check("the literal scales are still literal", () => {
   }
   assert.equal(type.body, "12px")
   assert.equal(type.weightSection, 600)
-  assert.equal(duration.base, "180ms")
+  assert.equal(duration.reveal, "250ms")
+  assert.equal(duration.exit, "150ms")
   assert.match(ease, /^cubic-bezier\(/)
   assert.match(easeSpring, /^cubic-bezier\(/)
 

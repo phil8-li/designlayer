@@ -160,7 +160,7 @@ function parseAppUrl(value) {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw badRequest(`Use an http:// or https:// address.`)
   if (!isLoopbackHost(parsed.origin)) {
     throw badRequest(
-      `Only apps on this machine can be edited — localhost, 127.0.0.1 or ::1.`
+      `Only apps on this machine can be edited: localhost, 127.0.0.1 or ::1.`
     )
   }
   return {
@@ -207,11 +207,11 @@ function resolveProject(raw) {
   } catch (error) {
     // A protected folder refuses `realpath` along with `stat` while still
     // opening and reading; the path as pasted is then the best name it has.
-    if (error.code !== "EPERM" || !isDirectory(value)) throw badRequest(`There is no folder at ${value}.`)
+    if (error.code !== "EPERM" || !isDirectory(value)) throw badRequest(`There is no folder at ${value}. Check the path.`)
     projectRoot = value
   }
 
-  if (!isDirectory(projectRoot)) throw badRequest(`${value} is a file, not a project folder.`)
+  if (!isDirectory(projectRoot)) throw badRequest(`${value} is a file, not a project folder. Pick the folder that contains it.`)
 
   let text
   try {
@@ -223,7 +223,7 @@ function resolveProject(raw) {
   try {
     manifest = JSON.parse(text)
   } catch {
-    throw badRequest(`The package.json in ${projectRoot} is not valid JSON.`)
+    throw badRequest(`The package.json in ${projectRoot} is not valid JSON. Fix the file, then try again.`)
   }
 
   const dependencies = { ...manifest.dependencies, ...manifest.devDependencies }
