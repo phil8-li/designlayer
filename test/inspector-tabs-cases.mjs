@@ -439,33 +439,31 @@ await check("a pinned note and a recorded edit are one list, and arm the button"
 
   assert.equal(copyButton().disabled, false)
   /*
-   * Both halves on screen, under a heading each — a tab that listed only its
-   * own store would still read as working right up to the point an agent got
-   * half a story.
-   *
-   * No tally is asserted, because there is none to assert. The heading used to
-   * carry "1 note and 1 edit" over two sub-headings that each carried a "1" of
-   * their own: the same arithmetic three times over a list two rows long.
+   * Both halves on screen, in ONE section — a tab that listed only its own
+   * store would still read as working right up to the point an agent got half
+   * a story. No tally: the rows are never off screen.
    */
   assert.deepEqual(
     Array.from(notesPane().querySelectorAll(".de-section-title")).map((node) =>
       node.textContent.trim()
     ),
-    ["Direct edits", "Notes", "Settings"]
+    ["Notes and edits", "Settings"]
   )
   assert.match(notesPane().textContent, /This gap is too tight/)
   assert.match(notesPane().textContent, /box-shadow/)
   /*
-   * GROUPED BY KIND, edits first, and each section counting from one.
-   *
-   * This used to assert chronological order, on the argument that the row a
-   * designer calls "2" has to be the row the brief sent as 2. That argument
-   * lost: the brief is read by an agent, which locates a change by its selector
-   * and its file and never used the numbers; the panel is read by a person, for
-   * whom "the second note" is only a usable phrase if the notes are numbered as
-   * notes. Edits lead because they are the section with a button.
+   * In the order they happened, with one run of numbers — the same numbers the
+   * pins on the canvas and the brief use.
    */
-  assert.deepEqual(rowKinds(), ["edit", "note"])
+  assert.deepEqual(rowKinds(), ["note", "edit"])
+  assert.deepEqual(
+    Array.from(notesPane().querySelectorAll(".de-ann-index")).map((n) => n.textContent.trim()),
+    ["1", "2"]
+  )
+  // A note needs the agent, so the one primary button sends.
+  const primary = notesPane().querySelector(".de-ann-ctas .de-button--primary")
+  assert.equal(primary.textContent.trim(), "Send to agent")
+  assert.equal(primary.disabled, false)
 })
 
 await check("the listed path is the file's tail, never the user's home", () => {
@@ -610,7 +608,7 @@ await check("dropping the last row empties the list and takes the buttons with i
   click(tabNamed("Changes"))
   assert.equal(copyButton().disabled, false)
 
-  const drop = notesPane().querySelector('[aria-label^="Take this change back"]')
+  const drop = notesPane().querySelector('[aria-label^="Discard change"]')
   assert.ok(drop, "an edit cannot be retracted from the handover")
   click(drop)
   assert.deepEqual(rowKinds(), [])

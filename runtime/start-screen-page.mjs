@@ -223,7 +223,7 @@ function hintFor(app) {
   // error message is the one the screen answers before it is earned.
   if (!hasPackageJson) return "No package.json in that folder. Pick the one with node_modules beside it."
   if (!hasReact && framework !== "angular") {
-    return name + " is neither React nor Angular, the only two the editor can edit."
+    return name + " does not use React or Angular, the two frameworks DesignLayer supports."
   }
   // An app already up needs no script, so a missing one is not a problem yet.
   if (app) return ""
@@ -746,7 +746,7 @@ el.waitingBack.addEventListener("click", () => {
   showChooser()
   show(
     el.stopped,
-    "Stopped waiting. Your app may still be starting — the terminal running designlayer shows its output."
+    "Stopped waiting. Your app may still be starting — check your terminal."
   )
 })
 
@@ -970,8 +970,8 @@ export function startScreenPage() {
     <h2 class="progress" id="progress" tabindex="-1">
       <span class="pulse" aria-hidden="true"></span><span id="progress-text"></span>
     </h2>
-    <p class="note" id="waiting-note">A first compile can take a minute. Its output is in the terminal running designlayer.</p>
-    <button type="button" class="ghost" id="waiting-back">Cancel and pick another app</button>
+    <p class="note" id="waiting-note">A first compile can take a minute. Progress shows in your terminal.</p>
+    <button type="button" class="ghost" id="waiting-back">Cancel</button>
   </div>
 </main>
 <script type="module">${CLIENT}</script>

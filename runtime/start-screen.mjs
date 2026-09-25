@@ -155,12 +155,12 @@ function parseAppUrl(value) {
   try {
     parsed = new URL(value.trim())
   } catch {
-    throw badRequest(`"${value.trim()}" is not an address. It should look like http://localhost:3000.`)
+    throw badRequest(`"${value.trim()}" is not a valid address. Try http://localhost:3000.`)
   }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw badRequest(`The editor opens http:// and https:// addresses, not ${parsed.protocol}//.`)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw badRequest(`Use an http:// or https:// address.`)
   if (!isLoopbackHost(parsed.origin)) {
     throw badRequest(
-      `${parsed.host} is somewhere else. The editor rewrites source files as it edits, so it only opens apps on this machine — localhost, 127.0.0.1 or ::1.`
+      `Only apps on this machine can be edited — localhost, 127.0.0.1 or ::1.`
     )
   }
   return {
@@ -199,7 +199,7 @@ function appPathOf(parsed) {
 function resolveProject(raw) {
   if (typeof raw !== "string" || raw.trim() === "") throw badRequest("Confirm the project folder before starting.")
   const value = pastedPath(raw)
-  if (!path.isAbsolute(value)) throw badRequest(`The project folder has to be a full path, and "${raw}" is not one.`)
+  if (!path.isAbsolute(value)) throw badRequest(`Enter a full path, like /Users/you/Projects/app.`)
 
   let projectRoot
   try {
@@ -217,13 +217,13 @@ function resolveProject(raw) {
   try {
     text = fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")
   } catch {
-    throw badRequest(`${projectRoot} has no package.json, so it is not a project the editor can open. Pick the folder that holds it.`)
+    throw badRequest(`No package.json in ${projectRoot}. Pick the folder that contains it.`)
   }
   let manifest
   try {
     manifest = JSON.parse(text)
   } catch {
-    throw badRequest(`The package.json in ${projectRoot} is not valid JSON, so the editor cannot read it.`)
+    throw badRequest(`The package.json in ${projectRoot} is not valid JSON.`)
   }
 
   const dependencies = { ...manifest.dependencies, ...manifest.devDependencies }
@@ -242,7 +242,7 @@ function resolveProject(raw) {
    */
   if (typeof dependencies.react !== "string" && typeof dependencies["@angular/core"] !== "string") {
     throw badRequest(
-      `${name} depends on neither React nor Angular, and those are the two the editor knows how to edit.`
+      `${name} does not use React or Angular, the two frameworks DesignLayer supports.`
     )
   }
 
@@ -258,7 +258,7 @@ function resolveDevScript(value, projectRoot, manifest) {
   if (value === null || value === undefined) return null
   if (typeof value !== "string" || typeof manifest.scripts?.[value] !== "string") {
     throw badRequest(
-      `There is no "${value}" script in ${path.basename(projectRoot)}/package.json, so the editor cannot start the app that way.`
+      `No "${value}" script in ${path.basename(projectRoot)}/package.json.`
     )
   }
   return value
@@ -379,7 +379,7 @@ export async function createStartScreen({
       // A second press, or a page reloaded mid-boot. The choice already made is
       // the one the supervisor is acting on, and it cannot be taken back until
       // the editor it asked for has either answered or died.
-      if (starting) throw badRequest("The editor is already starting. This page will move on by itself.")
+      if (starting) throw badRequest("Already starting. This page updates on its own.")
       if (!body) throw badRequest("Choose an app and a project folder before starting.")
       const { appUrl, appPort, appPath } = parseAppUrl(body.url)
       const { projectRoot, manifest, packageName } = resolveProject(body.projectRoot)

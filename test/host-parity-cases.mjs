@@ -322,21 +322,19 @@ check("neither host asks the designer to turn component detection on", () => {
   assert.deepEqual(asksAboutComponents(angularPanel), [], "the Angular panel is back to asking")
 })
 
-check("the saved-style verbs are always drawn, on both", () => {
+check("every always-drawn section carries its saved-style control, on both", () => {
   /*
-   * They used to sit in a footer of their own, last in the panel, because the
-   * list they act on is absent until something is saved. They are the first row
-   * of that section now and the section is unconditional — which is the whole
-   * point of the rearrangement, and the thing a host could quietly lose.
-   *
-   * The way out to the app controls is deliberately NOT here. It only exists
-   * when a control is bound to the selected element, and neither fixture wires
-   * a control panel up, so on both hosts its absence is correct.
+   * Saved styles have no section of their own: each is scoped to one section's
+   * properties and opened from that section's header. A host that dropped the
+   * control from one section would quietly lose the only way to save that
+   * kind of style, so the toggles are counted per section.
    */
+  const toggles = ["Layout styles", "Appearance styles", "Color styles", "Stroke styles", "Effect styles"]
   for (const panel of [reactPanel, angularPanel]) {
-    for (const name of ["Save current style", "Update saved style", "Revert to original"]) {
+    for (const name of toggles) {
       assert.ok(panel.controls.includes(name), `${name} is missing`)
     }
+    assert.ok(!panel.sections.includes("Saved styles"), "the standalone Saved styles section is back")
   }
 })
 

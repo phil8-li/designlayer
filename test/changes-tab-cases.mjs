@@ -1,22 +1,17 @@
 /**
- * The Changes tab's two sections, and taking a change back.
+ * The Changes tab's one section, and taking a change back.
  *
- * Three claims, and they are the ones the tab was restructured to make true:
+ * 1. Notes and edits are ONE list under one heading, interleaved in the order
+ *    they happened, numbered with the same run the canvas pins and the brief
+ *    use. One primary button finishes the session: "Apply to code" when only
+ *    writable edits are pending, "Send to agent" when anything needs the agent.
+ *    One Copy, shared with the toolbar's `notes.copy` chord. One undo timeline,
+ *    so a deleted note comes back from Cmd+Z and from the toast alike.
  *
- * 1. A row is filed under WHO FINISHES IT, not under what kind of thing it is.
- *    The editor writes what it can spell; everything else, notes included, is
- *    the agent's. Each group carries the verb that finishes it, under its own
- *    rows, so the scope of a button is the block you are looking at.
+ * 2. Dropping an edit row WITHDRAWS the change, not just the row.
  *
- * 2. Dropping a row WITHDRAWS the change. It used to remove the row and leave
- *    the queued operation standing, so Apply afterwards wrote something the
- *    designer had explicitly discarded — the tab said one thing and the file
- *    said another.
- *
- * 3. Withdrawal works in ANY ORDER. Undo is a timeline and has to be walked
- *    backwards; this is not undo. A row is one (element, property) and the
- *    journal collapses repeats onto one row, so rows are independent by
- *    construction and the middle of the list can go first.
+ * 3. Withdrawal works in ANY ORDER: rows are one (element, property) each and
+ *    the journal collapses repeats, so rows are independent by construction.
  *
  * The harness is `stranded-write-cases`': one bundle, because the journal, the
  * ledger and the vendor store are all module state and two builds would each
@@ -80,6 +75,9 @@ const bundled = await build({
       export { withdrawEdit } from "./src/core/withdraw"
       export { resetComponentUsageForTest } from "./src/core/component-usage"
       export { elementKey } from "./src/core/store"
+      export { undo, resetHistory } from "./src/core/history"
+      export { installToolbar } from "./src/shell/toolbar"
+      export { runCommand } from "./src/core/commands"
     `,
     resolveDir: PACKAGE,
     loader: "ts",
@@ -157,9 +155,13 @@ function makeBridge() {
     },
     send() {},
     subscribe: () => () => {},
-    toast() {},
+    toast(message, kind, action) {
+      toasts.push([message, kind, action])
+    },
   }
 }
+
+const toasts = []
 
 let bridge
 let tab
@@ -169,12 +171,15 @@ function reset() {
   ui.resetAnnotationsForTest()
   ui.clearPreviewOnly()
   ui.resetComponentUsageForTest()
+  ui.resetHistory()
+  toasts.length = 0
   window.localStorage.clear()
   window.document.getElementById("app").innerHTML = ""
   bridge = makeBridge()
   const context = ui.createContext(bridge, { right: null, left: null, bottom: null })
   tab = ui.annotationsTab(context)
   tab.update()
+  return context
 }
 
 function mount(html) {
@@ -186,31 +191,52 @@ function mount(html) {
 }
 
 /**
- * The outbox's sections, in column order.
- *
- * They were `.de-ann-group` blocks stacked inside one section called Handover,
- * each drawing a heading and a tally of its own. They are `section()`s now —
- * the panel's own header, the same call the Design tab makes — so the title is
- * read off `.de-section-title`, and there is no count to read anywhere: the
- * rows ARE the section, and a list you can count by looking does not need to be
- * counted at you three times.
- *
- * Settings is filtered out. It is a section in the same column but it is not
- * part of the outbox, and these cases are about the two piles a session makes.
+ * The outbox's sections, in column order, with Settings filtered out: it is a
+ * section in the same column but not part of the outbox.
  */
 const groups = () =>
   Array.from(tab.node.querySelectorAll(".de-section"))
     .map((node) => ({
       title: node.querySelector(".de-section-title").textContent.trim(),
-      cta: node.querySelector(".de-ann-cta button")?.textContent.trim() ?? null,
       rows: Array.from(node.querySelectorAll(".de-ann-item")).map((row) =>
         row.querySelector(".de-ann-item-line")?.textContent.trim() ?? ""
+      ),
+      kinds: Array.from(node.querySelectorAll(".de-ann-item")).map((row) =>
+        row.classList.contains("de-ann-item--note") ? "note" : "edit"
       ),
       numbers: Array.from(node.querySelectorAll(".de-ann-index")).map((n) =>
         Number(n.textContent.trim())
       ),
     }))
     .filter((group) => group.title !== "Settings")
+
+const primary = () => tab.node.querySelector(".de-ann-ctas .de-button--primary")
+const ctaLabels = () =>
+  Array.from(tab.node.querySelectorAll(".de-ann-ctas .de-button")).map((node) =>
+    node.textContent.trim()
+  )
+const press = (node) =>
+  node.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
+
+function pin(comment) {
+  return ui.addAnnotation({
+    kind: "element",
+    comment,
+    rect: { x: 0, y: 0, width: 10, height: 10 },
+    target: null,
+    selectedText: null,
+  })
+}
+
+function selectionOf(element) {
+  return {
+    element,
+    tagName: element.tagName.toLowerCase(),
+    componentName: "Fixture",
+    source: null,
+    key: ui.elementKey(element, "Fixture", 0),
+  }
+}
 
 const rowIds = () =>
   Array.from(tab.node.querySelectorAll(".de-ann-item")).map((row) =>
@@ -230,136 +256,180 @@ async function check(name, fn) {
   }
 }
 
-console.log("\nTwo sections, each counting from one")
+console.log("\nOne section, one numbering")
 
-await check("edits and notes are separate sections, split by what you did", async () => {
+await check("notes and edits are ONE section, interleaved in time order, numbered 1..N", async () => {
   reset()
   const element = mount('<button class="btn">Go</button>')
   const writer = ui.createWriter(bridge)
-  writer.applyStyles(
-    { element, tagName: "button", componentName: "Fixture", source: null, key: ui.elementKey(element, "Fixture", 0) },
-    [{ property: "opacity", value: "0.5" }],
-    "Opacity"
-  )
+  const selection = selectionOf(element)
+
+  // Interleaved on purpose: note, edit, note, edit, note.
+  pin("First note")
   await settle()
-  ui.addAnnotation({
-    kind: "element",
-    comment: "This is doing too much",
-    rect: { x: 0, y: 0, width: 10, height: 10 },
-    target: null,
-    selectedText: null,
-  })
-  tab.update()
-
-  /*
-   * The split is what the designer DID, not what happens to it next. An edit is
-   * a change made on the canvas; a note is a sentence written about the page.
-   * Those are the two activities a session is made of, and they are the two
-   * errands somebody opens this tab on — "what have I changed" and "where is
-   * that note I left".
-   */
-  const found = groups()
-  assert.deepEqual(
-    found.map((group) => group.title),
-    ["Direct edits", "Notes"]
-  )
-})
-
-await check("an unwritable edit stays with the edits, not with the notes", async () => {
-  reset()
-  const element = mount('<button class="btn">Go</button>')
-  const writer = ui.createWriter(bridge)
-  // `filter` has no Tailwind spelling, so no commit will ever write it. It is
-  // still an edit: the designer changed it on the canvas, and filing it under
-  // Notes would describe it as something they wrote rather than something they
-  // did. Its BADGE says who has to finish it; its section says what it is.
-  writer.applyStyles(
-    { element, tagName: "button", componentName: "Fixture", source: null, key: ui.elementKey(element, "Fixture", 0) },
-    [{ property: "filter", value: "blur(2px)" }],
-    "Blur"
-  )
-  await settle()
-  tab.update()
-
-  const [edits] = groups()
-  assert.equal(edits.title, "Direct edits")
-  assert.ok(
-    edits.rows.some((line) => line.includes("filter")),
-    "an unwritable edit was filed away from the other edits"
-  )
-})
-
-await check("EACH SECTION COUNTS FROM ONE", async () => {
-  reset()
-  const element = mount('<button class="btn">Go</button>')
-  const writer = ui.createWriter(bridge)
-  const selection = {
-    element,
-    tagName: "button",
-    componentName: "Fixture",
-    source: null,
-    key: ui.elementKey(element, "Fixture", 0),
-  }
-
-  /*
-   * Interleaved on purpose: note, edit, note, edit, note. Under the old merged
-   * numbering these came out 1..5 and the sections were cosmetic — the third
-   * note being called 5 told you only that two edits happened to be made before
-   * it, which is a fact about the clock and not about the note.
-   */
-  ui.addAnnotation({
-    kind: "element", comment: "First note", rect: { x: 0, y: 0, width: 10, height: 10 },
-    target: null, selectedText: null,
-  })
   writer.applyStyles(selection, [{ property: "opacity", value: "0.5" }], "Opacity")
   await settle()
-  ui.addAnnotation({
-    kind: "element", comment: "Second note", rect: { x: 0, y: 0, width: 10, height: 10 },
-    target: null, selectedText: null,
-  })
+  pin("Second note")
+  await settle()
   writer.applyStyles(selection, [{ property: "width", value: "120px" }], "Width")
   await settle()
-  ui.addAnnotation({
-    kind: "element", comment: "Third note", rect: { x: 0, y: 0, width: 10, height: 10 },
-    target: null, selectedText: null,
-  })
+  pin("Third note")
   tab.update()
 
   const found = groups()
-  assert.deepEqual(found.map((group) => group.title), ["Direct edits", "Notes"])
-  assert.deepEqual(found[0].numbers, [1, 2], "the edits did not count from one")
-  assert.deepEqual(found[1].numbers, [1, 2, 3], "the notes did not count from one")
+  assert.deepEqual(found.map((group) => group.title), ["Notes and edits"])
+  const [outbox] = found
+  assert.deepEqual(outbox.kinds, ["note", "edit", "note", "edit", "note"], "rows are not in time order")
+  assert.deepEqual(outbox.numbers, [1, 2, 3, 4, 5], "the rows do not share one run of numbers")
+  assert.ok(outbox.rows[1].includes("opacity") && outbox.rows[3].includes("width"))
+  // The old shapes, as negatives.
+  assert.equal(tab.node.querySelector(".de-ann-none"), null, "the 'No notes yet' line came back")
+  assert.equal(tab.node.querySelector(".de-ann-cta"), null, "the per-section button came back")
 })
 
-await check("only the edits carry a verb; the handover is a footer action", async () => {
+await check("an edits-only session still gets the section, with no placeholder line", async () => {
+  reset()
+  const element = mount('<button class="btn">Go</button>')
+  // `filter` has no Tailwind spelling, so no commit will ever write it. It is
+  // still a row in the one list; its BADGE says who finishes it.
+  ui.createWriter(bridge).applyStyles(selectionOf(element), [{ property: "filter", value: "blur(2px)" }], "Blur")
+  await settle()
+  tab.update()
+
+  const [outbox] = groups()
+  assert.equal(outbox.title, "Notes and edits")
+  assert.ok(outbox.rows.some((line) => line.includes("filter")))
+  assert.ok(!tab.node.textContent.includes("No notes yet"))
+})
+
+await check("ONE primary button: 'Apply to code' for writable edits, 'Send to agent' once anything needs the agent", async () => {
   reset()
   const element = mount('<button class="btn">Go</button>')
   const writer = ui.createWriter(bridge)
-  writer.applyStyles(
-    { element, tagName: "button", componentName: "Fixture", source: null, key: ui.elementKey(element, "Fixture", 0) },
-    [{ property: "opacity", value: "0.5" }],
-    "Opacity"
-  )
+  writer.applyStyles(selectionOf(element), [{ property: "opacity", value: "0.5" }], "Opacity")
   await settle()
-  ui.addAnnotation({
-    kind: "element", comment: "A note", rect: { x: 0, y: 0, width: 10, height: 10 },
-    target: null, selectedText: null,
-  })
   tab.update()
 
-  /*
-   * "Apply to code" acts on exactly the rows above it, so it sits under them.
-   * Handing over does not: the brief carries the whole session, notes AND
-   * edits, so a Send button under the notes heading would claim a scope it does
-   * not have. It belongs beside Copy, the other whole-session action.
-   */
-  const found = groups()
-  assert.deepEqual(found.map((group) => group.cta), ["Apply to code", null])
-  const footer = Array.from(tab.node.querySelectorAll(".de-ann-ctas button")).map((node) =>
-    node.textContent.trim()
+  // Exactly two labelled buttons: the primary and Copy.
+  assert.deepEqual(ctaLabels(), ["Apply to code", "Copy"])
+  assert.equal(primary().disabled, false, "a queued writable edit left the button disabled")
+  assert.equal(primary().querySelector("svg"), null, "Apply to code carries the Send mark")
+
+  // A note needs the agent, so the SAME button now sends — and writes first.
+  pin("Tighten this")
+  tab.update()
+  assert.deepEqual(ctaLabels(), ["Send to agent", "Copy"])
+  assert.ok(primary().querySelector("svg"), "Send to agent lost its mark")
+  assert.match(primary().title, /write/i, "the title does not say the writable edits are written first")
+  assert.equal(tab.node.querySelectorAll(".de-ann-ctas .de-button--primary").length, 1)
+})
+
+await check("an unwritable edit alone makes the button send", async () => {
+  reset()
+  const element = mount('<span class="icon">x</span>')
+  ui.recordEdit({ property: "icon", from: "Star", to: "Heart", element, written: false })
+  tab.update()
+  assert.equal(primary().textContent.trim(), "Send to agent")
+  assert.equal(primary().disabled, false)
+})
+
+await check("with nothing pending, the primary button is disabled", async () => {
+  reset()
+  const element = mount('<button class="btn">Go</button>')
+  ui.createWriter(bridge).applyStyles(selectionOf(element), [{ property: "opacity", value: "0.5" }], "Opacity")
+  await settle()
+  // Committed: the row stays, "In your files", and nothing is owed.
+  ui.markEditsWritten()
+  bridge.queued.clear()
+  tab.update()
+  assert.equal(primary().textContent.trim(), "Apply to code")
+  assert.equal(primary().disabled, true, "the button is live over a session with nothing to do")
+})
+
+console.log("\nOne copy")
+
+await check("the toolbar's notes.copy and the tab's Copy put identical text on the clipboard", async () => {
+  const context = reset()
+  const toolbar = window.document.createElement("div")
+  window.document.body.append(toolbar)
+  ui.installToolbar({ ...context, slots: { ...context.slots, toolbar } })
+  const element = mount('<button class="btn">Go</button>')
+  ui.createWriter(bridge).applyStyles(selectionOf(element), [{ property: "opacity", value: "0.5" }], "Opacity")
+  await settle()
+  pin("Too loud")
+  tab.update()
+
+  const written = []
+  Object.defineProperty(window.navigator, "clipboard", {
+    value: { writeText: (text) => (written.push(text), Promise.resolve()) },
+    configurable: true,
+  })
+  const copy = Array.from(tab.node.querySelectorAll(".de-ann-ctas button")).find(
+    (node) => node.textContent.trim() === "Copy"
   )
-  assert.ok(footer.includes("Send to agent"), "the handover left the footer")
-  assert.ok(footer.includes("Copy"), "Copy left the footer")
+  press(copy)
+  const tabToast = toasts.at(-1)[0]
+  assert.equal(ui.runCommand("notes.copy"), true, "notes.copy is not registered")
+  const chordToast = toasts.at(-1)[0]
+
+  assert.equal(written.length, 2, "one of the two copies wrote nothing")
+  assert.equal(written[0], written[1], "the chord and the button copied different text")
+  assert.equal(tabToast, chordToast, "the chord and the button said different things")
+  assert.match(tabToast, /^Copied 1 note and 1 edit$/)
+})
+
+console.log("\nOne undo timeline")
+
+await check("deleting a note from its row, then history undo(), brings it back", async () => {
+  reset()
+  pin("First")
+  await settle()
+  pin("Second")
+  tab.update()
+  const rows = () => Array.from(tab.node.querySelectorAll(".de-ann-item--note"))
+  press(rows()[0].querySelector(".de-mini--danger"))
+  await settle()
+  assert.deepEqual(groups()[0].rows, ["Second"], "the delete did not delete")
+  assert.doesNotMatch(toasts.at(-1)[0], /cannot be undone/i)
+
+  assert.equal(ui.undo(), "Delete note", "the delete is not on the history timeline")
+  tab.update()
+  assert.deepEqual(groups()[0].rows, ["First", "Second"], "Cmd+Z did not restore the note in place")
+})
+
+await check("the delete toast's Undo brings the note back too", async () => {
+  reset()
+  pin("Only note")
+  tab.update()
+  press(tab.node.querySelector(".de-ann-item--note .de-mini--danger"))
+  await settle()
+  assert.equal(tab.node.querySelectorAll(".de-ann-item--note").length, 0)
+
+  const [message, , action] = toasts.at(-1)
+  assert.match(message, /^Deleted the note/)
+  assert.equal(action?.label, "Undo")
+  action.onClick()
+  tab.update()
+  assert.deepEqual(groups()[0].rows, ["Only note"], "the toast's Undo did not restore the note")
+  // Undone through the timeline, so Cmd+Z has nothing left to take back.
+  assert.equal(ui.undo(), null, "the toast's Undo left the delete on the timeline")
+})
+
+await check("clear-all is one undoable step, offered back on its toast", async () => {
+  reset()
+  pin("One")
+  await settle()
+  pin("Two")
+  tab.update()
+  const bin = tab.node.querySelectorAll(".de-ann-tools button")[1]
+  press(bin)
+  assert.doesNotMatch(toasts.at(-1)[0], /cannot be undone/i)
+  press(bin)
+  assert.equal(tab.node.querySelectorAll(".de-ann-item--note").length, 0)
+  assert.equal(toasts.at(-1)[2]?.label, "Undo", "clearing offered no Undo")
+  assert.equal(ui.undo(), "Delete 2 notes", "clear-all is not one step on the timeline")
+  tab.update()
+  assert.deepEqual(groups()[0].rows, ["One", "Two"])
 })
 
 console.log("\nTaking a change back")

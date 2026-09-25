@@ -209,7 +209,7 @@ check("the tool cluster is gone entirely — Scale, Text, Move and Hand alike", 
   const pressable = Array.from(toolbar.querySelectorAll(".de-tool[aria-pressed]"))
   assert.deepEqual(
     pressable.map((button) => button.getAttribute("aria-label")).sort(),
-    ["Inspect", "Notes", "Toggle inspector", "Toggle layers panel"],
+    ["Inspect", "Notes", "Show or hide inspector", "Show or hide left panel"],
     "a tool radio survives"
   )
   // …and the bar is not simply empty, so this is not asserting nothing.
@@ -279,8 +279,8 @@ check("each panel toggle draws its own side of the screen", () => {
     assert.ok(Number.isFinite(x), "the column shape names no x at all")
     return x < 12 ? "left" : "right"
   }
-  assert.equal(inkedSide(byLabel("Toggle layers panel")), "left", "the left toggle is not left")
-  assert.equal(inkedSide(byLabel("Toggle inspector")), "right", "the right toggle is not right")
+  assert.equal(inkedSide(byLabel("Show or hide left panel")), "left", "the left toggle is not left")
+  assert.equal(inkedSide(byLabel("Show or hide inspector")), "right", "the right toggle is not right")
 })
 
 check("the zoom cluster is gone, readout and steppers alike", () => {
@@ -335,8 +335,8 @@ check("the eight icons of the bar, in reading order", () => {
   // question the switch answers — what does a click do — and a bar that filed
   // that answer in two places would make it findable in neither.
   assert.ok(byLabel("Notes"))
-  assert.ok(byLabel("Toggle layers panel"))
-  assert.ok(byLabel("Toggle inspector"))
+  assert.ok(byLabel("Show or hide left panel"))
+  assert.ok(byLabel("Show or hide inspector"))
   // The chrome's own paint, with the two panel toggles because that cluster is
   // "what the editor is showing you" — and BEFORE Hide, which is the member
   // that takes the whole cluster off screen.
@@ -366,8 +366,8 @@ check("the eight icons of the bar, in reading order", () => {
       "Undo",
       "Redo",
       "Switch to light mode",
-      "Toggle layers panel",
-      "Toggle inspector",
+      "Show or hide left panel",
+      "Show or hide inspector",
       "Hide editor",
     ],
     "the bar's contents or their order moved"
@@ -583,8 +583,8 @@ const drawing = (subject) =>
     .join("|")
 
 const TOGGLES = [
-  ["Toggle layers panel", "layersOpen"],
-  ["Toggle inspector", "inspectorOpen"],
+  ["Show or hide left panel", "layersOpen"],
+  ["Show or hide inspector", "inspectorOpen"],
 ]
 
 /*
@@ -635,8 +635,8 @@ check("each toggle fills its mark while it is on, and hollows it while it is off
  */
 check("a toggle draws the set's own mark for its glyph, in both states", () => {
   for (const [label, flag, name] of [
-    ["Toggle layers panel", "layersOpen", "PanelLeft"],
-    ["Toggle inspector", "inspectorOpen", "PanelRight"],
+    ["Show or hide left panel", "layersOpen", "PanelLeft"],
+    ["Show or hide inspector", "inspectorOpen", "PanelRight"],
   ]) {
     editor.setState({ [flag]: true })
     assert.equal(
@@ -657,8 +657,8 @@ check("the two toggles are told apart from each other, in both states", () => {
   for (const open of [true, false]) {
     editor.setState({ layersOpen: open, inspectorOpen: open })
     assert.notEqual(
-      drawing(byLabel("Toggle layers panel")),
-      drawing(byLabel("Toggle inspector")),
+      drawing(byLabel("Show or hide left panel")),
+      drawing(byLabel("Show or hide inspector")),
       `the pair is indistinguishable while ${open ? "open" : "collapsed"}`
     )
   }
@@ -707,8 +707,8 @@ check("each control wears the mark it was chosen for", () => {
   assert.equal(worn("Redo"), glyph("ToolRedo"))
   assert.notEqual(worn("Undo"), worn("Redo"), "both history arrows point the same way")
   assert.equal(worn("Notes"), glyph("MessageSquare"))
-  assert.equal(worn("Toggle layers panel"), glyph("PanelLeft"))
-  assert.equal(worn("Toggle inspector"), glyph("PanelRight"))
+  assert.equal(worn("Show or hide left panel"), glyph("PanelLeft"))
+  assert.equal(worn("Show or hide inspector"), glyph("PanelRight"))
   /*
    * A cross, where this drew four arrows converging on a centre.
    *
@@ -774,13 +774,13 @@ check("aria-pressed follows the store, not the click", () => {
 
 check("clicking a toggle moves its own flag and only its own", () => {
   editor.setState({ layersOpen: true, inspectorOpen: true })
-  byLabel("Toggle layers panel").click()
+  byLabel("Show or hide left panel").click()
   assert.equal(context.getState().layersOpen, false)
   assert.equal(context.getState().inspectorOpen, true, "the inspector moved with the layers panel")
-  byLabel("Toggle inspector").click()
+  byLabel("Show or hide inspector").click()
   assert.equal(context.getState().inspectorOpen, false)
   assert.equal(context.getState().layersOpen, false)
-  byLabel("Toggle layers panel").click()
+  byLabel("Show or hide left panel").click()
   assert.equal(context.getState().layersOpen, true)
   editor.setState({ layersOpen: true, inspectorOpen: true })
 })
@@ -1084,7 +1084,7 @@ check("a pressed panel toggle takes no chip, and still answers the pointer", () 
   const quietLabels = Array.from(toolbar.querySelectorAll(".de-tool--quiet")).map((button) =>
     button.getAttribute("aria-label")
   )
-  assert.deepEqual(quietLabels.sort(), ["Toggle inspector", "Toggle layers panel"])
+  assert.deepEqual(quietLabels.sort(), ["Show or hide inspector", "Show or hide left panel"])
 })
 
 // ── Standing down, as one object ───────────────────────────────────────────
@@ -1766,8 +1766,8 @@ check("the strip is one group, and the mode leads it", () => {
     "Undo",
     "Redo",
     "Switch to light mode",
-    "Toggle layers panel",
-    "Toggle inspector",
+    "Show or hide left panel",
+    "Show or hide inspector",
     "Hide editor",
   ])
   // Every control is in it. A square that renders outside the one group is a
@@ -1982,7 +1982,7 @@ check("deleting a note is what takes it off the handover", () => {
    * off takes, and the one that must not report a success it did not get.
    */
   pressCopy()
-  assert.match(copyLane.toasts.at(-1).message, /refused the clipboard/)
+  assert.match(copyLane.toasts.at(-1).message, /clipboard access was blocked/)
   assert.equal(copyLane.toasts.at(-1).kind, "error")
 
   copyLane.module.removeAnnotation(note.id)
@@ -2100,8 +2100,8 @@ check("a chooser behind the bar changes neither the group count nor the order", 
     "Undo",
     "Redo",
     "Switch to light mode",
-    "Toggle layers panel",
-    "Toggle inspector",
+    "Show or hide left panel",
+    "Show or hide inspector",
     "Hide editor",
   ])
   assert.ok(
@@ -2391,7 +2391,7 @@ await moves("a drag on the pill's ground moves it, a tremor does not, and ten is
 await moves("a press on a control neither drags the bar nor loses its click", async () => {
   const before = [bar.style.left, bar.style.top]
   editor.setState({ layersOpen: true })
-  const toggle = byLabel("Toggle layers panel")
+  const toggle = byLabel("Show or hide left panel")
 
   point(toggle, "pointerdown", 500, 730)
   point(toggle, "pointermove", 560, 700)

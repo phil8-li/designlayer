@@ -823,7 +823,7 @@ await check("clicking a row for a finding that is not on this page says so", asy
 
   assert.equal(editor.getState().selection[0]?.element, action, "an off-page row moved the selection")
   assert.equal(toasts.length, 1, "clicking an off-page row did nothing and said nothing")
-  assert.match(toasts[0][0], /not rendered on this page/)
+  assert.match(toasts[0][0], /is not on this page/)
 })
 
 await check("the Audit button runs the audit over the wire", async () => {
@@ -1129,7 +1129,7 @@ await check("a run that failed is announced, not quietly swapped into the list",
 
   const said = line.textContent
   assert.doesNotMatch(said, /HTTP \d/, `the section handed a designer a status code: ${said}`)
-  assert.match(said, /terminal running designlayer/, `the failure names no recovery: ${said}`)
+  assert.match(said, /Check its terminal/, `the failure names no recovery: ${said}`)
   assert.ok(warned.length, "the status was dropped rather than logged for whoever runs the server")
 
   await audit()
@@ -1174,7 +1174,7 @@ await check("on an untouched editor the group is Audit alone", async () => {
     "Hide markers is offered before there are any markers to hide"
   )
   const said = fresh.node.querySelector(".de-empty")?.textContent ?? ""
-  assert.match(said, /Press Audit/, "the untouched section does not say what to press")
+  assert.match(said, /Audit finds/, "the untouched section does not say what to press")
   // "Nothing audited yet" said only that nothing had happened. The first state a
   // designer meets has to say what the section is for.
   assert.match(said, /design tokens/, "the untouched section does not say what an audit looks for")

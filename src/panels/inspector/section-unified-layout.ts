@@ -59,7 +59,8 @@
 import { el } from "../../core/dom"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
-import { isExpanded, miniButton, section, setExpanded, takeJustExpanded } from "./field"
+import { isExpanded, miniButton, setExpanded, takeJustExpanded } from "./field"
+import { styledSection } from "../../options/panel"
 import { revealGroup } from "../../core/leave"
 import { laysOutChildren, SIDES, tokenControl, tokenRow } from "./token-row"
 import { sizeControls } from "./section-layout"
@@ -177,7 +178,9 @@ export const unifiedLayoutSection: InspectorSection = (context: SectionContext) 
       : {}
   )
 
-  return section(
+  return styledSection(
+    context,
+    "layout",
     "Layout",
     el("div", { class: "de-stack" }, [
       el("div", { class: "de-layout-group" }, [sizeControls(context)]),

@@ -60,12 +60,11 @@ import { tokens } from "../core/tokens"
 /** Why a control cannot be deleted from here. Shown verbatim. */
 const WHY_NOT = {
   control:
-    "Removing the control itself is a structural source edit: its schema, consumers, and " +
-    "fallback behavior must change together. This surface can remove a configured saved " +
-    "default, but it does not guess how to delete application code.",
+    "Not from here. A control is app code — its schema, default and every use change " +
+    "together. You can remove its saved default.",
   choice:
-    "Named choices are application behavior, not saved values. Removing one safely can " +
-    "require changing its options array, defaults, and every branch that consumes it.",
+    "A choice is app code, not a saved value. Removing it means editing its options, " +
+    "defaults and every place that uses it.",
 }
 
 const defaultStateCache = new Map<string, boolean>()
@@ -112,8 +111,7 @@ function chips(control: LevaControl, editor: EditorContext): HTMLElement {
             // the recovery is a different value or the app's own panel — this
             // surface has nothing else to offer and should not imply it does.
             editor.toast(
-              `${control.label} would not take “${name}” — pick another choice, or set it in ` +
-                `the app’s own control panel.`,
+              `${control.label} rejected “${name}”. Try another choice.`,
               "error"
             )
             return
@@ -139,8 +137,7 @@ function valueEditor(control: LevaControl, editor: EditorContext): HTMLElement {
   const commit = (value: unknown) => {
     if (setControlValue(control.path, value)) return
     editor.toast(
-      `${control.label} would not take that value — check its allowed range or choices, then ` +
-        `try another.`,
+      `${control.label} rejected that value. Check its allowed range.`,
       "error"
     )
   }
@@ -207,7 +204,7 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
   if (!url || !control.canPersistDefault) return null
 
   const status = el("span", { class: "de-opt-tag", "aria-live": "polite" }, ["source-linked"])
-  const apply = el("button", { class: "de-button", type: "button" }, ["Apply / update default"])
+  const apply = el("button", { class: "de-button", type: "button" }, ["Apply to code"])
   const remove = el(
     "button",
     { class: "de-button de-button--danger", type: "button" },
@@ -216,7 +213,7 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
 
   const setState = (exists: boolean) => {
     defaultStateCache.set(url, exists)
-    status.textContent = exists ? "saved default" : "live only"
+    status.textContent = exists ? "saved" : "not saved"
     apply.textContent = exists ? "Update default" : "Apply to code"
     ;(apply as HTMLButtonElement).disabled = control.disabled
     ;(remove as HTMLButtonElement).disabled = control.disabled || !exists
@@ -253,8 +250,7 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
       // The live value already moved; only the durable copy did not. Saying so
       // is the difference between "try again" and "redo the whole adjustment".
       editor.toast(
-        `Could not update the default for ${control.label} — the control is still set here, ` +
-          `but the source file was not written. Try again.`,
+        `${control.label} is set here, but its default was not saved to code. Try again.`,
         "error"
       )
     }
@@ -268,8 +264,7 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
       editor.toast(`Removed source default for ${control.label}`)
     } catch {
       editor.toast(
-        `Could not remove the default for ${control.label}. Try again, or delete it in the ` +
-          `source file it is written to.`,
+        `Could not remove the default for ${control.label}. Try again, or delete it in the source file.`,
         "error"
       )
     }
@@ -307,8 +302,7 @@ export function controlRow(control: LevaControl, editor: EditorContext): HTMLEle
             const resolved = highlightControlTargets(control)
             if (!resolved?.elements.length) {
               editor.toast(
-                `No elements bound to ${control.label} are on this page. Navigate to the page ` +
-                  `that uses it, then press this again.`,
+                `Nothing on this page uses ${control.label}. Open a page that does, then try again.`,
                 "error"
               )
             }
@@ -352,7 +346,7 @@ function folderNode(
         (folder.variantCount ? ` · ${folder.variantCount} choices` : ""),
     ]),
     folder.hasSaveDefault
-      ? el("span", { class: "de-opt-tag de-opt-tag--saved", title: "This folder offers a save-default action" }, ["default"])
+      ? el("span", { class: "de-opt-tag de-opt-tag--saved", title: "Values here can be saved as defaults" }, ["default"])
       : null,
   ])
 
@@ -522,8 +516,7 @@ export function controlsTab(editor: EditorContext): LeftPanelTab {
       body.append(
         emptyState(
           "No controls affect this element",
-          "Bindings come from this project’s config. An unbound control still works; this " +
-            "editor just cannot say what it changes.",
+          "Controls still work. Map them in your config to see what each one affects.",
           el(
             "button",
             { class: "de-button", type: "button", onclick: () => setScope("all") },
@@ -544,9 +537,7 @@ export function controlsTab(editor: EditorContext): LeftPanelTab {
       // itself. An instruction describing work the product does not need is how
       // a reader learns to stop trusting the copy.
       note(
-        `${inventory.controlCount} controls, ${inventory.variantCount} choices. Edits apply ` +
-          `to the running app immediately, and only bindings this project declares can say ` +
-          `which elements a control affects.`
+        `${inventory.controlCount} controls, ${inventory.variantCount} choices. Changes apply to the running app instantly.`
       ),
       ...(sections.length
         ? sections.map((section) => folderNode(section, editor, 0, query.trim().length > 0))

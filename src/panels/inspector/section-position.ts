@@ -214,8 +214,7 @@ function multiControls(multi: MultiAlignment, invalidate: () => void): HTMLEleme
     return group(
       "Alignment",
       el("div", { class: "de-hint" }, [
-        `The ${multi.count} selected elements sit in different containers, so there is no ` +
-          `layout that places them relative to each other. Pick elements that share a parent.`,
+        `Only elements with the same parent can be aligned together.`,
       ])
     )
   }
@@ -251,8 +250,7 @@ function multiControls(multi: MultiAlignment, invalidate: () => void): HTMLEleme
     "Alignment",
     multiAlignTracks(multi, invalidate),
     el("div", { class: "de-hint" }, [
-      `${perElement} place each of the ${multi.count} selected elements inside ` +
-        `<${multi.target.tagName}>; ${wholeSet} move the whole set together.`,
+      `${perElement} align each element; ${wholeSet} move the group.`,
     ])
   )
 }
@@ -426,7 +424,7 @@ function controls(context: SectionContext): Array<HTMLElement | null> {
       "Alignment",
       alignTracks(alignment, context.invalidate),
       el("div", { class: "de-hint" }, [
-        `Aligns every child of <${alignment.target.tagName}> — that is what flex alignment means.`,
+        `Aligns all children of <${alignment.target.tagName}>.`,
       ])
     ),
     arrangementGroup(context, alignment),

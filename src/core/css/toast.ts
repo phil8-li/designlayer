@@ -47,24 +47,11 @@ import { sonnerCss } from "./sonner-css"
 const LAYER = 2147483646
 
 /**
- * A signal colour tinted into the card's own ground — OPAQUE, and that is the
- * whole point of the helper.
- *
- * The first version mixed into `transparent`, which is how the rest of this
- * chrome tints a surface, and it is wrong HERE for a reason that does not apply
- * anywhere else in the package: every other tinted surface sits on a panel this
- * editor painted, and a toast sits on whatever app is underneath it. A
- * translucent error card is therefore legible or not depending on the page
- * being edited — measured at 4.6:1 over the dark chrome and collapsing to
- * roughly 1.5:1 over a white app, for the same declaration.
- *
- * Mixed into `bgRaised`, the ground the plain card already uses, the error text
- * measures 4.62:1 in the dark theme and 4.62:1 in the light one, because the
- * token flips with the theme and the ground flips with it. Same number both
- * ways, and it no longer depends on the host.
+ * `shadow.popover` without its second layer, the `0 0 0 0.5px` ring. The ring
+ * is an outline drawn as a shadow, and the toast has none: the cast alone lifts
+ * it off the page.
  */
-const tint = (color: string, percent: number) =>
-  `color-mix(in srgb, ${color} ${percent}%, ${t.color.bgRaised})`
+const CAST = t.shadow.popover.slice(0, t.shadow.popover.lastIndexOf(", 0 0 0"))
 
 const overrides = `
 /*
@@ -169,22 +156,6 @@ const overrides = `
   --normal-border: ${t.color.border};
   --normal-border-hover: ${t.color.borderStrong};
   --normal-text: ${t.color.text};
-
-  --error-bg: ${tint(t.color.danger, 16)};
-  --error-border: ${tint(t.color.danger, 38)};
-  --error-text: ${t.color.danger};
-
-  --success-bg: ${tint(t.color.success, 16)};
-  --success-border: ${tint(t.color.success, 38)};
-  --success-text: ${t.color.success};
-
-  --info-bg: ${tint(t.color.accent, 16)};
-  --info-border: ${tint(t.color.accent, 38)};
-  --info-text: ${t.color.accent};
-
-  --warning-bg: ${tint(t.color.lintWarning, 16)};
-  --warning-border: ${tint(t.color.lintWarning, 38)};
-  --warning-text: ${t.color.lintWarning};
 }
 
 /*
@@ -193,9 +164,10 @@ const overrides = `
  * the inspector rows it appears beside, not the marketing site it was designed
  * on.
  *
- * A rich-coloured toast keeps the tinted background the block above gives it;
- * the cast and the geometry are shared, which is why they are set here once
- * rather than per type.
+ * NO OUTLINE AND NO TINT. Every kind is the same plain card; the cast alone
+ * lifts it off the app, and the glyph alone says what kind it is. The right
+ * padding is the small step because the close button sits on that edge and
+ * carries its own hit area.
  *
  * THE LEADING IS A ROLE NOW, AND THE DESCRIPTION'S WAS UNDER THE FLOOR.
  *
@@ -213,11 +185,12 @@ const overrides = `
  * reader reads as a sentence rather than as a label.
  */
 [data-sonner-toast][data-styled='true'] {
-  padding: ${t.space.md}px ${t.space.lg}px;
+  padding: ${t.space.md}px ${t.space.sm}px ${t.space.md}px ${t.space.lg}px;
   gap: ${t.space.md}px;
+  border: none;
   font-size: ${t.type.body};
   line-height: ${t.type.leadingRow};
-  box-shadow: ${t.shadow.popover};
+  box-shadow: ${CAST};
 }
 
 [data-sonner-toast][data-styled='true'] [data-title] {
@@ -242,28 +215,9 @@ const overrides = `
 }
 
 /*
- * The WORDS go back to the chrome's own ink; the GLYPH keeps the signal.
- *
- * \`richColors\` paints the whole card in the signal colour — background, border
- * and text together. On the tinted ground above, that text measures 4.62:1:
- * legible, and only just, for the one message in the editor a reader actually
- * has to act on. The chrome's own ink on the same ground measures 10.7:1 in the
- * dark theme and 14.8:1 in the light one.
- *
- * So the tint and the border carry the severity — which is what makes the card
- * readable as an error at a glance, before any word is — and the glyph carries
- * it at full strength, where a 14px mark has no contrast threshold to meet in
- * the first place because it is not text. Nothing is given up by this except
- * coloured prose.
- *
- * Spelled to beat \`[data-rich-colors='true'][data-sonner-toast][data-type=…]\`
- * (0,3,0) in Sonner's sheet, which the type selector here matches at (0,3,0)
- * and wins on order, exactly as the header describes.
+ * The glyph is the whole of the severity signal, in the signal colour; the
+ * words stay in the chrome's own ink.
  */
-[data-sonner-toast][data-styled='true'][data-type] {
-  color: ${t.color.text};
-}
-
 [data-sonner-toast][data-styled='true'] [data-icon] {
   height: 14px;
   width: 14px;
@@ -278,26 +232,23 @@ const overrides = `
 }
 
 /*
- * The action and cancel buttons, which the editor does not use yet but which
- * \`toast()\` can be handed at any call site. Left looking like the chrome's own
- * small buttons so that the first one added does not arrive wearing Sonner's
- * black pill.
+ * The action ("Undo"): a text button in the accent ink, no fill. A filled pill
+ * on a card this small outweighs the sentence it belongs to. \`accentText\` is
+ * the accent rung measured for text on a panel ground.
  */
 [data-sonner-toast][data-styled='true'] [data-button] {
   height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.md}px;
+  margin: 0;
   border-radius: ${t.radius.sm};
-  font-size: ${t.type.caption};
+  font-size: ${t.type.body};
   font-weight: ${t.type.weightValue};
-  /* The TEXT rung of the accent fill. This button carries a word, and the glyph
-     rung is 3.53:1 under one — the split \`tokens.ts\` documents above
-     \`RAIL_FILL\`. \`accentSurfaceText\` is 5.28:1, and the hover follows it
-     rather than stepping back onto the glyph ramp. */
-  background: ${t.color.accentSurfaceText};
-  color: ${t.color.onAccent};
+  background: transparent;
+  color: ${t.color.accentText};
+  transition: background ${t.duration.fast} ${t.ease};
 }
 [data-sonner-toast][data-styled='true'] [data-button]:hover {
-  background: ${t.color.accentSurfaceTextHover};
+  background: ${t.color.bgHover};
 }
 [data-sonner-toast][data-styled='true'] [data-cancel] {
   background: ${t.color.field};
@@ -305,6 +256,34 @@ const overrides = `
 }
 [data-sonner-toast][data-styled='true'] [data-cancel]:hover {
   background: ${t.color.fieldHover};
+}
+
+/*
+ * The close button, moved from Sonner's floating corner badge into the card as
+ * its trailing control: after the action, a quiet ✕ that only takes a plate on
+ * hover.
+ *
+ * Sonner renders it FIRST in the card's DOM, so \`order\` is what puts it last in
+ * the flex row. Spelled at (0,5,0) to beat both of the vendor's themed rules for
+ * it — the dark one is (0,4,0), and both \`:hover\` rules are (0,5,0) and lose
+ * on order.
+ */
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  order: 1;
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  height: ${t.size.rowHeight}px;
+  width: ${t.size.rowHeight}px;
+  border: none;
+  border-radius: ${t.radius.sm};
+  background: transparent;
+  color: ${t.color.textMuted};
+  transition: background ${t.duration.fast} ${t.ease}, color ${t.duration.fast} ${t.ease};
+}
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  background: ${t.color.bgHover};
+  color: ${t.color.text};
 }
 
 /*
@@ -323,16 +302,15 @@ const overrides = `
  * focusable thing in this chrome wears, and it is legible on both grounds.
  */
 [data-sonner-toast]:focus-visible {
-  box-shadow: ${t.shadow.popover}, 0 0 0 2px ${t.color.accent};
+  box-shadow: ${CAST}, 0 0 0 2px ${t.color.accent};
 }
 
 /*
  * THE THREE INTERACTION STATES THIS FILE USED TO STOP SHORT OF.
  *
- * Everything above re-inks the toast at REST: the card, the four rich-colour
- * triples, the action buttons, the card's own focus ring. Sonner also styles
- * what happens when you point at the close button and when you tab onto either
- * button, and those three rules were left wearing the vendor's own primitives —
+ * Everything above re-inks the toast at REST: the card, the glyphs, the
+ * buttons, the card's own focus ring. Sonner also styles what happens when you
+ * tab onto either button, and those rules were left wearing the vendor's own primitives —
  * a light-theme palette hardcoded in the bundled sheet, which is the one thing
  * overriding \`--normal-*\` cannot reach.
  *
@@ -345,29 +323,6 @@ const overrides = `
  * including — three rules up — the toast card itself, so a keyboard user now
  * meets ONE focus design whether they are on the card, its action, or its
  * dismiss.
- *
- * ## AND THE CLOSE BUTTON'S HOVER IS DELIBERATELY NOT TOUCHED
- *
- * It looked like the same bug and it is not, which is worth a paragraph so that
- * the next audit does not re-find it. \`[data-close-button]:hover\` does take
- * Sonner's \`--gray2\` — \`hsl(0, 0%, 97.3%)\`, a near-white the vendor declares
- * in BOTH themes — and the ✕ on it does take \`--normal-text\`, which this file
- * points at \`color.text\`. White ink on a near-white plate is 1.06:1, so on
- * paper it reads as a defect and in dark it reads as a disaster.
- *
- * Neither happens, because the two halves cannot take those values at the same
- * time. \`--normal-text\` is white only in the DARK theme, and in the dark theme
- * Sonner ships a second rule —
- * \`[data-sonner-toaster][data-sonner-theme='dark'] … [data-close-button]:hover\`
- * — that re-points the plate at \`--normal-bg-hover\`, which this file already
- * themes. On paper \`--normal-text\` is \`#1a1a1a\` and near-white is the correct
- * ground for it. Measured on the rendered card: **20.97:1** in dark and
- * **16.39:1** in light.
- *
- * An override here would have replaced both with the chrome's own hover step
- * and measured 7.82:1 and 15.44:1 — still far past the floor, still a change in
- * the wrong direction, and bought with a rule that has to be kept in agreement
- * with a vendor file forever. So: not a finding.
  */
 [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible,
 [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {

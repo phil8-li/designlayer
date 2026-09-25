@@ -400,7 +400,7 @@ function shortcutsPanel(): ShortcutsPanel {
       (tab) => tab.id.startsWith(prefix)
     )
     const tab = tabs[Number(slot[2]) - 1]
-    return tab ? `${shortcut.label} (${tab.textContent?.trim()})` : shortcut.label
+    return tab ? `${shortcut.label.split(":")[0]}: ${tab.textContent?.trim()}` : shortcut.label
   }
 
   const build = (): HTMLDialogElement => {
@@ -462,7 +462,7 @@ function shortcutsPanel(): ShortcutsPanel {
           el("p", { class: "de-shortcut-note" }, [
             // The whole contract in one sentence, where the person who is about
             // to press a key will read it.
-            `Figma's keys. They work while the editor is on screen — collapse it to the disc and the page gets its keyboard back, except ${isMac() ? "⌘." : "Ctrl+."}, which brings the editor home. Esc is the quick way out: it closes what is open, then deselects, then collapses.`,
+            `Figma’s keys. When the editor is collapsed, keys go to your page — except ${isMac() ? "⌘." : "Ctrl+."}, which brings it back. Esc closes, then deselects, then collapses.`,
           ]),
           close,
         ]),

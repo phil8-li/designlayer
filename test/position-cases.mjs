@@ -317,7 +317,7 @@ check("a parent that is not flex offers the way in instead of six dead marks", (
 })
 
 check("the hint says out loud that alignment acts on every child", () => {
-  assert.match(scene().text(), /Aligns every child of <div>/)
+  assert.match(scene().text(), /Aligns all children of <div>/)
 })
 
 /* ---------- distribute ---------- */

@@ -163,8 +163,8 @@ const label = (name) => context.slots.toolbar.querySelector(`[aria-label="${name
 
 await check("the toolbar draws the mode switch, both panel toggles and time travel", () => {
   assert.ok(context.slots.toolbar.querySelector(".de-button--mode"))
-  assert.ok(label("Toggle layers panel"))
-  assert.ok(label("Toggle inspector"))
+  assert.ok(label("Show or hide left panel"))
+  assert.ok(label("Show or hide inspector"))
   assert.ok(label("Undo"))
   assert.ok(label("Redo"))
   // The commit left the bar, and so did the indicator that replaced it.
@@ -510,8 +510,8 @@ const toggle = (name) => context.slots.toolbar.querySelector(`[aria-label="${nam
 
 await check("a toolbar toggle actually shows and hides the panel it names", () => {
   for (const [name, side, inset] of [
-    ["Toggle layers panel", "left", "--de-left"],
-    ["Toggle inspector", "right", "--de-right"],
+    ["Show or hide left panel", "left", "--de-left"],
+    ["Show or hide inspector", "right", "--de-right"],
   ]) {
     editorModule.setState({ layersOpen: true, inspectorOpen: true })
     assert.equal(panel(side).hidden, false, `${side} panel did not start open`)
@@ -526,8 +526,8 @@ await check("a toolbar toggle actually shows and hides the panel it names", () =
 
 await check("the toggle's pressed state and the panel never disagree", () => {
   for (const [name, side, flag] of [
-    ["Toggle layers panel", "left", "layersOpen"],
-    ["Toggle inspector", "right", "inspectorOpen"],
+    ["Show or hide left panel", "left", "layersOpen"],
+    ["Show or hide inspector", "right", "inspectorOpen"],
   ]) {
     for (const open of [false, true, false]) {
       // Driven from the store rather than the button, because the shell writes
@@ -825,7 +825,7 @@ await check("cmd+z is claimed from the page and the vendor's guard", () => {
  * builds on, and the marker that scopes it — is asserted on a live element.
  */
 await check("a pressed control draws its glyph heavier than an unpressed one", () => {
-  const toggle = context.slots.toolbar.querySelector('[aria-label="Toggle layers panel"]')
+  const toggle = context.slots.toolbar.querySelector('[aria-label="Show or hide left panel"]')
   const glyph = toggle.querySelector("svg")
   assert.ok(glyph.hasAttribute("data-de-glyph"), "the toggle's glyph is unmarked, so the rule misses it")
   assert.ok(
@@ -1376,7 +1376,7 @@ await check("the bar's controls come back in the state they went away in", () =>
   editorModule.setState({ inspectorOpen: false })
 
   const pressed = () =>
-    ["Inspect", "Notes", "Toggle layers panel", "Toggle inspector"].map(
+    ["Inspect", "Notes", "Show or hide left panel", "Show or hide inspector"].map(
       (name) => `${name}=${label(name)?.getAttribute("aria-pressed")}`
     )
   const flags = () => {
@@ -1388,7 +1388,7 @@ await check("the bar's controls come back in the state they went away in", () =>
   const before = { pressed: pressed(), flags: flags() }
   assert.deepEqual(
     before.pressed,
-    ["Inspect=false", "Notes=true", "Toggle layers panel=true", "Toggle inspector=false"],
+    ["Inspect=false", "Notes=true", "Show or hide left panel=true", "Show or hide inspector=false"],
     "the bar does not report the state it was just put into, so the trip below proves nothing"
   )
 

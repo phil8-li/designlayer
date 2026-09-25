@@ -40,7 +40,8 @@ import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { swatch, toHex } from "./color"
-import { miniButton, numberField, section, selectField } from "./field"
+import { miniButton, numberField, selectField } from "./field"
+import { styledSection } from "../../options/panel"
 import { hasBorder, hasOutline, hasRing, svgTarget, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -124,7 +125,9 @@ export const strokeSection: InspectorSection = (context) => {
      *
      * The three edges above stay, because none of them is the border.
      */
-    return section(
+    return styledSection(
+      context,
+      "stroke",
       "Stroke",
       el("div", { class: "de-stack" }, [
         el("div", { class: "de-hint" }, ["No stroke."]),
@@ -252,5 +255,5 @@ export const strokeSection: InspectorSection = (context) => {
     ...edges,
   ])
 
-  return section("Stroke", body, add)
+  return styledSection(context, "stroke", "Stroke", body, add)
 }

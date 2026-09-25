@@ -2,8 +2,10 @@
  * Two surfaces that used to be one, and are styled together because the rows
  * still are.
  *
- * `.de-option*` is the right panel's saved-styles list — this editor's own
- * per-element snapshots, beside the selection every one of their verbs needs.
+ * `.de-option*` and `.de-style-*` are the saved styles inside the right
+ * panel's Typography, Fill, Stroke, Effects, Appearance and Layout sections —
+ * this editor's own per-element snapshots, beside the selection every one of
+ * their verbs needs.
  * `.de-opt-*` is the left panel's Controls pane: the app's own tunables, the
  * folders they sit in, and the filter and scope switch over them.
  *
@@ -134,6 +136,47 @@ export const optionsCss = `/* ---------- options / variants ---------- */
  */
 .de-option-delete:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 .de-option-delete:focus-visible { outline: 2px solid ${t.color.accent}; outline-offset: 1px; }
+
+/* ---------- scoped styles, inside a design section ---------- */
+/* The header strip when a section carries both the styles toggle and a \`+\`:
+   \`section()\` takes one actions element, so the pair shares this wrapper. Same
+   gap as \`.de-section-actions\` so the two 24px hit pads do not overlap. */
+.de-style-actions { display: inline-flex; align-items: center; gap: ${t.space.md}px; }
+/* The toggle is accent-inked while the element matches a style, so a closed
+   section still says a style is in play from its header. */
+.de-style-toggle--applied { color: ${t.color.accent}; }
+.de-style-toggle[aria-expanded="true"] { background: ${t.color.bgHover}; color: ${t.color.text}; }
+.de-style-block { display: flex; flex-direction: column; gap: ${t.space.sm}px; }
+.de-style-block[hidden],
+.de-style-panel[hidden],
+.de-style-applied[hidden] { display: none; }
+/* The applied style, always visible while the panel is shut: the glyph and the
+   name, with the kind trailing in the secondary ink. */
+.de-style-applied {
+  display: flex; align-items: center; gap: ${t.space.md}px;
+  height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px;
+  border-radius: ${t.radius.md};
+  background: ${t.color.bgSunken}; color: ${t.color.text};
+}
+.de-style-applied > svg,
+.de-option > svg { flex: none; color: ${t.color.textDim}; }
+.de-style-applied-kind { flex: none; color: ${t.color.textDim}; font-size: ${t.type.body}; }
+.de-style-panel {
+  display: flex; flex-direction: column; gap: ${t.space.sm}px;
+  padding-bottom: ${t.space.md}px;
+  border-bottom: 1px solid ${t.color.border};
+}
+.de-style-list { display: flex; flex-direction: column; }
+.de-style-empty {
+  margin: 0; color: ${t.color.textDim};
+  font-size: ${t.type.body}; line-height: ${t.type.leadingRow};
+}
+/* Update is \`aria-disabled\` while the style already matches: reachable and
+   announced, drawn as unavailable, with no hover promising a press. */
+.de-option-rename[aria-disabled="true"],
+.de-option-rename[aria-disabled="true"]:hover {
+  background: transparent; color: ${t.color.textDisabled}; cursor: default;
+}
 
 /* ---------- the left panel's Controls pane ---------- */
 /*

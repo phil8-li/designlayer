@@ -484,7 +484,7 @@ check("the section says plainly that it writes classes, not the prop", () => {
   renderSection()
   const note = host.querySelector(".de-variant-note")
   assert.ok(note)
-  assert.match(note.textContent, /not its prop/)
+  assert.match(note.textContent, /writes its classes, not the/)
 })
 
 /*

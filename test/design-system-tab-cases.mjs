@@ -1152,10 +1152,10 @@ await check("a refused add says in plain words that the site is private", async 
    * These are the whole of what survived the paragraph, so they are what the
    * remaining sentence has to carry.
    */
-  assert.match(seen, /window opens/, `nothing says a sign-in window will open: ${seen}`)
+  assert.match(seen, /new window/, `nothing says a sign-in window will open: ${seen}`)
   assert.match(
     seen,
-    /Nothing is typed into the editor/,
+    /Your password stays there/,
     `the dialog does not say the credential stays out of it: ${seen}`
   )
 
@@ -1562,12 +1562,12 @@ await check("a 403 says the editor was turned away, not that it should sign in",
 
   const seen = visibleWords()
   assert.ok(
-    seen.startsWith("guarded.example.com would not let the editor in"),
+    seen.startsWith("guarded.example.com denied access"),
     `a 403 was reported as something else: ${seen}`
   )
   assert.match(
     seen,
-    /what the account is allowed to see/,
+    /the account needs permission/,
     `nothing distinguishes a refusal from a missing sign-in: ${seen}`
   )
   dismissSignIn()
@@ -1883,7 +1883,7 @@ await check("a proxied Storybook offers the provider's own sign-in, not a token"
     seen.startsWith("storybook-3f81c0a2-ue.example.net needs you to sign in"),
     `the heading is not a plain sentence about the site: ${seen}`
   )
-  assert.match(seen, /window opens/)
+  assert.match(seen, /new window/)
   /*
    * The same list the plain-words case enforces, and for the same reason. Note
    * what is NOT in it: "I have an access token" is the fold's own label, and it
@@ -2104,7 +2104,7 @@ await check("a wait that never answers ends by itself and hands the action back"
   assert.ok(visible(said), "the wait ended with nothing on screen, which is where it started")
   assert.match(
     said.textContent,
-    /stopped waiting/i,
+    /timed out/i,
     `the deadline does not say what happened: ${said.textContent}`
   )
   // Re-offered, not merely explained: a dead end with a sentence in it is still
@@ -2240,7 +2240,7 @@ await check("closing during a sign-in does not leave the next dialog waiting on 
   // launch the same Chrome profile.
   assert.match(
     visibleWords(),
-    new RegExp(`sign-in for ${new URL(WALL.origin).host} is still running`),
+    new RegExp(`sign-in for ${new URL(WALL.origin).host} first`),
     `the dialog does not say what is in the way: ${visibleWords()}`
   )
   const cancel = one("signin-cancel")

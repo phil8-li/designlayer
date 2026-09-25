@@ -278,6 +278,32 @@ one undo step, one row in the Changes tab, and — for the width and height a
 resize settles on — a queued operation "Apply to code" can write. A gesture that
 moved and resized at once is a single step, not three.
 
+### As a Dock app on a Mac
+
+`desktop/mac` installs DesignLayer as a Mac app, which is a nicer front door
+than a terminal for the way this is actually used: opened in the morning, left
+running, switched between apps all day.
+
+```sh
+node desktop/mac/install.mjs              # install and open it
+node desktop/mac/install.mjs --status     # LaunchAgent, health, start screen, app
+node desktop/mac/install.mjs --uninstall --yes
+```
+
+Nothing is compiled and nothing is signed, which is the constraint it is built
+around — a managed Mac will not run an ad-hoc signed binary, and this needs no
+binary at all. A user LaunchAgent starts a loopback-only desk server at login,
+which keeps the start screen up and restarts it if it dies; the window is a
+Chrome-installed web app in its own profile, showing a tab strip of Home, your
+open editors, and an offer for each other editor running on the machine. An
+existing start screen is adopted rather than killed, and `--uninstall` stops
+only the Chrome whose command line names this app's own profile, never your
+browser.
+
+`desktop/mac/README.md` has the whole thing, including the policy table it was
+designed against. The suite is `desktop/mac/test/desk-cases.mjs`; it is in
+`npm test` and skips loudly off macOS.
+
 ## Angular hosts
 
 An Angular app is a first-class host. Nothing has to be configured — not the
@@ -775,24 +801,25 @@ a drag.
 ## Handing a change to your coding agent
 
 The **Changes** tab holds everything a session produced — the notes you left and
-the edits you made — and finishes them in two groups, because the two halves
-finish differently.
+the edits you made — as one list in the order they happened. Notes and edits
+share one system:
 
-**Apply to code** writes the half the codemod can spell, straight into your
-files: a hundred milliseconds, and exact. **Send to agent** delivers the rest to
-a coding agent that is already running, with no paste, and with the written half
-already in the brief as context. Each button sits under its own rows, so a
-session that only moved some padding never thinks about an agent at all.
+- **One numbering.** Item 4 is 4 on its row, on its pin on the canvas, and in
+  the brief. Edits get pins too, drawn as squares beside the notes' discs.
+- **One undo timeline.** Pinning, rewriting and deleting a note are Cmd+Z steps
+  beside every style edit, so Undo always takes back the newest thing you did.
+- **One send button.** It writes everything the codemod can spell straight into
+  your files first, then hands whatever is left — notes, and edits no commit can
+  write — to a coding agent that is already running, with the written half in
+  the brief as context. A session that only moved some padding finishes at the
+  first stage; the button reads **Apply to code** then, and **Send to agent**
+  once something needs the agent.
+- **One copy.** **Copy** in the tab and the copy shortcut write the same brief.
+  It is not a fallback: the editor cannot see whether an agent is attached, so
+  the paste path has to stay a peer.
 
-There is also **Copy**, which writes the same brief to the clipboard. It is not
-a fallback and does not go away: the editor cannot see whether an agent is
-attached, so the paste path has to stay a peer.
-
-Which half a change lands in is never the designer's question to answer. It used
-to be — "Send to agent" and "Apply to code" sat side by side, and which one
-finished your change depended on whether the writer happened to have a word for
-the CSS property you touched. Recolouring went one way, dragging went the other,
-and nothing on screen said so.
+Which half a change lands in is never the designer's question to answer: every
+edit row says whether it is Ready, In your files, or Needs the agent.
 
 ### How it works
 

@@ -252,7 +252,7 @@ await check("the panels mount at the two widths the stylesheet has always had", 
 await check("each seam is a focusable separator that names the panel it resizes", () => {
   mount()
   for (const [side, label, now] of [
-    ["left", "Resize layers panel", tokens.size.panelWidth],
+    ["left", "Resize left panel", tokens.size.panelWidth],
     ["right", "Resize inspector", tokens.size.inspectorWidth],
   ]) {
     const grip = seam(side)

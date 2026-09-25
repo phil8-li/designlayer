@@ -36,10 +36,10 @@ export function copyLibrarySnippet(editor: EditorContext, snippet: string, name:
   try {
     void navigator.clipboard
       .writeText(snippet)
-      .catch(() => editor.toast("The browser refused the clipboard", "error"))
+      .catch(() => editor.toast("Could not copy — clipboard access was blocked", "error"))
   } catch {
     refused = true
   }
-  if (refused) editor.toast("The browser refused the clipboard", "error")
+  if (refused) editor.toast("Could not copy — clipboard access was blocked", "error")
   else editor.toast(`Copied the ${name} snippet`)
 }

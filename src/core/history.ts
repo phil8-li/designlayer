@@ -42,13 +42,14 @@ function notify(): void {
  * history suite fails on exactly that, so the structure is held by a test
  * rather than by a guard no test can trip.
  */
-export function record(step: HistoryStep): void {
+export function record(step: HistoryStep): HistoryStep {
   past.push(step)
   // A fresh edit after an undo forks the timeline, and the branch that was
   // undone is gone. Keeping it would make Redo re-apply a change to state it
   // was never computed against.
   future.length = 0
   notify()
+  return step
 }
 
 export function canUndo(): boolean {
@@ -77,6 +78,21 @@ export function redo(): string | null {
   past.push(step)
   notify()
   return step.label
+}
+
+/**
+ * Undo ONE particular step, from a surface that offered it — a toast's Undo.
+ *
+ * Only when it is still the newest step. A toast is up for seconds and the
+ * timeline can move under it; reverting a step from the middle would leave the
+ * steps above it replaying against state they were never computed against.
+ * When something newer has landed, the step stays where it is and Cmd+Z walks
+ * back to it in order. Returns whether it was undone.
+ */
+export function undoStep(step: HistoryStep): boolean {
+  if (past[past.length - 1] !== step) return false
+  undo()
+  return true
 }
 
 export function onHistoryChange(listener: () => void): () => void {

@@ -99,7 +99,7 @@ interface Spec {
 
 const SPECS: Record<PanelSide, Spec> = {
   left: {
-    label: "Resize layers panel",
+    label: "Resize left panel",
     defaultSize: tokens.size.panelWidth,
     minSize: tokens.size.panelMinWidth,
     maxShare: tokens.size.panelMaxShare,

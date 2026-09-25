@@ -778,7 +778,7 @@ for (const [name, arrange, expected] of [
   [
     "this is the only app running",
     () => (server.apps = { apps: [] }),
-    /Start another with designlayer in its project folder/,
+    /Run designlayer in another project/,
   ],
   [
     "the server could not reach the start screen",
@@ -788,7 +788,7 @@ for (const [name, arrange, expected] of [
   [
     "the request never arrived at all",
     () => (server.appsUnreachable = true),
-    /Reload the page to try again/,
+    /Reload to try again/,
   ],
 ]) {
   await check(`${name}: the menu says so, and says what to do about it`, async () => {
@@ -831,8 +831,8 @@ await check("with only one app running it says how to get a second one listed", 
   const text = ui.note().textContent
   assert.doesNotMatch(text, /nothing to switch between/, "the old claim came back")
   assert.doesNotMatch(text, /without the app chooser/, "the menu denied its own existence again")
-  assert.match(text, /Only this app is running\./)
-  assert.match(text, /designlayer in its project folder/)
+  assert.match(text, /No other apps running\./)
+  assert.match(text, /designlayer in another project/)
   ui.destroy()
   server.reset()
 })
@@ -847,7 +847,7 @@ await check("a session with a start screen is offered that too, not instead", as
   server.apps = { apps: [] }
   const ui = await opened(mount(named))
   const text = ui.note().textContent
-  assert.match(text, /designlayer in its project folder/)
+  assert.match(text, /designlayer in another project/)
   assert.match(text, /http:\/\/127\.0\.0\.1:3455\//)
   ui.destroy()
   server.reset()
@@ -1307,7 +1307,7 @@ await check("a dropped POST over a live proxy is reported, not narrated as a han
   // apps (502)` was the old one: a number the reader cannot act on, standing in
   // for the sentence that would have told them how.
   assert.match(ui.note().textContent, /^Could not switch to Docs site\./)
-  assert.match(ui.note().textContent, /try again, or start the app from http:\/\/127\.0\.0\.1:3455\//)
+  assert.match(ui.note().textContent, /Try again, or start it from http:\/\/127\.0\.0\.1:3455\//)
   assert.doesNotMatch(ui.note().textContent, /\(\d{3}\)/, "a raw HTTP status reached the reader")
 
   // And the card is dismissible, because nothing is happening to this page.
@@ -1901,7 +1901,7 @@ await check("a row whose editor died between the refresh and the click goes nowh
   // And the list went back for a fresh answer rather than leaving a row the
   // reader has just been told is dead sitting there to be pressed again.
   assert.deepEqual(ui.rows(), [], "the stale row survived the probe that killed it")
-  assert.match(ui.note().textContent, /Only this app is running/)
+  assert.match(ui.note().textContent, /No other apps running/)
   ui.destroy()
   server.reset()
 })
@@ -2137,7 +2137,7 @@ await (async () => {
     // opened at all. `http://127.0.0.1:9100 · source folder not found` said the
     // same thing with a url in front of it that no reader could act on.
     assert.equal(dead.querySelector(".de-app-menu-where").textContent, "No project folder")
-    assert.match(dead.getAttribute("aria-label"), /could not find its project folder/)
+    assert.match(dead.getAttribute("aria-label"), /project folder not found/)
   })
 
   await check("the row says it cannot work; the note under the list says what can", () => {
@@ -2147,7 +2147,7 @@ await (async () => {
     // belongs to the process that can open one.
     const note = ui.note()
     assert.ok(note, "no way out was offered at all")
-    assert.match(note.textContent, /start screen/)
+    assert.match(note.textContent, /enter its path at/)
     assert.ok(readsAsASentence(note.textContent))
   })
 
@@ -2190,8 +2190,8 @@ await (async () => {
     const bare = await opened(mount(ghost))
     const note = bare.note()
     assert.ok(note, "an unopenable row was left with no way out at all")
-    assert.match(note.textContent, /running designlayer from that folder/)
-    assert.doesNotMatch(note.textContent, /start screen/, "it offered a screen this session has not got")
+    assert.match(note.textContent, /run designlayer in that folder/)
+    assert.doesNotMatch(note.textContent, /enter its path at/, "it offered a screen this session has not got")
     bare.destroy()
   })
 

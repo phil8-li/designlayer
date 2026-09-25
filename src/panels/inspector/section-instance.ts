@@ -339,7 +339,7 @@ function nativeBoolean(element: Element, name: string): boolean {
 }
 
 const NO_ATTRIBUTE =
-  "This element does not carry the attribute, and the editor cannot add one — the source writer has no operation for a component prop."
+  "Not set on this element, and cannot be added from here."
 
 /**
  * The element a component's inputs are actually ON, which is usually not the
@@ -479,7 +479,7 @@ function statedRow(prop: DocumentedProp): HTMLElement {
   const text = prop.values?.length ? prop.values.join(" · ") : prop.type || "documented"
   return propertyRow(
     prop.name,
-    statedValue(text, `${prop.name} is documented by the library; there is no attribute to set.`)
+    statedValue(text, `Documented only. Nothing to set on this element.`)
   )
 }
 
@@ -666,7 +666,7 @@ export const instanceSection: InspectorSection = (context) => {
   if (declaration) {
     body.push(
       el("div", { class: "de-variant-note" }, [
-        `Writes the classes ${declaration.name || "this component"} gives the option, not its prop.`,
+        `Picking an option writes its classes, not the ${declaration.name || "component"} prop.`,
       ])
     )
   }
@@ -690,14 +690,12 @@ export const instanceSection: InspectorSection = (context) => {
     body.push(
       el("div", { class: "de-variant-note" }, [
         previewable
-          ? `${match.libraryName}'s props set the attribute${
-              hostTag ? ` on ${hostTag}` : ""
-            } and go to Changes; they do not reach the file.${
+          ? `Props preview${hostTag ? ` on ${hostTag}` : ""} and go to Changes. They are not written to the file.${
               stated ? " The rest are documented only." : ""
             }`
-          : `${match.libraryName} documents these props. Nothing here can write them — ${
-              hostTag ? `${hostTag} does not` : "this element does not"
-            } carry them as attributes.`,
+          : `Documented by ${match.libraryName}. Read-only — ${
+              hostTag ? `${hostTag} has` : "this element has"
+            } no matching attributes.`,
       ])
     )
   }

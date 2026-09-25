@@ -392,15 +392,13 @@ export function readInventory(): LevaInventory {
           available: false,
           title: "No app controls on this screen",
           reason:
-            "The control panel this project configures is not on this page. Open the app " +
-            "surface that mounts it — this list updates on its own.",
+            "Open the screen that shows your control panel. This list updates automatically.",
         }
       : {
           available: false,
           title: "No app controls",
           reason:
-            "This project has not connected a control panel. Add one under controls in " +
-            "designlayer.config.mjs, then reload the app.",
+            "Add a control panel under controls in designlayer.config.mjs, then reload.",
         }
   }
   try {
@@ -412,8 +410,7 @@ export function readInventory(): LevaInventory {
         available: false,
         title: "No app controls yet",
         reason:
-          "The control panel is loaded but has registered no controls yet. Open the app " +
-          "screen that owns them — this list updates on its own.",
+          "Open the screen that fills your control panel. This list updates automatically.",
       }
     }
     return { available: true, ...tree }
@@ -423,8 +420,7 @@ export function readInventory(): LevaInventory {
       available: false,
       title: "The control panel could not be read",
       reason:
-        "This page’s control panel could not be read. Reload the page, then open the " +
-        "surface that owns the controls.",
+        "Reload the page, then open the screen with the controls.",
     }
   }
 }

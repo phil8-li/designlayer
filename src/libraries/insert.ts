@@ -878,7 +878,7 @@ export async function insertComponent(
 
   const markup = markupFor(component)
   if (!markup) {
-    editor.toast(`${component.name} has no tag this host can write`, "error")
+    editor.toast(`Cannot insert ${component.name} in this app`, "error")
     return
   }
 
@@ -894,7 +894,7 @@ export async function insertComponent(
     const source = await resolveElementSource(editor.bridge, reference.element)
     const componentName = source?.componentName || knownComponentName(editor, reference.element)
     if (!componentName) {
-      throw new Error("Could not tell which component writes that element")
+      throw new Error("Could not find the component that renders that element")
     }
 
     const result = await postInsert(editor.apiBase, {

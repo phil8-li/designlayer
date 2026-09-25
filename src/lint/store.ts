@@ -224,8 +224,7 @@ async function failure(response: Response): Promise<Error> {
   if (stated) return new Error(stated)
   console.warn("[designlayer] the lint route answered", response.status, response.url)
   return new Error(
-    "The editor’s own server could not answer that. " +
-      "Check the terminal running designlayer, then try again."
+    "The DesignLayer server did not respond. Check its terminal, then try again."
   )
 }
 

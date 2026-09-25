@@ -722,7 +722,7 @@ await check("SW-14 Copy writes the brief for the rows on screen, and writes it s
   // makes reading either of them worthless.
   assert.equal(copied, buildAnnotationBrief())
   assert.match(copied, /transform/, "the row is on screen and the brief does not mention it")
-  assert.match(copied, /still need writing/, "a preview-only change is the work, and must read as it")
+  assert.match(copied, /still needs writing/, "a preview-only change is the work, and must read as it")
 })
 
 // --- the ledger across a reload, and across an app switch ------------------

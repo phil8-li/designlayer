@@ -73,7 +73,6 @@ import { strokeSection } from "./section-stroke"
 import { effectsSection } from "./section-effects"
 import { typographySection } from "./section-typography"
 import { classesSection } from "./section-classes"
-import { optionsSection } from "../../options/panel"
 
 export interface SectionContext {
   editor: EditorContext
@@ -119,18 +118,10 @@ const SECTIONS: InspectorSection[] = [
   // so `section-instance.ts` merges them by name and says, per row, which of
   // them can actually be written.
   instanceSection,
-  // Third, and now the whole of what the options subsystem contributes here.
-  //
-  // It used to be two entries: the list of saved styles in this slot, and the
-  // three verbs that act on them — Save, Update, Revert — dead last, nine
-  // sections below. The split was argued on the grounds that the list is absent
-  // until something is saved, and Save is the only way anything ever gets
-  // saved, so the button could not live inside a box that did not exist yet.
-  // The fix was to stop letting the box not exist: the section is unconditional
-  // now, with the verbs as the first row of its body, and the objection
-  // dissolves with them inside it. A critical action nine sections below the
-  // fold is not grouped with anything; it is just hard to find.
-  optionsSection,
+  // Saved styles have no section of their own any more. Each is scoped to the
+  // properties one section edits — text styles in Typography, color styles in
+  // Fill, and so on — so it lives in that section's header, beside the controls
+  // it would change. `options/panel.ts` builds that control.
   responsiveSection,
   // Above layout, the way every editor stacks it: where the thing sits and how
   // it lines up with its siblings is the first question, and it is answerable
@@ -482,7 +473,7 @@ export function installInspector(editor: EditorContext): void {
     if (!selection) {
       host.append(
         el("div", { class: "de-empty" }, [
-          el("div", {}, ["Select an element on the canvas, or pick a layer, to edit it here."]),
+          el("div", {}, ["Select an element or layer to edit it."]),
           el(
             "button",
             {
@@ -504,45 +495,12 @@ export function installInspector(editor: EditorContext): void {
     }
 
     /*
-     * A third mark in the header, because the header is the only thing that
-     * says WHAT the panel below is describing.
-     *
-     * Everything under it still names one element — the tag, the source line,
-     * the fill, the frame — so a five-element selection reads as a panel that
-     * has quietly forgotten four of them unless something up here says
-     * otherwise. It is appended beside the two spans rather than folded into
-     * either: the first span is the component's name and the second is its
-     * tag, and a count spliced into either would make `textContent` read
-     * `Card4`, which is what the tab strip's own count already had to learn.
-     *
-     * Absent at one, not zeroed. "1 selected" is a badge on the ordinary case,
-     * and a number that is always on screen stops being read.
+     * No identity header over the sections. It named the component, its tag
+     * and its source line, and every one of those is already on screen where it
+     * belongs: the layer row is selected in the left panel, the canvas labels
+     * the box, and the Code tab beside Layers is where source lives. Repeating
+     * them here spent the top of the panel on a readout instead of a control.
      */
-    const extra = selections.length - 1
-    host.append(
-      el("div", { class: "de-section" }, [
-        el("div", {
-          // The header is a two-column grid, so a third child lands on an
-          // implicit second row inside a fixed-height bar and is clipped. The
-          // modifier opens a third column, and only when one is occupied.
-          class: extra > 0 ? "de-section-header de-section-header--counted" : "de-section-header",
-        }, [
-          el("span", {}, [selection.componentName]),
-          el("span", { class: "de-tagname" }, [`<${selection.tagName}>`]),
-          extra > 0
-            ? el("span", { class: "de-tagname de-selection-count" }, [
-                `+${extra} selected`,
-              ])
-            : null,
-        ]),
-        selection.source
-          ? el("div", { class: "de-section-body de-source" }, [
-              `${selection.source.filePath.split("/").slice(-2).join("/")}:${selection.source.lineNumber}`,
-            ])
-          : null,
-      ])
-    )
-
     const context: SectionContext = {
       editor,
       writer,

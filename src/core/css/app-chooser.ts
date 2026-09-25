@@ -91,19 +91,19 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  *
  * Full bleed rather than inset, because it is the panel's header and a header
  * with a margin reads as the first item in a list. The horizontal padding is
- * the workhorse step, which is the column \`.de-tabs\` and every section below
- * it already start on — so the app's name, the tab labels and the layer rows
- * all share one left edge.
+ * the \`lg\` step, the same inset \`.de-tabs\` gives its first pill, so the
+ * app's name and the selected tab's edge share one left line. At the
+ * workhorse 8 the header read as cramped against the panel edge.
  *
- * \`sectionHeader\` tall for the reason that token exists: taller than a row, so
- * the target is unmissable and the band is legible as a landmark.
+ * \`panelHeader\` tall: taller than a section header, because this band heads
+ * the whole panel rather than one section of it.
  */
 .de-app-chooser {
   flex: none;
   display: flex; align-items: center; gap: ${t.space.sm}px;
   width: 100%;
-  height: ${t.size.sectionHeader}px;
-  padding: 0 ${t.space.md}px;
+  height: ${t.size.panelHeader}px;
+  padding: 0 ${t.space.lg}px;
   border: none;
   border-bottom: 1px solid ${t.color.border};
   border-radius: 0;

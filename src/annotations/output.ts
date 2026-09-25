@@ -21,7 +21,7 @@
  * says that Agentation never has to is WHICH KIND of edit each item is. A brief
  * that mixes "the designer already did this" with "the designer wants this" is
  * how an agent ends up reverting work that is already in the file it just
- * opened, so the two kinds of edit never share a heading.
+ * opened, so every edit carries a `**Status:**` of its own.
  */
 
 import { owningComponentName } from "../core/angular"
@@ -539,6 +539,23 @@ export function outboxItems(): OutboxItem[] {
   return items.sort((a, b) => a.at - b.at)
 }
 
+/** The id a row, a pin and a hover event all name an item by. */
+export function outboxId(item: OutboxItem): string {
+  return item.type === "note" ? item.note.id : item.edit.id
+}
+
+/**
+ * ONE NUMBER PER ITEM, the same on the row, the pin and in the brief.
+ *
+ * The position in `outboxItems()`, counted from one. Notes and edits share the
+ * run: the fourth thing that happened in the session is 4 wherever it is shown,
+ * so "fix 4" means the same item to the designer reading the panel, the pin on
+ * the canvas, and the agent reading the brief.
+ */
+export function outboxNumbers(items: OutboxItem[] = outboxItems()): Map<string, number> {
+  return new Map(items.map((item, index) => [outboxId(item), index + 1]))
+}
+
 /**
  * How many rows still want something from the designer.
  *
@@ -721,6 +738,42 @@ interface BriefItem {
   /** `Feedback` for a note, `Change` for an edit — the item's last line. */
   field: "Feedback" | "Change"
   body: string
+  /** An edit's `EditStatus`; a note has none. */
+  status: EditStatus | null
+}
+
+/**
+ * Where an edit stands, as the agent must read it.
+ *
+ * Three states, because `written` alone is two of them: the writer sets it the
+ * moment it can spell a change, so a queued edit is `written` and still in no
+ * file. Calling that "already written" tells the agent to skip the one change
+ * the editor has not made yet; calling it "needs writing" gets it written
+ * twice, once by hand and once by the editor's own Apply.
+ */
+interface EditStatus {
+  /** The `**Status:**` line. */
+  full: string
+  /** The tail of a compact line. */
+  short: string
+}
+
+const WRITTEN: EditStatus = {
+  full: "Already written to source — do not apply again",
+  short: "already written, do not apply again",
+}
+const QUEUED: EditStatus = {
+  full: "Queued in DesignLayer — it will write this itself; do not apply by hand",
+  short: "queued in DesignLayer, do not apply by hand",
+}
+const PREVIEW: EditStatus = {
+  full: "Showing in the browser only — still needs writing",
+  short: "browser only, still needs writing",
+}
+
+function editStatus(edit: EditRecord): EditStatus {
+  if (!edit.written) return PREVIEW
+  return isEditQueued(edit.id) ? QUEUED : WRITTEN
 }
 
 function noteItem(note: AnnotationRecord): BriefItem {
@@ -739,6 +792,7 @@ function noteItem(note: AnnotationRecord): BriefItem {
     selectedText: (note.selectedText ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
     field: "Feedback",
     body: note.comment.trim() || "(no comment)",
+    status: null,
   }
 }
 
@@ -756,6 +810,7 @@ function editItem(edit: EditRecord): BriefItem {
     selectedText: "",
     field: "Change",
     body: editPhrase(edit),
+    status: editStatus(edit),
   }
 }
 
@@ -784,7 +839,8 @@ function renderItem(index: number, item: BriefItem, detail: OutputDetail): strin
     const quote = selectedText
       ? ` (re: "${selectedText.slice(0, 30)}${selectedText.length > 30 ? "..." : ""}")`
       : ""
-    return [`${index}. **${item.name}**${source ? ` (${source})` : ""}: ${item.body}${quote}`]
+    const status = item.status ? ` — ${item.status.short}` : ""
+    return [`${index}. **${item.name}**${source ? ` (${source})` : ""}: ${item.body}${quote}${status}`]
   }
 
   const lines = [`### ${index}. ${item.name}`]
@@ -832,35 +888,24 @@ function renderItem(index: number, item: BriefItem, detail: OutputDetail): strin
     if (detail === "detailed" && context) lines.push(`**Context:** ${context}`)
   }
 
+  if (item.status) lines.push(`**Status:** ${item.status.full}`)
   lines.push(`**${item.field}:** ${item.body}`, "")
-  return lines
-}
-
-function editSection(
-  entries: EditRecord[],
-  firstIndex: number,
-  heading: string,
-  preamble: string,
-  detail: OutputDetail
-): string[] {
-  const lines: string[] = [heading, "", preamble, ""]
-  entries.forEach((edit, offset) => {
-    lines.push(...renderItem(firstIndex + offset, editItem(edit), detail))
-  })
-  if (detail === "compact") lines.push("")
   return lines
 }
 
 /**
  * The whole session as markdown an agent can act on, in Agentation's format.
  *
- * The notes are exactly what Agentation would copy for the same notes. The
- * edits follow in two sections of their own, numbered on from the notes so
- * every item in the brief has one number: what is already done, and what is
- * done but not yet real. The first of those exists to prevent a specific
- * failure — an agent that reads the notes, opens the file, sees the padding
- * change already applied, and applies it a second time because nothing told it
- * the designer had got there first.
+ * ONE list, in the order of `items` — chronological, notes and edits
+ * interleaved — and each item numbered by its position, so the numbers are
+ * `outboxNumbers`'s and "fix 4" means the same thing in the brief as on the
+ * row and the pin. A note prints exactly what Agentation would copy for it.
+ *
+ * Each edit states its status on its own line, just before its change. That
+ * exists to prevent a specific failure — an agent that opens the file, sees
+ * the padding change already applied, and applies it a second time because
+ * nothing told it the designer had got there first. The same warning also
+ * sits once under the header, where an agent that skims still reads it.
  */
 export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): string {
   const detail = annotationSettings().outputDetail
@@ -868,53 +913,29 @@ export function buildAnnotationBrief(items: OutboxItem[] = outboxItems()): strin
   // Every note goes. There is no resolved state to filter out any more — the
   // only way to take a note off this list is to delete it, which removes it
   // from the store, so anything still here is by definition still wanted.
-  const notes = items
-    .filter((item): item is Extract<OutboxItem, { type: "note" }> => item.type === "note")
-    .map((item) => item.note)
-  const changes = items
-    .filter((item): item is Extract<OutboxItem, { type: "edit" }> => item.type === "edit")
-    .map((item) => item.edit)
-  const written = changes.filter((edit) => edit.written)
-  const pending = changes.filter((edit) => !edit.written)
-
-  if (!notes.length && !changes.length) {
+  if (!items.length) {
     return "Nothing to hand over yet. Pin a note on the page, or make a change, and it lands here."
   }
+
+  const briefItems = items.map((item) =>
+    item.type === "note" ? noteItem(item.note) : editItem(item.edit)
+  )
 
   const lines: string[] = [`## Page Feedback: ${pageLabel()}`, `**App:** ${appLabel()}`]
   if (detail === "forensic") lines.push(...environmentBlock())
   else if (detail !== "compact") lines.push(`**Viewport:** ${viewportLabel()}`)
   lines.push("")
-
-  notes.forEach((note, offset) => lines.push(...renderItem(offset + 1, noteItem(note), detail)))
-  if (notes.length && detail === "compact") lines.push("")
-
-  if (written.length) {
+  if (briefItems.some((item) => item.status === WRITTEN)) {
     lines.push(
-      ...editSection(
-        written,
-        notes.length + 1,
-        "## Already written to source — do not apply these again",
-        `${written.length} ${written.length === 1 ? "change is" : "changes are"} already in the files below. They are done. Applying them a second time is a conflict, not a fix.`,
-        detail
-      )
+      "Items marked already written are in the source files. Do not apply them again — a second application is a conflict, not a fix.",
+      ""
     )
   }
 
-  if (pending.length) {
-    lines.push(
-      ...editSection(
-        pending,
-        notes.length + written.length + 1,
-        "## Showing in the browser only — these still need writing",
-        `${pending.length} ${pending.length === 1 ? "change exists" : "changes exist"} as a live preview and in no file. This is the work: the next reload eats ${pending.length === 1 ? "it" : "them"}.`,
-        detail
-      )
-    )
-  }
+  briefItems.forEach((item, index) => lines.push(...renderItem(index + 1, item, detail)))
 
-  // Collapse the blank lines the sections leave where they join, and end where
-  // the last item ends, as Agentation's copy does.
+  // Collapse the blank lines left where blocks join, and end where the last
+  // item ends, as Agentation's copy does.
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
 }
 

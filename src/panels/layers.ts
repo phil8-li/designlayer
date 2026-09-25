@@ -431,8 +431,7 @@ export function installLayersPanel(context: EditorContext): void {
       ? ""
       : query
         ? `Nothing matches “${query}”.`
-        : "No layers here yet. The editor lists elements the app has rendered — " +
-          "interact with the page, or pick an element on the canvas."
+        : "No layers yet. Use the page, or select an element on it."
     if (sentence === emptyShowing) return
     emptyShowing = sentence
     emptyNote.hidden = !sentence

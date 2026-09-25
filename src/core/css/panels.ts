@@ -376,21 +376,6 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   color: ${t.color.text};
   font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
 }
-/*
- * A third column, for the identity header when the selection holds more than
- * one element.
- *
- * The grid above is two columns wide, so the count would otherwise be laid out
- * on an implicit second row inside a bar with a fixed height — present in the
- * DOM, invisible on screen, which is the worst way for a panel to tell you it
- * is describing four elements you cannot see. The name keeps the \`1fr\` so it
- * still pushes the pair to the right edge, where the tag already sat.
- */
-.de-section-header--counted {
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: ${t.space.sm}px;
-}
-.de-selection-count { white-space: nowrap; }
 /* The bottom step is the heavier one on purpose: the header carries the air
    above the first row, and the 12 below the last one is the whole rest between
    this section's rows and the next section's hairline. */
@@ -399,8 +384,8 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   display: flex; flex-direction: column; gap: ${t.space.md}px;
 }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. This is the
-   fold for a body that has NO \`.de-section-fold\` around it — the identity
-   header's source line is one — and the wrapped case overrides it below. */
+   fold for a body that has NO \`.de-section-fold\` around it, and the wrapped
+   case overrides it below. */
 .de-section-body[hidden] { display: none; }
 
 /*
@@ -732,8 +717,11 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
    reading and never look at again. */
 .de-hint { color: ${t.color.textDim}; font-size: ${t.type.body}; line-height: ${t.type.leadingRow}; }
 
-/* Selection identity: what you picked, and where it lives in the source. */
-.de-tagname { color: ${t.color.textDim}; font-weight: ${t.type.weightBody}; }
+/* Where something lives in the source — a file:line under a responsive measure,
+   and the owner of a breakpoint. \`.de-tagname\` sat beside this and drew the
+   tag name in the inspector's identity header; that header is gone, because the
+   layer row, the canvas label and the Code tab each already said one part of
+   what it repeated. Nothing wears the class now. */
 .de-source { font-size: ${t.type.body}; color: ${t.color.textDim}; word-break: break-all; }
 
 .de-row { display: flex; align-items: center; gap: ${t.space.md}px; }

@@ -71,7 +71,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
   const where = el("span", { class: "de-code-source" })
   const code = el("pre", { class: "de-code-view", tabindex: "0" })
   const empty = el("div", { class: "de-empty" }, [
-    "Select an element on the canvas, or pick a layer, to read it as code.",
+    "Select an element or layer to see its code.",
   ])
   const status = el("span", { class: "de-code-status" })
   /*
@@ -152,7 +152,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
 
   function reportRefused(): void {
     setCopyLabel(false)
-    setStatus("The browser refused the clipboard", "error")
+    setStatus("Could not copy — clipboard access was blocked", "error")
   }
 
   function render(): void {
@@ -171,7 +171,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
       where.textContent = ""
       where.removeAttribute("title")
       copyButton.disabled = true
-      setStatus("Nothing selected")
+      setStatus("")
       return
     }
 

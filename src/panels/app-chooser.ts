@@ -678,7 +678,7 @@ export function installAppChooser(context: EditorContext): {
         ? `Go to ${label}, which already has an editor running`
         : placed
           ? `Switch to ${label}`
-          : `${label} — the editor could not find its project folder, so it cannot be opened from here`
+          : `${label} — project folder not found, cannot open from here`
 
     /*
      * The name wraps here, and carries no `title`, which is the opposite of
@@ -974,7 +974,7 @@ export function installAppChooser(context: EditorContext): {
    */
   const refusedSentence = (label: string): string =>
     config.chooserUrl
-      ? `Could not switch to ${label}. The start screen refused it; try again, or start the app from ${config.chooserUrl}.`
+      ? `Could not switch to ${label}. Try again, or start it from ${config.chooserUrl}.`
       : `Could not switch to ${label}. Nothing was changed; try again.`
 
   /**
@@ -1124,7 +1124,7 @@ export function installAppChooser(context: EditorContext): {
        * The recovery is unglamorous and it always works, so it is what the
        * sentence says.
        */
-      showNote(`${label} did not start. Run designlayer against it in a terminal to get an editor for it.`)
+      showNote(`${label} did not start. Run designlayer in its folder instead.`)
     }
   }
 
@@ -1141,7 +1141,7 @@ export function installAppChooser(context: EditorContext): {
     leaving = true
     pinned = true
     context.toast(`Switching to ${label}\u2026`)
-    showNote(`Starting ${label}. This editor reloads as soon as it is up.`)
+    showNote(`Starting ${label}. This page reloads when it is ready.`)
     void settleIntoNewEditor(label)
   }
 
@@ -1158,7 +1158,7 @@ export function installAppChooser(context: EditorContext): {
      */
     const held = menu.contains(document.activeElement)
     if (!payload) {
-      showNote("Could not reach this editor’s server. Reload the page to try again.")
+      showNote("Could not reach the DesignLayer server. Reload to try again.")
       return
     }
     if (typeof payload.error === "string" && payload.error.length > 0) {
@@ -1186,8 +1186,8 @@ export function installAppChooser(context: EditorContext): {
     if (apps.length === 0) {
       showNote(
         config.chooserUrl
-          ? `Only this app is running. Start another with designlayer in its project folder, or from the start screen at ${config.chooserUrl}, and it will appear here.`
-          : "Only this app is running. Start another with designlayer in its project folder and it will appear here."
+          ? `No other apps running. Run designlayer in another project, or open ${config.chooserUrl}.`
+          : "No other apps running. Run designlayer in another project to add one."
       )
       return
     }
@@ -1216,8 +1216,8 @@ export function installAppChooser(context: EditorContext): {
       drawn.push(
         note(
           config.chooserUrl
-            ? `An app with no project folder has to be opened from the start screen at ${config.chooserUrl}, which can take a path.`
-            : "An app with no project folder has to be opened by running designlayer from that folder."
+            ? `To open an app with no project folder, enter its path at ${config.chooserUrl}.`
+            : "To open an app with no project folder, run designlayer in that folder."
         )
       )
     }

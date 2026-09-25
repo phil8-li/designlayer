@@ -16,6 +16,8 @@ import path from "node:path"
 const MAX_OPTIONS_PER_SET = 40
 const MAX_NAME = 120
 const MAX_VALUE = 2000
+/** Mirrors `STYLE_SCOPES` in src/options/scopes.ts. */
+const STYLE_SCOPES = new Set(["typography", "fill", "stroke", "effects", "appearance", "layout"])
 
 function normalizeOption(value) {
   if (!value || typeof value !== "object") return null
@@ -37,6 +39,9 @@ function normalizeOption(value) {
     createdAt: Number.isFinite(value.createdAt) ? value.createdAt : Date.now(),
   }
   if (typeof value.text === "string") option.text = value.text.slice(0, MAX_VALUE)
+  // A scope the client does not know would file the style under no section,
+  // where nothing could show or delete it, so only the known ones survive.
+  if (STYLE_SCOPES.has(value.scope)) option.scope = value.scope
   return option
 }
 

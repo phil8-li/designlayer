@@ -33,7 +33,8 @@ import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { alphaOf, restated, swatch, toHex } from "./color"
-import { miniButton, numberField, section } from "./field"
+import { miniButton, numberField } from "./field"
+import { styledSection } from "../../options/panel"
 import { svgTarget, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -138,7 +139,9 @@ export const fillSection: InspectorSection = (context) => {
      * The price is one extra click. `+` gives the box a fill and the row —
      * binding included — is here on the next render.
      */
-    return section(
+    return styledSection(
+      context,
+      "fill",
       "Fill",
       el("div", { class: "de-stack" }, [el("div", { class: "de-hint" }, ["No fill."]), svgFill]),
       add
@@ -213,7 +216,7 @@ export const fillSection: InspectorSection = (context) => {
       onCommit: (next) => {
         const committed = withAlpha(value, next / 100)
         if (committed) apply(committed, "Set fill opacity")
-        else context.editor.toast(`Opacity needs a color this editor can re-state — ${value} is left as authored`, "error")
+        else context.editor.toast(`Opacity needs a plain color. ${value} is kept as written.`, "error")
       },
     }),
     miniButton({
@@ -270,5 +273,5 @@ export const fillSection: InspectorSection = (context) => {
     svgFill,
   ])
 
-  return section("Fill", body, add)
+  return styledSection(context, "fill", "Fill", body, add)
 }

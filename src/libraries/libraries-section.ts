@@ -144,8 +144,7 @@ const ARRIVAL_STEPS = 5
 
 /** The four things `detectLibraryKind` knows how to read, said in one breath. */
 const RECOGNISED =
-  "A design-system manifest, a DTCG or Style Dictionary token file, an icon " +
-  "drawing set, or a stylesheet declaring custom properties."
+  "Looks for manifests, token files (DTCG, Style Dictionary), icon sets and CSS custom properties."
 
 /** The kind of file a library was read out of, as a badge. */
 function kindBadge(kind: string): HTMLElement {
@@ -237,7 +236,7 @@ const WALL_SUMMARY: Record<LibraryChallenge["kind"], string> = {
   redirect: "needs you to sign in",
   basic: "needs a username and password",
   bearer: "needs an access token",
-  forbidden: "would not let the editor in",
+  forbidden: "denied access",
 }
 
 /**
@@ -264,7 +263,7 @@ const WALL_SUMMARY: Record<LibraryChallenge["kind"], string> = {
  * guess: a window is about to open, and their password is not going anywhere
  * near this editor. Fourteen words.
  */
-const OPEN_NOTE = "A window opens on the site's own sign-in. Nothing is typed into the editor."
+const OPEN_NOTE = "Opens the site’s sign-in in a new window. Your password stays there."
 
 /**
  * The same moment when there is no window to offer.
@@ -275,7 +274,7 @@ const OPEN_NOTE = "A window opens on the site's own sign-in. Nothing is typed in
  * and offers only Close.
  */
 const NO_WINDOW_NOTE =
-  "The editor could not find a browser to open it in, so an access token is the way in to this one."
+  "No browser found to sign in with. Use an access token instead."
 
 /**
  * While the sign-in is in flight — and it has to be true BEFORE the window
@@ -316,7 +315,7 @@ const WAITING_NOTE = "Opening the sign-in window. Finish there and this closes i
  * measured at over twelve seconds against a cold browser.
  */
 const WAITING_LONG_NOTE =
-  "Still waiting for that sign-in. Finish in the window that opened, or cancel and try again."
+  "Still waiting. Finish in the sign-in window, or cancel and try again."
 
 /**
  * The sentence a cancelled wait leaves behind, and it has to mention the window.
@@ -330,7 +329,7 @@ const WAITING_LONG_NOTE =
  * so is one clause.
  */
 const CANCELLED_NOTE =
-  "Sign-in cancelled. The window the editor opened may still be on screen; it is safe to close."
+  "Sign-in cancelled. You can close the sign-in window."
 
 /**
  * And the wait that ran out on its own.
@@ -347,8 +346,7 @@ const CANCELLED_NOTE =
  * connection from a person who walked away from the window.
  */
 const DEADLINE_NOTE =
-  "The editor stopped waiting for that sign-in after six minutes. If the window is still " +
-  "open, finish there and press Sign in again."
+  "Sign-in timed out. If the window is still open, finish there and press Sign in again."
 
 /**
  * One sign-in at a time, said to the reader who just met the second one.
@@ -363,8 +361,7 @@ const DEADLINE_NOTE =
  */
 function busyNote(host: string): string {
   return (
-    `A sign-in for ${host} is still running in a browser window. Finish or cancel that one ` +
-    `first — the editor opens them one at a time, in one browser profile.`
+    `Finish or cancel the sign-in for ${host} first. Only one can run at a time.`
   )
 }
 
@@ -379,7 +376,7 @@ function busyNote(host: string): string {
  * owes the reader an explanation.
  */
 const NO_TARGET_NOTE =
-  "The editor does not have a link to sign in with. Add the link again, and this time it will."
+  "No link to sign in with. Add the link again."
 
 /**
  * When the wait's copy moves, and when the editor gives up on it.
@@ -402,8 +399,7 @@ type ProviderSignInAnswer = Awaited<ReturnType<typeof openProviderSignIn>>
 
 /** The 403's version: it got in and was turned away, which is a different fix. */
 const REFUSED_NOTE =
-  "The editor reached the page and the site turned it away, so this is about " +
-  "what the account is allowed to see rather than about signing in again."
+  "The site refused access. Signing in again will not help — the account needs permission."
 
 /**
  * The facts a refusal named that a designer has nowhere else to read.
@@ -451,7 +447,7 @@ const SCHEMES: ReadonlyArray<{
     value: "cookie",
     label: "Cookie",
     placeholder: "Paste the Cookie header",
-    title: "Sent to the site as a Cookie header, the way a browser sends it",
+    title: "Sent to the site as a Cookie header",
   },
 ]
 
@@ -495,9 +491,7 @@ function defaultScheme(wall: LibraryChallenge): LibraryCredentialScheme {
  * whether the paste is going to work, and only this side knows it.
  */
 const BASIC_NOTE =
-  "This editor sends what you paste as an Authorization header. If the site " +
-  "refuses it, a session cookie from a browser that can already open it is the " +
-  "other way in."
+  "Sent as an Authorization header. If the site refuses it, try a session cookie from a signed-in browser."
 
 export function librariesSection(editor: EditorContext): { node: HTMLElement; update(): void } {
   /*
@@ -2019,7 +2013,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         ? CANCELLED_NOTE
         : run.expired
           ? DEADLINE_NOTE
-          : messageOf(settled.error, "The editor could not open that sign-in")
+          : messageOf(settled.error, "Could not open the sign-in")
       /*
        * The stale-server sentence is news about the PROCESS, not about this
        * dialog: the page has outrun the server it is talking to and the fix is
@@ -2238,7 +2232,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       const word = SCHEME_WORDS[entry.scheme] ?? entry.scheme
       nameEl.textContent = name
       nameEl.title = `${link}\n${when ? `A ${word}, saved ${when}` : `A ${word}`}`
-      const said = `Forget the credential for ${name}. It stops loading until you add the credential again.`
+      const said = `Forget sign-in for ${name}. It will not load until you sign in again.`
       forget.title = said
       forget.setAttribute("aria-label", said)
     }
@@ -2419,8 +2413,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     if (!candidates.length) {
       candidateList.append(
         el("p", { class: "de-lib-hint" }, [
-          `No design-system files found in this project. ${RECOGNISED} Add one by ` +
-            `path below if the scan missed it.`,
+          `No design-system files found. ${RECOGNISED} Add one by path below.`,
         ])
       )
       return
@@ -2518,8 +2511,8 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         // Two sentences, because "Remove" alone leaves the reader guessing
         // whether this touches the file. It does not: the library is a pointer
         // at a path or a link, and removing it takes the pointer.
-        title: `Remove ${library.name}. The file on disk is not touched.`,
-        "aria-label": `Remove ${library.name}. The file on disk is not touched.`,
+        title: `Remove ${library.name} (the file stays on disk)`,
+        "aria-label": `Remove ${library.name} (the file stays on disk)`,
         "data-de-lib": "remove",
         "data-de-lib-id": library.id,
       },

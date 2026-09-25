@@ -83,6 +83,9 @@ const bundled = await build({
       export { installShortcuts } from "./src/shell/shortcuts"
       export * as history from "./src/core/history"
       export { historyAction } from "./src/core/keymap"
+      export * as noteActions from "./src/annotations/actions"
+      export * as noteStore from "./src/annotations/store"
+      export { edits as journalEdits, resetJournalForTest } from "./src/annotations/journal"
     `,
     resolveDir: PACKAGE_DIR,
     loader: "ts",
@@ -366,6 +369,94 @@ check("a field keeps its own Cmd+Z", () => {
   // the key would revert a style edit instead of the word just typed.
   assert.equal(history.canUndo(), true)
   assert.equal(target.style.getPropertyValue("opacity"), "0.5")
+})
+
+// ── Notes share the timeline ───────────────────────────────────────────────
+
+console.log("\nNotes share the timeline")
+
+const { noteActions, noteStore } = editor
+const noteInput = (comment) => ({
+  kind: "region",
+  comment,
+  url: window.location.href,
+  rect: { x: 0, y: 0, width: 10, height: 10 },
+  target: null,
+  selectedText: null,
+})
+const resetNotes = () => {
+  reset()
+  // The store rehydrates from storage on its next read, so both go.
+  window.localStorage.clear()
+  editor.resetJournalForTest()
+  noteStore.resetAnnotationsForTest()
+}
+const comments = () => noteStore.annotations().map((note) => note.comment)
+
+check("pinning a note is one Cmd+Z, and redo brings back the same note", () => {
+  resetNotes()
+  const note = noteActions.pinNote(noteInput("too tight"))
+  assert.equal(history.undo(), "Pin note")
+  assert.deepEqual(comments(), [])
+  history.redo()
+  assert.equal(noteStore.annotations()[0].id, note.id)
+})
+
+check("an edit and a note undo in the order they happened", () => {
+  resetNotes()
+  target.style.setProperty("opacity", "1")
+  writer.applyStyles(selection, [{ property: "opacity", value: "0.5" }], "Set opacity")
+  noteActions.pinNote(noteInput("still wrong"))
+  history.undo()
+  assert.deepEqual(comments(), [], "the newest step is the note")
+  assert.equal(target.style.getPropertyValue("opacity"), "0.5", "the edit is still standing")
+  history.undo()
+  assert.equal(target.style.getPropertyValue("opacity"), "1")
+  assert.equal(editor.journalEdits().length, 0, "the undone edit left the outbox too")
+})
+
+check("rewriting a note undoes to the old words, and a no-op rewrite is not a step", () => {
+  resetNotes()
+  const note = noteActions.pinNote(noteInput("first"))
+  noteActions.rewriteNote(note.id, "first")
+  noteActions.rewriteNote(note.id, "second")
+  assert.equal(history.undo(), "Edit note")
+  assert.deepEqual(comments(), ["first"])
+  assert.equal(history.undo(), "Pin note")
+})
+
+check("deleting a note restores it in place, from Cmd+Z or from the toast", () => {
+  resetNotes()
+  noteActions.pinNote(noteInput("a"))
+  const middle = noteActions.pinNote(noteInput("b"))
+  noteActions.pinNote(noteInput("c"))
+  const removed = noteActions.deleteNote(middle.id)
+  assert.deepEqual(comments(), ["a", "c"])
+  history.undo()
+  assert.deepEqual(comments(), ["a", "b", "c"])
+  history.redo()
+  noteActions.undoNoteStep(removed.step)
+  assert.deepEqual(comments(), ["a", "b", "c"], "the toast's Undo is the same act")
+  assert.equal(history.canRedo(), true, "and it went through the timeline, so redo is offered")
+})
+
+check("clearing every note is one step", () => {
+  resetNotes()
+  noteActions.pinNote(noteInput("a"))
+  noteActions.pinNote(noteInput("b"))
+  assert.equal(noteActions.clearNotes(), 2)
+  assert.deepEqual(comments(), [])
+  history.undo()
+  assert.deepEqual(comments(), ["a", "b"])
+})
+
+check("a step whose note was cleared by a handover undoes to nothing, not an error", () => {
+  resetNotes()
+  noteActions.pinNote(noteInput("a"))
+  noteStore.clearAnnotations()
+  assert.equal(history.undo(), "Pin note")
+  history.redo()
+  assert.deepEqual(comments(), ["a"])
 })
 
 console.log(`\n${passed} passed, ${failed} failed`)

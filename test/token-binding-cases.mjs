@@ -608,11 +608,10 @@ await checkAsync("no section named or titled `Design system` survives in the Des
   )
   // The sections that DID run, so this case fails loudly on a rename rather
   // than passing because the panel quietly stopped drawing anything.
-  // "Saved styles" is unconditional now — it holds the Save button, which is
-  // the only way a first saved style is ever created, so the box cannot be
-  // allowed to disappear on the element that most needs it.
+  // "Saved styles" is not a section any more: each scoped style control lives
+  // in the header of the section whose properties it saves.
   const known = new Set([
-    "Icon", "Saved styles", "Responsive", "Position", "Layout", "Appearance", "Fill", "Stroke",
+    "Icon", "Responsive", "Position", "Layout", "Appearance", "Fill", "Stroke",
     "Effects", "Typography", "Classes",
   ])
   const strangers = [...seen].filter((title) => !known.has(title))

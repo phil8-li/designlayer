@@ -274,3 +274,70 @@ export function toClassUpdate(property: string, rawValue: string): ClassUpdate |
     ...(scalar.pattern ? { classPattern: scalar.pattern } : {}),
   }
 }
+
+/**
+ * Strips what does not change which property a class sets: variant prefixes
+ * (`hover:`, `md:`, `[&>svg]:`), the `!` important marker and a leading `-`.
+ * Colons inside brackets belong to arbitrary values, so the split tracks depth.
+ */
+export function baseUtility(className: string): string {
+  let depth = 0
+  let start = 0
+  for (let index = 0; index < className.length; index += 1) {
+    const char = className[index]
+    if (char === "[" || char === "(") depth += 1
+    else if ((char === "]" || char === ")") && depth > 0) depth -= 1
+    else if (char === ":" && depth === 0) start = index + 1
+  }
+  let base = className.slice(start)
+  if (base.startsWith("!")) base = base.slice(1)
+  if (base.endsWith("!")) base = base.slice(0, -1)
+  if (base.startsWith("-")) base = base.slice(1)
+  return base
+}
+
+let keywordIndex: Map<string, string> | null = null
+let patterned: Array<[string, RegExp]> | null = null
+let prefixed: Array<[string, string]> | null = null
+
+/**
+ * The CSS property a Tailwind class sets, read back off the same KEYWORDS and
+ * SCALARS tables `toClassUpdate` writes from — so the two directions cannot
+ * disagree about which property `text-lg` or `border-red-500` belongs to.
+ * Returns null for anything those tables do not describe; callers that need a
+ * wider net (saved-style scopes) layer their own extras on top.
+ */
+export function propertyForClass(className: string): string | null {
+  const cls = baseUtility(className)
+  if (!cls) return null
+
+  // `[mask-type:luminance]`: the arbitrary-property form names its property.
+  const arbitrary = /^\[(-{0,2}[a-z][\w-]*):.+\]$/.exec(cls)
+  if (arbitrary) return arbitrary[1]
+
+  if (!keywordIndex) {
+    keywordIndex = new Map()
+    for (const [property, values] of Object.entries(KEYWORDS)) {
+      for (const token of Object.values(values)) keywordIndex.set(token, property)
+    }
+    patterned = Object.entries(SCALARS)
+      .filter(([, scalar]) => scalar.pattern)
+      .map(([property, scalar]) => [property, new RegExp(scalar.pattern as string)])
+    // Longest stem first, so `gap-x-2` is `column-gap` and not `gap`.
+    prefixed = Object.entries(SCALARS)
+      .filter(([, scalar]) => !scalar.pattern)
+      .map(([property, scalar]) => [property, scalar.prefix] as [string, string])
+      .sort((a, b) => b[1].length - a[1].length)
+  }
+
+  const keyword = keywordIndex.get(cls)
+  if (keyword) return keyword
+  if (new RegExp(FONT_WEIGHT_PATTERN).test(cls)) return "font-weight"
+  for (const [property, pattern] of patterned ?? []) {
+    if (pattern.test(cls)) return property
+  }
+  for (const [property, prefix] of prefixed ?? []) {
+    if (cls === prefix || cls.startsWith(`${prefix}-`)) return property
+  }
+  return null
+}

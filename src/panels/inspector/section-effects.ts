@@ -26,7 +26,8 @@ import { leaveRow } from "../../core/leave"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { swatch, toHex } from "./color"
-import { miniButton, numberField, section, selectField } from "./field"
+import { miniButton, numberField, selectField } from "./field"
+import { styledSection } from "../../options/panel"
 import { hasUtility, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -254,5 +255,5 @@ export const effectsSection: InspectorSection = (context) => {
     motionBinding,
   ])
 
-  return section("Effects", body, add)
+  return styledSection(context, "effects", "Effects", body, add)
 }

@@ -216,22 +216,22 @@ export const SHORTCUTS: readonly Shortcut[] = [
     command: "mode.inspect",
     chord: { key: "v" },
     aliases: [{ key: "a" }],
-    label: "Inspect — a click selects an element",
-    figma: "Move tool (V). A is Figma’s Frame tool, which has no meaning here, so it is a second key for this.",
+    label: "Inspect: click to select",
+    figma: "Move tool (V). A also works.",
     group: "Tools",
   },
   {
     command: "mode.notes",
     chord: { key: "c" },
-    label: "Notes — a click pins a note",
+    label: "Notes: click to pin a note",
     figma: "Add comment (C)",
     group: "Tools",
   },
   {
     command: "mode.interactive",
     chord: { key: "h" },
-    label: "Interactive — clicks go to the prototype",
-    figma: "Hand tool (H), the one tool where a click does not touch what is under it",
+    label: "Interactive: clicks go to the app",
+    figma: "Hand tool (H)",
     group: "Tools",
   },
 
@@ -281,8 +281,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "chrome.focus",
     chord: { code: "Digit1", mod: true, shift: true },
-    label: "Move focus to the editor toolbar",
-    figma: "No Figma equivalent — Figma owns its window and is never a guest on a page",
+    label: "Focus the toolbar",
+    figma: "No Figma equivalent",
     group: "View",
   },
   /*
@@ -335,14 +335,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
     command: "panel.inspector.tab2",
     chord: { code: "Digit9", alt: true },
     label: "Inspector: second view",
-    figma: "Prototype panel (⌥9) — this editor’s second inspector tab, in its slot",
+    figma: "Prototype panel (⌥9)",
     group: "View",
   },
   {
     command: "panel.inspector.tab3",
     chord: { code: "Digit0", alt: true },
     label: "Inspector: third view",
-    figma: "Inspect panel (⌥0), which is where Figma shows you code too",
+    figma: "Inspect panel (⌥0)",
     group: "View",
   },
   {
@@ -364,8 +364,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "select.none",
     chord: { key: "escape" },
-    label: "Deselect — press it again with nothing selected to collapse the editor",
-    figma: "Select none (Esc). The empty press is ours: Figma has no page to stand down to.",
+    label: "Deselect (press again to collapse)",
+    figma: "Select none (Esc)",
     group: "Selection",
     owner: "canvas",
   },
@@ -409,7 +409,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "select.next",
     chord: { key: "tab" },
-    label: "Select the next sibling — Esc hands Tab back to the page",
+    label: "Select the next sibling",
     figma: "Select next sibling (Tab)",
     group: "Selection",
     owner: "canvas",
@@ -417,7 +417,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "select.prev",
     chord: { key: "tab", shift: true },
-    label: "Select the previous sibling — Esc hands Tab back to the page",
+    label: "Select the previous sibling",
     figma: "Select previous sibling (⇧Tab)",
     group: "Selection",
     owner: "canvas",
@@ -440,7 +440,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     command: "select.reveal",
     chord: { code: "Digit2", shift: true },
     label: "Scroll the selection into view",
-    figma: "Zoom to selection (⇧2). There is no canvas zoom here, so it scrolls.",
+    figma: "Zoom to selection (⇧2)",
     group: "Selection",
   },
 
@@ -510,8 +510,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     command: "notes.copy",
     chord: { code: "KeyC", mod: true, alt: true },
-    label: "Copy the notes and edits brief",
-    figma: "Copy properties (⌥⌘C) — the key for copying a description of the thing rather than the thing.",
+    label: "Copy notes and edits",
+    figma: "Copy properties (⌥⌘C)",
     group: "Edit",
   },
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- DesignLayer mark: three stacked layers on the chrome ground. -->
+  <rect width="512" height="512" rx="112" fill="#1a1a1a"/>
+  <rect x="0.5" y="0.5" width="511" height="511" rx="111.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <path d="M256 318 L402 262 L420 272 L256 336 L92 272 L110 262 Z" fill="#ffffff" fill-opacity="0.22"/>
+  <path d="M256 282 L402 226 L420 236 L256 300 L92 236 L110 226 Z" fill="#7cc4f8" fill-opacity="0.55"/>
+  <path d="M256 128 L420 192 L256 256 L92 192 Z" fill="#0c8ce9"/>
+  <path d="M256 128 L420 192 L256 256 L92 192 Z" fill="none" stroke="#7cc4f8" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M256 360 L420 296 L420 312 L256 376 L92 312 L92 296 Z" fill="#ffffff" fill-opacity="0.10"/>
+</svg>

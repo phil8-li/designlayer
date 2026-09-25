@@ -792,3 +792,16 @@ export function section(
 
   return el("div", { class: "de-section" }, [header, fold])
 }
+
+/**
+ * A section that never folds: the same header, title and body padding as
+ * `section()`, with no toggle, no chevron and no hover ground. For a block that
+ * is short enough that a fold would only cost a click on every visit.
+ */
+export function plainSection(title: string, body: HTMLElement, actions?: HTMLElement): HTMLElement {
+  const header = el("div", { class: "de-section-header" }, [
+    el("span", { class: "de-section-title" }, [title]),
+    actions ? el("span", { class: "de-section-actions" }, [actions]) : null,
+  ])
+  return el("div", { class: "de-section" }, [header, el("div", { class: "de-section-body" }, [body])])
+}

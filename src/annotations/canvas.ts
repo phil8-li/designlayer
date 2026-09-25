@@ -22,8 +22,8 @@ import { tokens } from "../core/tokens"
 import { arriveFrom, prefersReducedMotion } from "../core/motion"
 import { editorOwnsInput } from "../core/store"
 import type { EditorContext } from "../core/context"
+import { MARKER } from "../core/css/annotations"
 import {
-  addAnnotation,
   annotationSettings,
   annotations,
   notePinsVisible,
@@ -31,10 +31,11 @@ import {
   onMarkerLayerChange,
   onSettingsChange,
   setMarkerLayer,
-  updateAnnotation,
 } from "./store"
-import { describeElement } from "./output"
-import type { AnnotationKind, AnnotationRect, AnnotationRecord } from "./types"
+import { pinNote, rewriteNote } from "./actions"
+import { editElement, edits, onEditsChange } from "./journal"
+import { describeElement, outboxItems, outboxNumbers } from "./output"
+import type { AnnotationKind, AnnotationRect, AnnotationRecord, EditRecord } from "./types"
 
 /**
  * One pixel more than the marquee's threshold, and deliberately so: a region
@@ -108,6 +109,37 @@ interface Box {
   width: number
   height: number
 }
+
+/** A viewport-space point: the top-left corner a pin is anchored to. */
+interface Point {
+  left: number
+  top: number
+}
+
+/**
+ * One pin as `paint` decided it, before any of it is written to a node.
+ *
+ * Built for every item first and written second, which is the read-then-write
+ * split `paint` exists to keep: every rect this needs has been measured by the
+ * time the first style is set.
+ */
+interface Pin {
+  id: string
+  kind: "note" | "edit"
+  label: string
+  /** The accessible name, which carries the number and says which kind it is. */
+  name: string
+  /** The tooltip: a note's own words, an edit's change. */
+  title: string
+  left: number
+  top: number
+}
+
+/**
+ * Space between two pins fanned out from one anchor. Enough to read them as two
+ * objects; small enough that they still read as belonging to one element.
+ */
+const FAN_GAP = 2
 
 /** One completed gesture, before the user has said anything about it. */
 interface Gesture {
@@ -352,8 +384,8 @@ export function installAnnotations(context: EditorContext): void {
 
     const text = el("textarea", {
       class: "de-ann-composer-text",
-      placeholder: "What is wrong here?",
-      "aria-label": "Annotation comment",
+      placeholder: "What should change?",
+      "aria-label": "Note",
       rows: 3,
     })
     text.value = initial
@@ -469,8 +501,11 @@ export function installAnnotations(context: EditorContext): void {
   const capture = (gesture: Gesture): void => {
     const target = gesture.element ? describeElement(gesture.element) : null
     const rect = toPageRect(gesture.box)
+    // `pinNote`, not the store's `addAnnotation`: pinning is a step on the one
+    // undo timeline, so Cmd+Z after a note takes the note back rather than the
+    // padding change made before it.
     openComposer(gesture.box, "", (comment) => {
-      addAnnotation({
+      pinNote({
         kind: gesture.kind,
         comment,
         url: window.location.href,
@@ -519,7 +554,7 @@ export function installAnnotations(context: EditorContext): void {
             width: note.rect.width,
             height: note.rect.height,
           })
-    openComposer(anchor, note.comment, (comment) => updateAnnotation(note.id, { comment }))
+    openComposer(anchor, note.comment, (comment) => rewriteNote(note.id, comment))
   }
 
   // ---------- the marker layer ----------
@@ -537,14 +572,27 @@ export function installAnnotations(context: EditorContext): void {
       // annotating the next press would otherwise pin a second note on top.
       event.preventDefault()
       event.stopPropagation()
-      const note = annotations().find((entry) => entry.id === marker.dataset.note)
+      const id = marker.dataset.item
+      if (!id) return
+      /*
+       * An edit's pin SELECTS what was edited instead of opening a composer.
+       * There are no words on an edit to rewrite: what the designer wants from
+       * that pin is the element back under the inspector, where the change can
+       * be looked at or changed again.
+       */
+      if (marker.dataset.kind === "edit") {
+        const element = editElement(id)
+        if (element?.isConnected) context.select(element)
+        return
+      }
+      const note = annotations().find((entry) => entry.id === id)
       if (note) reopen(note)
     })
     /**
      * The mirror of the panel's own hover, and the id is captured on the way
      * IN rather than re-read on the way out.
      *
-     * `dataset.note` is repainted under the pointer whenever the set of notes
+     * `dataset.item` is repainted under the pointer whenever the set of items
      * changes, so a leave handler that read it again could clear the highlight
      * for a note the pointer never touched — or, worse, decline to clear the
      * one it did. The guard is what makes pins that overlap safe: the second
@@ -552,7 +600,7 @@ export function installAnnotations(context: EditorContext): void {
      */
     let entered: string | null = null
     marker.addEventListener("pointerenter", () => {
-      entered = marker.dataset.note ?? null
+      entered = marker.dataset.item ?? null
       reportMarkerHover(entered)
     })
     marker.addEventListener("pointerleave", () => {
@@ -564,16 +612,6 @@ export function installAnnotations(context: EditorContext): void {
     return marker
   }
 
-  /**
-   * Where a pin goes this frame, or `null` when it is off screen.
-   *
-   * The live element wins over the stored rect whenever there still is one:
-   * that is the whole reason the record holds a node it never persists — a
-   * sticky header or an accordion opening above the element moves it without
-   * moving the page, and the stored page rect cannot know. Off-screen pins are
-   * hidden rather than parked past the edge, because a button positioned out
-   * of view is still in the tab order and Tab would walk notes nobody can see.
-   */
   /**
    * Put a rehydrated note back on the element it was written about.
    *
@@ -618,27 +656,105 @@ export function installAnnotations(context: EditorContext): void {
     return note.element
   }
 
-  const markerPoint = (note: AnnotationRecord): { left: number; top: number } | null => {
+  /**
+   * Where a note's pin goes this frame, before it is fanned out or culled.
+   *
+   * The live element wins over the stored rect whenever there still is one:
+   * that is the whole reason the record holds a node it never persists — a
+   * sticky header or an accordion opening above the element moves it without
+   * moving the page, and the stored page rect cannot know. Off-screen pins are
+   * hidden (`inView`) rather than parked past the edge, because a button
+   * positioned out of view is still in the tab order and Tab would walk pins
+   * nobody can see.
+   */
+  const noteAnchor = (note: AnnotationRecord): Point => {
     const live = note.element?.isConnected ? note.element : reattach(note)
     const rect =
       live && live.isConnected
         ? live.getBoundingClientRect()
         : { left: note.rect.x - window.scrollX, top: note.rect.y - window.scrollY }
-    if (rect.left < -BLEED || rect.top < -BLEED) return null
-    if (rect.left > window.innerWidth + BLEED || rect.top > window.innerHeight + BLEED) return null
     return { left: rect.left, top: rect.top }
   }
 
   /**
-   * One pin per open note, plus the outline under the pointer.
+   * Where an edit's pin goes, or `null` when it has nowhere to go.
+   *
+   * Only ever the live element. An edit keeps no page rect of its own, and
+   * the node it was made on is the only honest place to say "this changed":
+   * once the app has re-rendered it away the row stays in the Changes tab, but
+   * a pin at a remembered coordinate would claim a change on whatever now sits
+   * there.
+   */
+  const editAnchor = (edit: EditRecord): Point | null => {
+    const live = editElement(edit.id)
+    if (!live?.isConnected) return null
+    const rect = live.getBoundingClientRect()
+    return { left: rect.left, top: rect.top }
+  }
+
+  const inView = (point: Point): boolean =>
+    point.left >= -BLEED &&
+    point.top >= -BLEED &&
+    point.left <= window.innerWidth + BLEED &&
+    point.top <= window.innerHeight + BLEED
+
+  /** Every item that currently exists, painted or not — see the pruning in `paint`. */
+  const liveIds = (): Set<string> =>
+    new Set([...annotations().map((note) => note.id), ...edits().map((edit) => edit.id)])
+
+  /**
+   * Every pin this frame, in outbox order, measured and not yet written.
+   *
+   * ONE pin per outbox item, notes and edits alike, numbered by
+   * `outboxNumbers` — the same number the item's row in the Changes tab and
+   * its heading in the brief carry. A canvas that numbered notes on their own
+   * would put a 2 on the page for the item the panel calls 3, and "fix 3" would
+   * name two different things depending on where the designer was looking.
+   *
+   * Pins that share an anchor fan out to the right, one pin and `FAN_GAP`
+   * apart, in outbox order. Several edits on one element — or a note and the
+   * edit it prompted — all anchor at the element's top-left, and stacked
+   * exactly they read as ONE pin whose number is whichever was painted last:
+   * the others are on the page and cannot be seen, pointed at or clicked. The
+   * fan is counted before culling, so a pin keeps its slot while its siblings
+   * scroll in and out.
+   */
+  const layout = (): Pin[] => {
+    const items = outboxItems()
+    const numbers = outboxNumbers(items)
+    const taken = new Map<string, number>()
+    const pins: Pin[] = []
+    for (const item of items) {
+      const anchor = item.type === "note" ? noteAnchor(item.note) : editAnchor(item.edit)
+      if (!anchor) continue
+      const key = `${Math.round(anchor.left)},${Math.round(anchor.top)}`
+      const slot = taken.get(key) ?? 0
+      taken.set(key, slot + 1)
+      if (!inView(anchor)) continue
+      const id = item.type === "note" ? item.note.id : item.edit.id
+      const label = String(numbers.get(id) ?? pins.length + 1)
+      const left = anchor.left + slot * (MARKER + FAN_GAP)
+      if (item.type === "note") {
+        const words = item.note.comment
+        pins.push({ id, kind: "note", label, name: `Note ${label}: ${words}`, title: words, left, top: anchor.top })
+      } else {
+        const { property, from, to } = item.edit
+        const name = `Edit ${label}: ${property}: ${from} → ${to}`
+        pins.push({ id, kind: "edit", label, name, title: name, left, top: anchor.top })
+      }
+    }
+    return pins
+  }
+
+  /**
+   * One pin per outbox item, plus the outline under the pointer.
    *
    * Every rect is read before anything is written, for the reason
    * `canvas/selection` spells out: a style write between two reads invalidates
-   * layout, so an interleaved pass costs one synchronous reflow per note on
+   * layout, so an interleaved pass costs one synchronous reflow per pin on
    * every frame of a scroll.
    */
   const paint = (): void => {
-    const notes = annotations()
     const settings = annotationSettings()
     // Stood-down chrome answers the same way `hideUntilRestart` does: an editor
     // that has handed the page back must not leave its own marks over it. And
@@ -647,7 +763,7 @@ export function installAnnotations(context: EditorContext): void {
     // otherwise land on the same corner. See `MarkerLayer` in `./store`.
     const shown = notePinsVisible() && editorOwnsInput()
 
-    const points = shown ? notes.map(markerPoint) : []
+    const pins = shown ? layout() : []
     // `showing` and not `annotating()`, for the same reason `shown` above is not
     // just the hide setting: a mode whose surfaces have stood down must not have
     // one of them painted back in by the next frame of a scroll.
@@ -672,7 +788,7 @@ export function installAnnotations(context: EditorContext): void {
     document.documentElement.style.setProperty("--de-ann-color", settings.markerColor)
 
     /**
-     * Which notes ended up on screen this frame.
+     * Which items ended up on screen this frame.
      *
      * Both highlights are reconciled against it below rather than trusted to
      * the pointer, because neither half of the correspondence is guaranteed to
@@ -684,69 +800,75 @@ export function installAnnotations(context: EditorContext): void {
      */
     const onScreen = new Set<string>()
 
-    for (let index = 0; index < points.length; index += 1) {
-      const point = points[index]
+    for (let index = 0; index < pins.length; index += 1) {
+      const pin = pins[index]
       const marker = markerAt(index)
-      if (!point) {
-        marker.style.display = "none"
-        marker.classList.remove(MARKER_ACTIVE)
-        continue
-      }
-      const note = notes[index]
-      const label = String(index + 1)
-      onScreen.add(note.id)
+      onScreen.add(pin.id)
       /*
-       * The pop fires once per NOTE, not once per reveal.
+       * The pop fires once per ITEM, not once per reveal.
        *
        * The obvious trigger — this pooled node going from hidden to shown — is
-       * wrong twice over: the pool reassigns nodes between notes as the list
+       * wrong twice over: the pool reassigns nodes between items as the list
        * changes, and a pin scrolled off the bottom and back re-enters through
        * exactly the same path. Either would pop a pin that has been there all
-       * along. Keying off the note id instead means the arrival belongs to the
-       * note, which is the thing that actually arrived.
+       * along. Keying off the item id instead means the arrival belongs to the
+       * note or edit, which is the thing that actually arrived.
        */
-      if (!announced.has(note.id)) {
-        announced.add(note.id)
+      if (!announced.has(pin.id)) {
+        announced.add(pin.id)
         marker.classList.add(MARKER_ARRIVING)
         const arriving = marker
         setTimeout(() => arriving.classList.remove(MARKER_ARRIVING), ARRIVE_MS())
       }
       marker.style.display = "block"
-      marker.style.left = `${point.left}px`
-      marker.style.top = `${point.top}px`
-      // Written only on change. These are the three properties that would
-      // otherwise be re-set on every frame of every scroll, and `title` in
-      // particular closes the tooltip the user is reading when it is re-set.
-      if (marker.dataset.note !== note.id) marker.dataset.note = note.id
-      if (marker.textContent !== label) marker.textContent = label
-      if (marker.title !== note.comment) {
-        marker.title = note.comment
-        marker.setAttribute("aria-label", `Note ${label}: ${note.comment}`)
+      marker.style.left = `${pin.left}px`
+      marker.style.top = `${pin.top}px`
+      // Written only on change. These are the properties that would otherwise
+      // be re-set on every frame of every scroll, and `title` in particular
+      // closes the tooltip the user is reading when it is re-set.
+      if (marker.dataset.item !== pin.id) marker.dataset.item = pin.id
+      if (marker.dataset.kind !== pin.kind) marker.dataset.kind = pin.kind
+      // `data-note` survives for notes only: it is the name the Notes panel and
+      // the suites have always read a note's pin by, and an edit is not one.
+      if (pin.kind === "note") {
+        if (marker.dataset.note !== pin.id) marker.dataset.note = pin.id
+      } else if (marker.dataset.note !== undefined) {
+        delete marker.dataset.note
       }
+      if (marker.textContent !== pin.label) marker.textContent = pin.label
+      if (marker.title !== pin.title) marker.title = pin.title
+      // Compared on its own rather than riding on `title`: the name carries the
+      // number, and a note renumbered by an edit undone before it keeps its
+      // words, so a name written only when the words change would go on
+      // announcing the old number.
+      if (marker.getAttribute("aria-label") !== pin.name) marker.setAttribute("aria-label", pin.name)
       // Re-stated rather than added once, because the nodes are pooled: a pin
-      // that last drew a resolved note would keep reading as resolved under
-      // whichever note reuses it next.
-      // Same reason, and the reason the panel names a note rather than a pin:
-      // re-derived from the id every frame, so the emphasis follows the note
+      // that last drew an edit would keep the edit's square under whichever
+      // note reuses it next.
+      marker.classList.toggle("de-ann-marker--edit", pin.kind === "edit")
+      // Same reason, and the reason the panel names an item rather than a pin:
+      // re-derived from the id every frame, so the emphasis follows the item
       // through a repool instead of staying on the button it first landed on.
-      marker.classList.toggle(MARKER_ACTIVE, note.id === activeNote)
+      marker.classList.toggle(MARKER_ACTIVE, pin.id === activeNote)
     }
-    for (let index = points.length; index < markers.length; index += 1) {
+    for (let index = pins.length; index < markers.length; index += 1) {
       markers[index].style.display = "none"
       markers[index].classList.remove(MARKER_ACTIVE)
     }
 
     // Deleted, not merely off screen. A pin scrolled out of view under a row
     // the pointer is still on must light up again when it scrolls back, so the
-    // id survives; what it must never survive is the note itself going away.
-    if (activeNote && !annotations().some((note) => note.id === activeNote)) activeNote = null
+    // id survives; what it must never survive is the item itself going away.
+    // Both kinds count: the Changes tab hovers edit rows as well as notes.
+    const live = activeNote || announced.size > 0 ? liveIds() : null
+    if (activeNote && live && !live.has(activeNote)) activeNote = null
     /*
-     * Forget notes that no longer exist, so a deleted-then-undone note arrives
-     * again rather than reappearing fully formed. Pruned against the live list
-     * rather than against `onScreen`, which is only what is in the viewport.
+     * Forget items that no longer exist, so a deleted-then-undone note — or an
+     * edit undone and redone — arrives again rather than reappearing fully
+     * formed. Pruned against the live lists rather than against `onScreen`,
+     * which is only what is in the viewport.
      */
-    if (announced.size > 0) {
-      const live = new Set(annotations().map((note) => note.id))
+    if (live) {
       for (const id of announced) if (!live.has(id)) announced.delete(id)
     }
     // The mirror is the opposite case and answers to the pointer: a pin that
@@ -789,7 +911,10 @@ export function installAnnotations(context: EditorContext): void {
     // kept running for a layer the audit has taken over would read a rect per
     // note per frame to draw nothing at all.
     if (!notePinsVisible()) return false
-    return annotations().some((note) => Boolean(note.element?.isConnected))
+    if (annotations().some((note) => Boolean(note.element?.isConnected))) return true
+    // An edit's pin only ever sits on a live element, so every painted edit pin
+    // is one that can move without telling us.
+    return edits().some((edit) => Boolean(editElement(edit.id)?.isConnected))
   }
 
   function draw(): void {
@@ -810,7 +935,7 @@ export function installAnnotations(context: EditorContext): void {
     if (!hint) {
       hint = el("div", { class: "de-ann-hint", role: "status" }, [
         icon("MessageSquare", tokens.icon.control),
-        "Click an element, drag a region, or select text to leave a note",
+        "Click, drag an area, or select text to add a note",
       ])
       layer.append(hint)
     }
@@ -1055,6 +1180,9 @@ export function installAnnotations(context: EditorContext): void {
   window.addEventListener("resize", schedule)
 
   const stopNotes = onAnnotationsChange(schedule)
+  // Edits are pins too, and the journal is a separate store with its own
+  // listeners: a change made, or taken back by Cmd+Z, renumbers every pin after it.
+  const stopEdits = onEditsChange(schedule)
   const stopSettings = onSettingsChange(schedule)
   const stopLayer = onMarkerLayerChange(schedule)
   const unsubscribe = context.subscribe((next, previous) => {
@@ -1095,6 +1223,7 @@ export function installAnnotations(context: EditorContext): void {
   function teardown(): void {
     unsubscribe()
     stopNotes()
+    stopEdits()
     stopSettings()
     stopLayer()
     window.removeEventListener(HOVER_EVENT, onPanelHover)

@@ -33,7 +33,8 @@ import { el, round } from "../../core/dom"
 import { icon, type IconName } from "../../core/icons"
 import { tokens } from "../../core/tokens"
 import { colorField, swatch } from "./color"
-import { group, iconSegmented, numberField, section, selectField, textField } from "./field"
+import { group, iconSegmented, numberField, selectField, textField } from "./field"
+import { styledSection } from "../../options/panel"
 import { directText, textStyleEvidence, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -410,12 +411,10 @@ export const typographySection: InspectorSection = (context) => {
       vertical
         ? null
         : el("div", { class: "de-hint" }, [
-            `<${selection.tagName}> is display: ${computed.display}, where the only property that` +
-              ` would move its text vertically is align-content — which core/tailwind.ts cannot` +
-              ` spell, so the edit would never reach your files. Make it a flex or grid container first.`,
+            `Vertical alignment needs a flex or grid container. Add auto layout first.`,
           ])
     ),
   ])
 
-  return section("Typography", body)
+  return styledSection(context, "typography", "Typography", body)
 }

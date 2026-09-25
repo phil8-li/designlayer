@@ -113,7 +113,7 @@ export function sharedComponentWarning(name: string): string {
   // "at least" only when the walk stopped early, so the ordinary sentence is
   // not hedged for a limit nobody hit.
   const qualifier = answer.truncated ? "at least " : ""
-  return `${name} is used in ${qualifier}${places}. Writing this changes all of them.`
+  return `${name} is used in ${qualifier}${places}. This changes all of them.`
 }
 
 /** Test seam: the cache outlives a panel, so a suite has to be able to clear it. */

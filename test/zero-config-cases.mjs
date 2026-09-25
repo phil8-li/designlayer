@@ -602,7 +602,7 @@ console.log("\nThe start screen opens both frameworks")
         devScript: null,
       })
       assert.equal(answer.status, 400)
-      assert.match(answer.body.error, /neither React nor Angular/)
+      assert.match(answer.body.error, /does not use React or Angular/)
     })
   )
 }

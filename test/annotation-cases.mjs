@@ -953,26 +953,83 @@ function seedBrief() {
   note(saveButton, "This button is doing too much")
   tick()
   editor.recordEdit({ property: "padding", from: "16px", to: "24px", element: lede, written: true })
+  // Apply ran: the padding is in the file, not merely queued for it.
+  editor.markEditsWritten()
   tick()
   editor.recordEdit({ property: "icon", from: "Star", to: "Heart", element: saveButton, written: false })
 }
 
-check("the brief files each change under written or not written, unmissably", () => {
+/** The block of one `### N.` item, up to the next item or the end. */
+function briefItem(brief, number) {
+  const start = brief.indexOf(`### ${number}. `)
+  if (start === -1) return ""
+  const next = brief.indexOf("\n### ", start + 1)
+  return brief.slice(start, next === -1 ? undefined : next)
+}
+
+check("the brief states each change's status, unmissably", () => {
   seedBrief()
+  editor.updateSettings({ outputDetail: "standard" })
   const brief = editor.buildAnnotationBrief()
 
-  const done = brief.indexOf("## Already written to source")
-  const doneItem = brief.indexOf("24px")
-  const todo = brief.indexOf("## Showing in the browser only")
-  const todoItem = brief.indexOf("swap the icon to `Heart`")
+  // Sections by kind are gone: one list, and the status rides on each item.
+  assert.ok(!brief.includes("## Already written to source"), "the edits still sit under their own headings")
+  assert.ok(!brief.includes("## Showing in the browser only"), "the edits still sit under their own headings")
 
-  assert.ok(done !== -1 && todo !== -1, "the two kinds of change share one heading")
-  assert.ok(done < doneItem && doneItem < todo, "the applied change was filed as still needing work")
-  assert.ok(todo < todoItem, "the preview-only change was filed as already in the file")
-  // Spelled out rather than implied: this is the section that stops an agent
-  // applying the designer's padding change a second time.
-  assert.match(brief, /Applying them a second time is a conflict, not a fix\./)
-  assert.match(brief, /exists as a live preview and in no file/)
+  const done = briefItem(brief, 2)
+  const todo = briefItem(brief, 3)
+  assert.match(done, /24px/)
+  assert.match(
+    done,
+    /\*\*Status:\*\* Already written to source — do not apply again\n\*\*Change:\*\*/,
+    "the applied change does not say it is done, right before what it changed"
+  )
+  assert.match(todo, /swap the icon to `Heart`/)
+  assert.match(todo, /\*\*Status:\*\* Showing in the browser only — still needs writing/)
+  assert.ok(!/Already written/.test(todo), "the preview-only change was filed as already in the file")
+  // Spelled out once at the top as well: this is the sentence that stops an
+  // agent applying the designer's padding change a second time.
+  const header = brief.slice(0, brief.indexOf("### 1."))
+  assert.match(header, /Do not apply them again — a second application is a conflict, not a fix\./)
+})
+
+check("the brief numbers notes and edits as one list, in the order they happened", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "standard" })
+  note(saveButton, "First thought")
+  tick()
+  editor.recordEdit({ property: "padding", from: "16px", to: "24px", element: lede, written: false })
+  tick()
+  note(lede, "Second thought")
+  const brief = editor.buildAnnotationBrief()
+
+  assert.match(briefItem(brief, 1), /\*\*Feedback:\*\* First thought/)
+  assert.match(briefItem(brief, 2), /\*\*Change:\*\* set `padding` to `24px`/)
+  assert.match(briefItem(brief, 3), /\*\*Feedback:\*\* Second thought/)
+  assert.equal(briefItem(brief, 4), "", "an item was numbered twice")
+  // Nothing is written, so there is nothing to warn about re-applying.
+  assert.ok(!brief.includes("Do not apply them again"), "a warning about written work with none written")
+})
+
+check("a queued edit is not described as already written", () => {
+  reset()
+  editor.updateSettings({ outputDetail: "standard" })
+  // `written` is set the moment the writer can spell it; until Apply runs the
+  // change is queued, and in no file.
+  editor.recordEdit({ property: "padding", from: "16px", to: "24px", element: lede, written: true })
+  const brief = editor.buildAnnotationBrief()
+
+  assert.ok(!/Already written/i.test(brief), "a queued change told the agent it is already in the file")
+  assert.match(
+    briefItem(brief, 1),
+    /\*\*Status:\*\* Queued in DesignLayer — it will write this itself; do not apply by hand/
+  )
+
+  editor.updateSettings({ outputDetail: "compact" })
+  assert.match(editor.buildAnnotationBrief(), /^1\. .*— queued in DesignLayer, do not apply by hand$/m)
+
+  editor.markEditsWritten()
+  assert.match(editor.buildAnnotationBrief(), /^1\. .*— already written, do not apply again$/m)
 })
 
 check("nothing to hand over says so, rather than printing empty headings", () => {
@@ -1197,13 +1254,13 @@ check("a dragged region is an Area selection at its page position", () => {
   )
 })
 
-check("edits read like notes, numbered on from them, under their own headings", () => {
+check("edits read like notes, in the same numbered list, with a status line", () => {
   seedBrief()
   editor.updateSettings({ outputDetail: "standard" })
   const brief = editor.buildAnnotationBrief()
   assert.match(
     brief,
-    /^### 2\. paragraph: "Vertex AI is now Agent Platform\."\n\*\*Location:\*\* #app > \.panel > #lede\n\*\*React:\*\* <Lede>\n\*\*Change:\*\* set `padding` to `24px` \(was `16px`\)$/m
+    /^### 2\. paragraph: "Vertex AI is now Agent Platform\."\n\*\*Location:\*\* #app > \.panel > #lede\n\*\*React:\*\* <Lede>\n\*\*Status:\*\* Already written to source — do not apply again\n\*\*Change:\*\* set `padding` to `24px` \(was `16px`\)$/m
   )
   assert.match(brief, /^### 3\. button "Save"\n[\s\S]*?\*\*Change:\*\* swap the icon to `Heart`/m)
 })
@@ -1214,7 +1271,7 @@ check("forensic opens with Agentation's environment block and rule", () => {
   const brief = editor.buildAnnotationBrief()
   assert.match(
     brief,
-    /^## Page Feedback: \/\n\*\*App:\*\* app on localhost\n\n\*\*Environment:\*\*\n- Viewport: \d+×\d+\n- URL: http:\/\/localhost\/\n- User Agent: .+\n- Timestamp: .+\n- Device Pixel Ratio: \d+(\.\d+)?\n\n---\n\n### 1\. button "Save"\n\*\*Full DOM Path:\*\* body > main#app > section\.panel > div\.row > button\.btn\n/
+    /^## Page Feedback: \/\n\*\*App:\*\* app on localhost\n\n\*\*Environment:\*\*\n- Viewport: \d+×\d+\n- URL: http:\/\/localhost\/\n- User Agent: .+\n- Timestamp: .+\n- Device Pixel Ratio: \d+(\.\d+)?\n\n---\n\nItems marked already written are in the source files\. [^\n]+\n\n### 1\. button "Save"\n\*\*Full DOM Path:\*\* body > main#app > section\.panel > div\.row > button\.btn\n/
   )
   assert.ok(!brief.includes("**Viewport:**"), "forensic printed the viewport twice")
 })
@@ -1701,7 +1758,7 @@ const pane = tab.node
 const tools = () => Array.from(pane.querySelectorAll(".de-ann-tools button"))
 const eyeButton = () => tools()[0]
 const clearButton = () => tools()[1]
-const settingsSwitch = () => pane.querySelector('.de-ann-toggle[aria-label="Show markers"]')
+const settingsSwitch = () => pane.querySelector('.de-ann-toggle[aria-label="Show pins"]')
 const noteRows = () => Array.from(pane.querySelectorAll(".de-ann-item--note"))
 const editRows = () => Array.from(pane.querySelectorAll(".de-ann-item--edit"))
 /**
@@ -1793,21 +1850,20 @@ check("the whole-session buttons arrive with the first thing the session holds",
   assert.equal(pane.querySelector(".de-ann-ctas"), null, "the buttons outlived the session")
 })
 
-check("a note brings the Notes section with it, holding the detail menu and the rows", () => {
+check("a note brings the Notes and edits section with it, holding the detail menu and the rows", () => {
   seedTab()
   note(saveButton, "Something to pin")
 
   /*
-   * The empty state goes, and a section arrives in its place. Direct edits
-   * stays away: this session changed nothing on the canvas, and a heading over
-   * an empty body would be the tab reporting a pile that does not exist.
+   * The empty state goes, and the one section arrives in its place. Notes and
+   * edits share it: there is no separate edits heading to stay away.
    */
   assert.deepEqual(
     Array.from(pane.children).map((node) => node.className),
     ["de-section", "de-ann-ctas", "de-section"]
   )
   const notes = sections()[0]
-  assert.equal(notes.querySelector(".de-section-title").textContent.trim(), "Notes")
+  assert.equal(notes.querySelector(".de-section-title").textContent.trim(), "Notes and edits")
   /*
    * A header and the fold layer under it. The body is one level down now: the
    * section animates open and shut on a grid row, and the row has to belong to
@@ -1826,10 +1882,9 @@ check("a note brings the Notes section with it, holding the detail menu and the 
    * Inside the body: what the section is for, the control that governs how much
    * it says, then the rows themselves.
    *
-   * The detail menu MOVED HERE from above the whole list. It governs the brief,
-   * and the brief is the notes' route out — the edits leave through a button in
-   * their own section, which never consults it. There is still exactly one of
-   * it; a second surface onto one setting is how a panel disagrees with itself.
+   * The detail menu governs the brief, which carries notes and edits alike.
+   * There is exactly one of it; a second surface onto one setting is how a
+   * panel disagrees with itself.
    */
   assert.deepEqual(
     Array.from(notes.querySelector(".de-section-body").firstElementChild.children).map(
@@ -1845,61 +1900,42 @@ check("a note brings the Notes section with it, holding the detail menu and the 
   assert.equal(notes.querySelector(".de-ann-group-count"), null, "the group tally is back")
 })
 
-check("the section headings are the two piles, and Settings is said once", () => {
+check("one outbox heading, and Settings is said once", () => {
   seedTab()
   note(saveButton, "Something to pin")
   const titles = Array.from(pane.querySelectorAll(".de-section-title"))
   /*
-   * Read RAW, with nothing stripped, because nothing shares these headings any
-   * more. "Handover" is gone with the container it named — a word over a tab
-   * already called Changes, wrapped around two piles that are read on two
-   * different errands. The headings are the piles now.
+   * Read RAW. Notes and edits are one list under one heading, with one
+   * numbering and one set of buttons; "Direct edits" and "Notes" as separate
+   * sections are gone.
    */
   assert.deepEqual(
     titles.map((node) => node.textContent.trim()),
-    ["Notes", "Settings"]
+    ["Notes and edits", "Settings"]
   )
-  /*
-   * The title is a SPAN and the fold is a button behind the whole bar — the
-   * Design tab's arrangement, and the reason it is not one element doing both:
-   * a header can carry a trailing action and a `+` nested inside a fold button
-   * would be a button inside a button.
-   */
   assert.equal(titles[1].tagName, "SPAN", "the settings title is a control again")
+  // Settings never folds: no toggle, no chevron, and the body is always open.
   const settingsHeader = sections()[1].querySelector(".de-section-header")
-  assert.ok(settingsHeader.querySelector(".de-section-toggle"), "settings lost its fold")
-  assert.ok(settingsHeader.querySelector(".de-chevron"), "settings lost its chevron")
+  assert.equal(settingsHeader.querySelector(".de-section-toggle"), null, "settings grew a fold")
+  assert.equal(settingsHeader.querySelector(".de-chevron"), null, "settings grew a chevron")
 })
 
-check("the settings fold is user state and survives a repaint", () => {
+check("settings is always open and survives a repaint", () => {
   seedTab()
-  /*
-   * The fold is `section()`'s now, so the thing that hides is the section BODY
-   * rather than the settings block itself, and the state lives in the panel's
-   * own collapse map instead of a local flag.
-   */
   const settingsSection = sections().at(-1)
-  const fold = settingsSection.querySelector(".de-section-toggle")
   const body = settingsSection.querySelector(".de-section-body")
   const inner = pane.querySelector(".de-ann-settings-body")
-  assert.equal(body.hidden, true, "settings opens itself")
-  assert.equal(fold.getAttribute("aria-expanded"), "false")
-
-  press(fold)
-  assert.equal(body.hidden, false)
-  assert.equal(fold.getAttribute("aria-expanded"), "true")
+  assert.equal(body.hidden, false, "settings arrived folded")
 
   // Dropping a marker repaints the list, and a settings block rebuilt with it
-  // would re-collapse under the reader mid-sentence and take the focus of
-  // whoever had just used a control in it.
+  // would take the focus of whoever had just used a control in it.
   note(saveButton, "Something to repaint for")
-  assert.equal(body.hidden, false, "the fold closed itself when a note arrived")
+  assert.equal(body.hidden, false)
   assert.equal(
     pane.querySelector(".de-ann-settings-body"),
     inner,
     "the settings block was rebuilt, so every control in it was replaced"
   )
-  press(fold)
 })
 
 check("the visibility toggle sits with the CTAs, not behind the settings fold", () => {
@@ -1922,8 +1958,8 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
 
   assert.equal(editor.markersVisible(), true)
   assert.equal(eye.dataset.glyph, "Eye")
-  assert.equal(eye.getAttribute("aria-label"), "Hide markers")
-  // The switch is labelled "Show markers" and reads forward: checked means the
+  assert.equal(eye.getAttribute("aria-label"), "Hide pins")
+  // The switch is labelled "Show pins" and reads forward: checked means the
   // markers are on the page, which is the state the eye beside it also reports.
   assert.equal(settingsSwitch().getAttribute("aria-checked"), "true")
 
@@ -1933,7 +1969,7 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
   assert.equal(editor.markersVisible(), false, "the footer toggle never reached the store")
   assert.equal(editor.annotationSettings().hideUntilRestart, true)
   assert.equal(eye.dataset.glyph, "EyeOff", "the eye is not struck through while hidden")
-  assert.equal(eye.getAttribute("aria-label"), "Show markers")
+  assert.equal(eye.getAttribute("aria-label"), "Show pins")
   assert.equal(
     settingsSwitch().getAttribute("aria-checked"),
     "false",
@@ -1945,7 +1981,7 @@ check("the footer toggle and the settings row are one flag, read both ways", () 
   press(settingsSwitch())
   assert.equal(editor.markersVisible(), true)
   assert.equal(eye.dataset.glyph, "Eye")
-  assert.equal(eye.getAttribute("aria-label"), "Hide markers")
+  assert.equal(eye.getAttribute("aria-label"), "Hide pins")
 })
 
 check("hidden is a fact about the markers, so the eye is two drawings", () => {
@@ -1955,7 +1991,7 @@ check("hidden is a fact about the markers, so the eye is two drawings", () => {
   note(saveButton, "Something to pin")
   const eye = eyeButton()
   // No `aria-pressed`: the label already moves with the state, and a moving
-  // label over a pressed state announces "Show markers, pressed", which says
+  // label over a pressed state announces "Show pins, pressed", which says
   // the opposite of what is true. The state is carried by the drawing.
   assert.equal(eye.getAttribute("aria-pressed"), null, "the eye reports itself as a pressed button")
   press(eye)
@@ -2020,16 +2056,12 @@ check("a note row offers exactly edit and delete, and says what delete costs", (
   /*
    * The name carries the consequence, and the consequence changed.
    *
-   * It used to say "There is no undo." and that was true: the row delete was
-   * the last irreversible single click in the editor. It now raises a card
-   * offering the note back, so the sentence promises the recovery instead —
-   * and the promise is asserted here rather than merely allowed, because the
-   * failure it guards against is silent. A reader who believes a reversible
-   * action is final does not press it, and the undo would have paid for
-   * nothing.
+   * The delete is a step on the one undo timeline, and the sentence promises
+   * the recovery — asserted rather than allowed, because a reader who believes
+   * a reversible action is final does not press it.
    */
-  assert.match(remove.getAttribute("aria-label"), /^Delete this note/)
-  assert.match(remove.getAttribute("aria-label"), /undo is offered/i)
+  assert.match(remove.getAttribute("aria-label"), /^Delete note/)
+  assert.match(remove.getAttribute("aria-label"), /undo brings it back/i)
   assert.doesNotMatch(remove.getAttribute("aria-label"), /no undo/i)
   /*
    * `data-de-tip`, and deliberately NO `title`.
@@ -2089,7 +2121,8 @@ check("clear-all needs two clicks, and says what the second one costs", () => {
   // question.
   const [message, kind] = toasts.at(-1)
   assert.match(message, /2 notes/)
-  assert.match(message, /cannot be undone/i)
+  // Clear-all is one undoable step now, so the prompt must not call it final.
+  assert.doesNotMatch(message, /cannot be undone/i)
   // The DEFAULT rung, not `error`. `DURATION.error` is `Infinity`, and a card
   // that never dismisses outlives the six-second arming window it is
   // instructing — it would go on saying "click again" after `disarm()` has
@@ -2101,6 +2134,15 @@ check("clear-all needs two clicks, and says what the second one costs", () => {
   assert.equal(clear.dataset.glyph, "Trash", "the control stayed armed over an empty list")
   assert.equal(clear.disabled, true)
   assert.match(toasts.at(-1)[0], /Deleted 2 notes/)
+  // And the card offers them back, as the one timeline's step.
+  const undo = toasts.at(-1)[2]
+  assert.equal(undo?.label, "Undo", "clearing the notes offered no Undo")
+  undo.onClick()
+  assert.deepEqual(
+    editor.annotations().map((entry) => entry.comment),
+    ["One", "Two"],
+    "the toast's Undo did not bring the notes back in order"
+  )
 })
 
 check("clearing the notes leaves the edits standing", () => {
@@ -2574,7 +2616,7 @@ check("edit asks the canvas to reopen the note, and only a note offers it", () =
   // First of two now, not second of three: the resolve tick that used to lead
   // the row is gone, so edit is the row's opening action.
   const [edit] = rowActions(noteRows()[0])
-  assert.match(edit.getAttribute("aria-label"), /^Reopen this note/)
+  assert.match(edit.getAttribute("aria-label"), /^Edit on page/)
   assert.equal(edit.getAttribute("data-de-tip"), edit.getAttribute("aria-label"))
   assert.equal(edit.getAttribute("title"), null, "the OS tooltip is back over the styled one")
   assert.deepEqual(
@@ -2597,7 +2639,7 @@ check("edit asks the canvas to reopen the note, and only a note offers it", () =
   // queued write stayed, so pressing Apply afterwards wrote a change the
   // designer had explicitly discarded. The bin withdraws the work now, and the
   // label is the thing that has to say so.
-  assert.match(editActions[0].getAttribute("aria-label"), /^Take this change back/)
+  assert.match(editActions[0].getAttribute("aria-label"), /^Discard change/)
 })
 
 check("a pin hovered on the page lights its row, and no other", () => {

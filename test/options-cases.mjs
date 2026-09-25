@@ -147,7 +147,7 @@ async function inventoryCases() {
     delete dom.window.__STORE
     const result = inventory.readInventory()
     assert.equal(result.available, false)
-    assert.match(result.reason, /not on this page/)
+    assert.match(result.reason, /shows your control panel/)
   })
 
   /*
@@ -262,7 +262,7 @@ async function inventoryCases() {
     dom.window.__STORE = stubStore({}, [])
     const result = inventory.readInventory()
     assert.equal(result.available, false)
-    assert.match(result.reason, /registered no controls/)
+    assert.match(result.reason, /screen that fills your control panel/)
     // And it no longer tells the reader to reopen the pane afterwards. The pane
     // subscribes to the host's store and repaints itself, so that instruction
     // described a step the product has never required.
@@ -778,7 +778,13 @@ async function surfaceCases() {
   const bundled = await build({
     stdin: {
       contents: `
-        export { optionsSection } from "./src/options/panel"
+        export { scopedStyles, styledSection } from "./src/options/panel"
+        export { typographySection } from "./src/panels/inspector/section-typography"
+        export { fillSection } from "./src/panels/inspector/section-fill"
+        export { strokeSection } from "./src/panels/inspector/section-stroke"
+        export { effectsSection } from "./src/panels/inspector/section-effects"
+        export { appearanceSection } from "./src/panels/inspector/section-appearance"
+        export { unifiedLayoutSection } from "./src/panels/inspector/section-unified-layout"
         export { controlsTab } from "./src/panels/controls"
         export { getState, setState, subscribe, primarySelection } from "./src/core/store"
       `,
@@ -795,19 +801,26 @@ async function surfaceCases() {
   )
 }
 
-/** The right panel's Saved styles section, with the verbs now inside it. */
+/**
+ * Saved styles inside the design sections, one scope per section.
+ *
+ * The standalone "Saved styles" section is gone: each of Typography, Fill,
+ * Stroke, Effects, Appearance and Layout carries a header toggle that opens
+ * its scope's styles at the top of its body.
+ */
 function savedStylesCases(surface) {
-  console.log("\nSaved styles, in the inspector")
+  console.log("\nSaved styles, in the design sections")
 
-  // No control store on this window, so nothing is bound to the element and the
-  // only thing that can populate the list is a saved style.
   delete globalThis.window.__STORE
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
+  const { window } = globalThis
 
-  const element = globalThis.document.createElement("div")
+  const element = globalThis.document.createElement("p")
+  element.textContent = "Hello"
   globalThis.document.body.append(element)
   const KEY = "panel-cases:1"
+  const writes = []
   const context = {
     editor: {
       apiBase: "http://127.0.0.1:0/api",
@@ -815,165 +828,189 @@ function savedStylesCases(surface) {
       getState: surface.getState,
       setState: surface.setState,
     },
-    writer: { setStyle() {}, setClassName() {} },
-    selection: { key: KEY, element, componentName: "Card", tagName: "div", source: null },
-    computed: globalThis.window.getComputedStyle(element),
+    // Records every writer call, whatever the verb is named.
+    writer: new Proxy({}, { get: (_, verb) => (...args) => writes.push([verb, ...args]) }),
+    selection: { key: KEY, element, componentName: "Card", tagName: "p", source: null },
+    computed: window.getComputedStyle(element),
     invalidate() {},
   }
-  // The title is a span beside the fold button rather than inside it: the
-  // chevron moved to the trailing edge, so the button holds no text of its own.
-  const heading = (node) => node?.querySelector(".de-section-title")?.textContent.trim()
-  const verbs = (node) =>
-    Array.from(node.querySelectorAll(".de-opt-actions button")).map((button) => button.textContent.trim())
-  const withNothingSaved = () => {
-    surface.setState({ optionSets: {} })
-    return surface.optionsSection(context)
+  const click = (node) => node.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+  const styles = (scope) => surface.scopedStyles(context, scope)
+  /** Leaves the scope's panel in the wanted state, whatever an earlier case did. */
+  const opened = (scope, open = true) => {
+    const control = styles(scope)
+    if ((control.action.getAttribute("aria-expanded") === "true") !== open) click(control.action)
+    return styles(scope)
   }
-  const withOneSaved = () => {
-    surface.setState({
-      optionSets: {
-        [KEY]: {
-          key: KEY,
-          activeOptionId: "opt-1",
-          options: [{ id: "opt-1", name: "Compact", className: "p-2", style: {}, createdAt: 1 }],
-        },
-      },
-    })
-    return surface.optionsSection(context)
-  }
+  const option = (id, name, scope, className = "") => ({
+    id,
+    name,
+    className,
+    style: {},
+    createdAt: Number(id.replace(/\D/g, "")) || 1,
+    scope,
+  })
+  const withStyles = (...options) =>
+    surface.setState({ optionSets: options.length ? { [KEY]: { key: KEY, activeOptionId: null, options } } : {} })
 
-  /*
-   * The claim the whole rearrangement rests on. The section used to vanish on
-   * an element with nothing saved, and the only control that can ever create a
-   * first saved style lived nine sections below it as a consequence. If the box
-   * can disappear again, the verbs have to leave again.
-   */
-  check("an element with nothing saved still gets the box its verbs live in", () => {
-    const node = withNothingSaved()
-    assert.ok(node, "the section vanished on the one element that most needs its Save button")
-    assert.equal(verbs(node).length, 3, `the verbs are ${JSON.stringify(verbs(node))}`)
-    const text = node.querySelector(".de-empty").textContent
-    assert.match(text, RECOVERY, `the empty list names no action: ${text}`)
+  check("the header toggle is named for its scope and starts shut on a fresh element", () => {
+    withStyles()
+    const { action, body } = opened("typography", false)
+    assert.equal(action.getAttribute("aria-label"), "Text styles")
+    assert.equal(action.getAttribute("aria-expanded"), "false")
+    assert.equal(action.disabled, false)
+    assert.equal(body.hidden, true, "a shut panel with nothing applied still takes space")
+    assert.equal(styles("fill").action.getAttribute("aria-label"), "Color styles")
   })
 
-  check("the three verbs sit above the list rather than nine sections below it", () => {
-    const node = withOneSaved()
-    const row = node.querySelector(".de-opt-actions")
-    const list = node.querySelector('[role="radiogroup"]')
-    assert.ok(row && list)
-    // `compareDocumentPosition` rather than an index, so this keeps holding if
-    // a helper line or another child lands between the two.
-    assert.ok(
-      row.compareDocumentPosition(list) & globalThis.window.Node.DOCUMENT_POSITION_FOLLOWING,
-      "the list is drawn before the verbs that act on it"
-    )
-    assert.equal(node.querySelector(".de-inspector-footer"), null, "the footer is still drawn")
+  check("the toggle opens in place and stays open across a rebuild", () => {
+    withStyles()
+    const shut = opened("typography", false)
+    click(shut.action)
+    assert.equal(shut.action.getAttribute("aria-expanded"), "true")
+    assert.equal(shut.body.hidden, false)
+    assert.equal(shut.body.querySelector(".de-style-panel").hidden, false)
+    assert.equal(styles("typography").action.getAttribute("aria-expanded"), "true", "a rebuild closed it")
+    assert.equal(styles("fill").action.getAttribute("aria-expanded"), "false", "open state leaked across scopes")
   })
 
-  /*
-   * A natively disabled button leaves the tab order and stops receiving pointer
-   * events, so the `title` explaining why it is greyed can never open — the
-   * reason becomes readable exactly when it stops being needed. Both halves are
-   * asserted: that the attribute is not used, and that a reason is on screen.
-   */
-  check("a verb that cannot run stays reachable and says why in visible text", () => {
-    const node = withNothingSaved()
-    const [save, update, revert] = node.querySelectorAll(".de-opt-actions button")
-    assert.equal(save.getAttribute("aria-disabled"), "false")
-    assert.equal(update.getAttribute("aria-disabled"), "true")
+  check("an empty scope names the action that fills it", () => {
+    withStyles()
+    const { body } = opened("typography")
+    const text = body.querySelector(".de-style-empty")?.textContent ?? ""
+    assert.match(text, RECOVERY, `the empty state names no action: ${text}`)
+    assert.match(text, /text styles/)
+  })
+
+  check("Revert stays reachable while unavailable, and does nothing when pressed", () => {
+    withStyles()
+    const buttons = Array.from(opened("typography").body.querySelectorAll(".de-opt-actions button"))
+    assert.deepEqual(buttons.map((b) => b.textContent.trim()), ["Save as text style", "Revert"])
+    const revert = buttons[1]
     assert.equal(revert.getAttribute("aria-disabled"), "true")
-    for (const button of [save, update, revert]) {
-      assert.equal(button.disabled, false, `${button.textContent} is natively disabled`)
-    }
-    const reason = node.querySelector(".de-opt-reason")
-    assert.ok(reason, "two greyed buttons and nothing on screen saying what would un-grey them")
-    assert.match(reason.textContent, RECOVERY)
-  })
-
-  check("an unavailable verb does nothing when pressed", () => {
-    const node = withNothingSaved()
-    const revert = Array.from(node.querySelectorAll(".de-opt-actions button")).at(-1)
-    // No throw and no state change is the whole of the guarantee: `aria-disabled`
-    // does not stop the click the way `disabled` would, so the handler has to.
-    revert.dispatchEvent(new globalThis.window.MouseEvent("click", { bubbles: true }))
+    assert.equal(revert.disabled, false, "natively disabled hides its reason")
+    writes.length = 0
+    click(revert)
+    assert.deepEqual(writes, [])
     assert.deepEqual(surface.getState().optionSets, {})
   })
 
-  /*
-   * The heading used to add two unrelated populations — bound controls plus
-   * saved styles — so a single saved style under a container read "Design
-   * options (178)". A count is a promise about the list beneath it.
-   */
-  check("the heading counts the list under it and nothing else", () => {
-    assert.equal(heading(withOneSaved()), "Saved styles (1)")
-    assert.equal(heading(withNothingSaved()), "Saved styles")
+  check("Save stores a style scoped to the section and restyles nothing", () => {
+    withStyles()
+    writes.length = 0
+    const save = opened("typography").body.querySelector(".de-opt-actions button")
+    click(save)
+    const saved = surface.getState().optionSets[KEY]?.options.filter((o) => o.id !== "__baseline__" && o.scope)
+    assert.equal(saved?.length, 1, JSON.stringify(surface.getState().optionSets[KEY]))
+    assert.equal(saved[0].scope, "typography")
+    assert.deepEqual(writes, [])
   })
 
-  check("no control touches the element, so no way out to the controls is offered", () => {
-    const node = withOneSaved()
-    const labels = Array.from(node.querySelectorAll("button")).map((b) => b.textContent.trim())
-    assert.ok(
-      labels.every((label) => !/app control/.test(label)),
-      `a button promises controls that do not exist: ${JSON.stringify(labels)}`
+  check("a style the element matches is shown without opening anything", () => {
+    withStyles(option("s1", "Body", "typography"))
+    const { body } = opened("typography", false)
+    assert.equal(body.hidden, false)
+    const row = body.querySelector(".de-style-applied")
+    assert.ok(row && !row.hidden, "the applied style is not visible while the panel is shut")
+    assert.match(row.textContent, /Body/)
+    assert.equal(body.querySelector(".de-style-panel").hidden, true)
+  })
+
+  check("the open list is a radiogroup that checks the matching style", () => {
+    withStyles(option("s1", "Body", "typography"), option("s2", "Large", "typography", "text-lg"))
+    const { body } = opened("typography")
+    const group = body.querySelector('[role="radiogroup"]')
+    assert.equal(group?.getAttribute("aria-label"), "Text styles")
+    const radios = Array.from(group.querySelectorAll('[role="radio"]'))
+    assert.deepEqual(radios.map((r) => r.getAttribute("aria-checked")), ["true", "false"])
+    for (const radio of radios) assert.equal(radio.querySelector("button"), null, "a radio owns a control")
+    assert.equal(body.querySelector(".de-style-applied").hidden, true, "the name is drawn twice")
+  })
+
+  check("Update is unavailable on the matching style and live on the others", () => {
+    withStyles(option("s1", "Body", "typography"), option("s2", "Large", "typography", "text-lg"))
+    const updates = Array.from(opened("typography").body.querySelectorAll('button[aria-label^="Update"]'))
+    assert.deepEqual(updates.map((b) => b.getAttribute("aria-disabled")), ["true", "false"])
+    assert.ok(updates.every((b) => !b.disabled))
+  })
+
+  check("every row verb has an accessible name", () => {
+    withStyles(option("s1", "Body", "typography"))
+    const { body, action } = opened("typography")
+    for (const button of [action, ...body.querySelectorAll("button")]) {
+      assert.ok(button.getAttribute("aria-label") || button.textContent.trim(), button.outerHTML)
+    }
+    assert.ok(body.querySelector('button[aria-label="Rename Body"]'))
+    assert.ok(body.querySelector('button[aria-label="Delete Body"]'))
+  })
+
+  check("a style saved in another scope is not offered here", () => {
+    withStyles(option("s1", "Brand", "fill"), option("s2", "Body", "typography"))
+    const names = Array.from(opened("typography").body.querySelectorAll('[role="radio"] .de-option-name')).map((n) =>
+      n.textContent.trim()
     )
+    assert.deepEqual(names, ["Body"])
   })
 
-  check("the row's delete control calls the thing a saved style, like the list above it", () => {
-    const remove = withOneSaved().querySelector(".de-option-delete")
-    const title = remove.getAttribute("title") ?? ""
-    assert.match(title, /saved style/)
-    // One `ElementOption` used to be a "saved option" in the list and a "saved
-    // variant" on this button — and "variant" is the host's word for a control's
-    // named choices, which is a different thing entirely.
-    assert.doesNotMatch(title, /variant|option/i, `the delete control still says: ${title}`)
+  check("choosing a style applies it through the writer", () => {
+    withStyles(option("s1", "Body", "typography"), option("s2", "Large", "typography", "text-lg"))
+    writes.length = 0
+    const radio = opened("typography").body.querySelectorAll('[role="radio"]')[1]
+    radio.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    assert.ok(writes.length > 0, "Enter on a style wrote nothing")
   })
 
-  /*
-   * With a control store present, the trailing button appears, counts what it
-   * promises, and does the one thing it says: open the Controls tab scoped to
-   * this element. Asserted on the store write rather than on a rendered pane,
-   * because the pane is in the other panel and the store is how they meet.
-   */
-  check("the way out to the app controls counts them and scopes the pane it opens", () => {
-    globalThis.window.__STORE = stubStore(SAMPLE, SAMPLE_VISIBLE)
-    element.setAttribute("data-card", "")
-    surface.setState({ leftTab: "layers", controlsScope: "all", layersOpen: false })
-    try {
-      const node = withNothingSaved()
-      const browse = Array.from(node.querySelectorAll("button")).find((button) =>
-        /app control/.test(button.textContent)
-      )
-      assert.ok(browse, "no way from a bound element to the controls that bind it")
-      assert.match(browse.textContent, /^Browse \d+ app controls?$/)
-      assert.match(browse.textContent, /^Browse 2 /, `the count is wrong: ${browse.textContent}`)
-      browse.dispatchEvent(new globalThis.window.MouseEvent("click", { bubbles: true }))
-      assert.equal(surface.getState().leftTab, "controls")
-      assert.equal(surface.getState().controlsScope, "selection")
-      assert.equal(surface.getState().layersOpen, true, "it opened a tab in a closed panel")
-    } finally {
-      element.removeAttribute("data-card")
-      delete globalThis.window.__STORE
-      surface.setState({ controlsScope: "all" })
+  check("Delete removes the style and nothing else", () => {
+    withStyles(option("s1", "Body", "typography"), option("s2", "Brand", "fill"))
+    click(opened("typography").body.querySelector('button[aria-label="Delete Body"]'))
+    const ids = surface.getState().optionSets[KEY]?.options.map((o) => o.id) ?? []
+    assert.ok(!ids.includes("s1"))
+    assert.ok(ids.includes("s2"))
+  })
+
+  check("the toggle and an existing + share one header strip, and styles sit above the body", () => {
+    withStyles(option("s1", "Body", "typography"))
+    opened("typography")
+    const add = globalThis.document.createElement("button")
+    add.setAttribute("aria-label", "Add fill")
+    const body = globalThis.document.createElement("div")
+    body.className = "own-body"
+    const node = surface.styledSection(context, "typography", "Typography", body, add)
+    const strip = node.querySelector(".de-section-actions .de-style-actions")
+    assert.ok(strip, "no shared header strip")
+    assert.deepEqual(
+      Array.from(strip.children).map((b) => b.getAttribute("aria-label")),
+      ["Text styles", "Add fill"]
+    )
+    const block = node.querySelector(".de-style-block")
+    assert.ok(block.compareDocumentPosition(body) & window.Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+
+  check("each design section carries its own scope's toggle", () => {
+    withStyles()
+    const expected = [
+      ["typographySection", "Text styles"],
+      ["fillSection", "Color styles"],
+      ["strokeSection", "Stroke styles"],
+      ["effectsSection", "Effect styles"],
+      ["appearanceSection", "Appearance styles"],
+      ["unifiedLayoutSection", "Layout styles"],
+    ]
+    // The sections reach for DOM constructors as globals, which JSDOM keeps on `window`.
+    for (const name of ["Node", "HTMLElement", "HTMLInputElement", "SVGElement", "Element", "getComputedStyle", "requestAnimationFrame", "CSS"]) {
+      if (!(name in globalThis) && name in window) globalThis[name] = window[name]
+    }
+    globalThis.requestAnimationFrame ??= (callback) => setTimeout(callback, 0)
+    globalThis.cancelAnimationFrame ??= (handle) => clearTimeout(handle)
+    for (const [name, label] of expected) {
+      const node = surface[name](context)
+      assert.ok(node, `${name} drew nothing`)
+      const toggle = node.querySelector(".de-section-actions .de-style-toggle")
+      assert.equal(toggle?.getAttribute("aria-label"), label, `${name} has no styles toggle`)
     }
   })
 
-  check("one control bound reads as one control, not as one controls", () => {
-    globalThis.window.__STORE = stubStore(
-      { "Overview.Hover.hoverScale": SAMPLE["Overview.Hover.hoverScale"] },
-      ["Overview.Hover.hoverScale"]
-    )
-    element.setAttribute("data-card", "")
-    try {
-      const browse = Array.from(withNothingSaved().querySelectorAll("button")).find((button) =>
-        /app control/.test(button.textContent)
-      )
-      assert.equal(browse.textContent.trim(), "Browse 1 app control")
-    } finally {
-      element.removeAttribute("data-card")
-      delete globalThis.window.__STORE
-    }
-  })
-
+  withStyles()
   globalThis.fetch = originalFetch
   element.remove()
 }
@@ -1078,7 +1115,7 @@ function controlsPaneCases(surface) {
     assert.equal(surface.getState().controlsScope, "selection")
     assert.equal(rows().length, 0)
     const text = empty().textContent
-    assert.match(text, /binding/i, `the empty scope does not say where bindings come from: ${text}`)
+    assert.match(text, /config/i, `the empty scope does not say where bindings come from: ${text}`)
     const back = empty().querySelector("button")
     assert.ok(back, "a scope with nothing in it offers no way out of itself")
     press(back)
@@ -1126,8 +1163,11 @@ function controlsPaneCases(surface) {
       tab.update()
       const state = empty()
       assert.equal(state.getAttribute("role"), "status")
-      assert.ok(state.querySelector(".de-empty-title"), "no headline over the explanation")
-      assert.match(state.textContent, RECOVERY)
+      const title = state.querySelector(".de-empty-title")
+      assert.ok(title, "no headline over the explanation")
+      // The reason alone: the headline's text runs straight into it in
+      // textContent, which would hide a reason that opens on its verb.
+      assert.match(state.textContent.slice(title.textContent.length), RECOVERY)
       assert.doesNotMatch(state.textContent, RAW_DIAGNOSTIC)
     } finally {
       globalThis.__DESIGNLAYER_CONFIG__ = config

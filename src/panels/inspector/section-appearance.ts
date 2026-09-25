@@ -44,10 +44,10 @@ import {
   iconButton,
   isExpanded,
   numberField,
-  section,
   setExpanded,
   takeJustExpanded,
 } from "./field"
+import { styledSection } from "../../options/panel"
 import { hasUtility, tokenControl, tokenHints, tokenRow } from "./token-row"
 import type { InspectorSection } from "./index"
 
@@ -241,5 +241,5 @@ export const appearanceSection: InspectorSection = (context) => {
     radiusGroup,
   ])
 
-  return section("Appearance", body)
+  return styledSection(context, "appearance", "Appearance", body)
 }

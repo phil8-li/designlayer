@@ -81,7 +81,18 @@ export interface ElementOption {
   /** Text content, when the option also changes copy. */
   text?: string
   createdAt: number
+  /**
+   * Which Design-tab section owns this saved style. Unset on legacy
+   * whole-element options, which every section offers through its own slice.
+   */
+  scope?: StyleScope
 }
+
+/**
+ * Declared here rather than in `options/scopes.ts` so this file stays pure
+ * types; `scopes.ts` re-exports it next to the logic that uses it.
+ */
+export type StyleScope = "typography" | "fill" | "stroke" | "effects" | "appearance" | "layout"
 
 export interface ElementOptionSet {
   /** Element key (see `Selection.key`). */

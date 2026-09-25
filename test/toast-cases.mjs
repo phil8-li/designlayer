@@ -73,7 +73,10 @@ const stub = `
   const calls = globalThis.__toastCalls
   const toast = Object.assign(
     (message, options) => calls.push({ fn: "toast", message, options }),
-    { error: (message, options) => calls.push({ fn: "error", message, options }) }
+    {
+      error: (message, options) => calls.push({ fn: "error", message, options }),
+      info: (message, options) => calls.push({ fn: "info", message, options }),
+    }
   )
   export { toast }
   export function Toaster(props) {
@@ -173,7 +176,7 @@ const flushEffects = () => {
   for (const fn of globalThis.__toastEffects.splice(0)) fn()
 }
 
-const emitted = () => calls.filter((c) => c.fn === "toast" || c.fn === "error")
+const emitted = () => calls.filter((c) => ["toast", "info", "error"].includes(c.fn))
 const tick = () => new Promise((resolve) => window.setTimeout(resolve, 0))
 
 /** Just the editor's overrides — everything after Sonner's own stylesheet. */
@@ -225,7 +228,7 @@ await check("a message raised before the toaster exists is queued, not lost", ()
   flushEffects()
   assert.deepEqual(
     emitted().map((c) => [c.fn, c.message]),
-    [["toast", "Applying 3 changes\u2026"]],
+    [["info", "Applying 3 changes\u2026"]],
     "the queued message did not arrive once the subscription existed"
   )
 })
@@ -243,7 +246,8 @@ await check("an error keeps its severity all the way to the library", () => {
 await check("plain news does not come out as an error", () => {
   calls.length = 0
   notify("Copied 2 notes")
-  assert.deepEqual(emitted().map((c) => c.fn), ["toast"])
+  // `info`, not the untyped call: the glyph is the only thing marking the kind.
+  assert.deepEqual(emitted().map((c) => c.fn), ["info"])
 })
 
 /*

@@ -165,8 +165,7 @@ function challengeOf(value: unknown): LibraryChallenge | null {
  * not know.
  */
 const STALE_SERVER =
-  "This page is newer than the editor process serving it, so that feature is not wired up yet. " +
-  "Restart designlayer in your terminal and try again."
+  "This needs a restart. Restart designlayer in your terminal, then try again."
 
 function isStaleServer(message: string): boolean {
   return /^No designlayer route for /i.test(message)

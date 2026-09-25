@@ -154,8 +154,7 @@ const ROW_ACTIVE = "de-lint-row--active"
  * with. The full reason it might be is the sentence that follows.
  */
 const NO_FIX =
-  "No automatic fix — the checker did not name a single replacement. " +
-  "Select the element and pick a token in the inspector."
+  "No automatic fix. Select the element and pick a token in the inspector."
 
 /** `3 issues`, `1 issue`. The summary has to count aloud. */
 function issueWord(count: number): string {
@@ -333,7 +332,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
       editor.toast(
         error instanceof Error
           ? error.message
-          : "The audit could not run. Check the terminal running designlayer, then press Audit again.",
+          : "Audit failed. Check the designlayer terminal, then try again.",
         "error"
       )
     })
@@ -351,8 +350,8 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
           // a recovery the copy never mentioned, leaving the reader a reason
           // and no instruction.
           editor.toast(
-            `Fixed ${result.fixed.length}, could not fix ${result.failed.length}: ` +
-              `${result.failed[0].reason} Press Audit again to see what is left.`,
+            `Fixed ${result.fixed.length}, ${result.failed.length} failed: ` +
+              `${result.failed[0].reason} Run Audit again to refresh.`,
             "error"
           )
           return
@@ -363,7 +362,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         editor.toast(
           error instanceof Error
             ? error.message
-            : "That fix could not be written. Press Audit again — the file may have changed.",
+            : "Fix failed — the file may have changed. Run Audit again.",
           "error"
         )
       })
@@ -412,8 +411,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
         .find(Boolean) ?? null
     if (!element) {
       editor.toast(
-        `${where(finding)} is not rendered on this page. ` +
-          `Navigate to the route that renders it, then press the row again.`,
+        `${where(finding)} is not on this page. Open a page that shows it, then try again.`,
         "error"
       )
       return
@@ -442,19 +440,19 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
    * so "why not" is the only thing left to say.
    */
   function checkerLine(): string {
-    if (!lintToolsLoaded()) return "Working out which checkers fit this project…"
+    if (!lintToolsLoaded()) return "Finding checkers for this project…"
     const all = lintTools()
     // The one branch of this sentence that is a dead end rather than a report:
     // there is nothing to name, so it names what would make the feature work.
     if (!all.length) {
-      return "No design-system checker is installed here. Install Stylelint, ds-lint or shadcn/lint to audit this project."
+      return "No checker installed. Add Stylelint, ds-lint or shadcn/lint to run an audit."
     }
     const names = (subset: typeof all): string => subset.map((tool) => tool.name).join(", ")
     const on = all.filter((tool) => tool.available)
     const off = all.filter((tool) => !tool.available)
     // Named even when none of them run: "no checker" with no names is a claim
     // the reader cannot check against their own package.json.
-    if (!on.length) return `No checker fits this project. Idle: ${names(off)}.`
+    if (!on.length) return `No checker fits this project. Tried: ${names(off)}.`
     return off.length ? `Running ${names(on)}. Not running: ${names(off)}.` : `Running ${names(on)}.`
   }
 
@@ -582,7 +580,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
           class: "de-button de-lint-action",
           type: "button",
           "aria-label": `Ignore ${finding.rule} at ${where(finding)}`,
-          title: "Dismiss this finding and its marker",
+          title: "Ignore",
           "data-de-lint": "ignore",
           onclick: (event: Event) => {
             event.stopPropagation()
@@ -680,7 +678,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
      */
     const why =
       auditButton.disabled && !running
-        ? "No checker fits this project — the info icon beside the heading says which ones were tried"
+        ? "No checker fits this project. The info icon lists what was tried."
         : ""
     auditButton.title = why
     if (why) auditButton.setAttribute("aria-description", why)
@@ -870,7 +868,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
        * taken. Joined rather than listed, since there are three of them at most.
        */
       return empty(
-        `No design-system checker fits this project. ` +
+        `No checker fits this project. ` +
           lintTools()
             .map((tool) => `${tool.name}: ${tool.reason}`)
             .join(" ")
@@ -892,7 +890,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // well as what to press. One sentence, like its three siblings: the Audit
     // button is directly above, and Fix explains itself on the rows it lands on.
     if (!lintRanAt()) {
-      return empty("Press Audit to find hard-coded values on this page that should use design tokens.")
+      return empty("Audit finds hard-coded values that should use design tokens.")
     }
     // The control that acts on this number is one line below, in the footer,
     // and the sentence used to give the count without naming it — a reader told
@@ -900,7 +898,7 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // statistic rather than as a door.
     if (dismissed) {
       return empty(
-        `Nothing open. ${issueWord(dismissed)} ignored — open “Show ignored” below to bring one back.`
+        `No open issues. ${issueWord(dismissed)} ignored — see “Show ignored” below.`
       )
     }
     return empty("No design-system issues found.")

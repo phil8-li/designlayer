@@ -21,19 +21,13 @@
  * whether a handover empties it — and reading them anywhere else means reading
  * them away from the thing they describe.
  *
- * The tab is TWO SECTIONS in one scrolling column, Handover then Settings, and
- * nothing is pinned to the bottom edge. Pinning settings there cost a dead gap
- * that grew with the window: a short session showed two notes, then four
- * hundred pixels of nothing, then a fold nobody was looking for. Two headings
- * and one scrollbar says the same thing without spending that space — the
- * second section starts where the first one ends, which is where a reader
- * looks for it.
+ * The tab is ONE SECTION, "Notes and edits", then the handover buttons, then
+ * Settings, in one scrolling column with nothing pinned to the bottom edge.
+ * Notes and edits share one list, one numbering (the same number the pin on the
+ * canvas and the brief use), one undo timeline, one Copy and one send.
  *
- * One control moved with it. Output detail used to be a row inside the fold,
- * three scrolls away from the button that copies the thing it governs; it is
- * now a tab strip directly above the list. A control and the thing it changes
- * belong next to each other, and there is exactly ONE of it — two surfaces
- * onto one setting is how a panel comes to disagree with itself.
+ * Output detail is a menu directly above the list, because a control belongs
+ * next to the thing it changes, and there is exactly ONE of it.
  */
 
 import { isProjectSourcePath } from "../../core/bridge"
@@ -44,31 +38,28 @@ import { holdScroll } from "../../core/scroll"
 import { leaveRow } from "../../core/leave"
 import { swapMark } from "../../core/swap-mark"
 import { icon, type IconName } from "../../core/icons"
-import { requestAgent } from "../../ai/transport"
 import {
   annotationSettings,
-  clearAnnotations,
   markersVisible,
   onAnnotationsChange,
   onSettingsChange,
-  removeAnnotation,
-  restoreAnnotation,
   updateSettings,
 } from "../../annotations/store"
-import { clearEdits, isEditQueued, onEditsChange } from "../../annotations/journal"
+import { isEditQueued, onEditsChange } from "../../annotations/journal"
+import { clearNotesStep, deleteNote, undoNoteStep } from "../../annotations/actions"
+import { copyHandover, handOver, needsAgent } from "../../annotations/handover"
 import { onComponentUsageChange, sharedComponentWarning } from "../../core/component-usage"
 import { withdrawEdit } from "../../core/withdraw"
-import { buildAnnotationBrief, outboxItems } from "../../annotations/output"
+import { outboxItems, outboxNumbers } from "../../annotations/output"
 import {
   OUTPUT_DETAILS,
   type AnnotationRecord,
   type AnnotationTarget,
   type EditRecord,
-  type OutboxItem,
   type OutputDetail,
 } from "../../annotations/types"
 import type { EditorContext } from "../../core/context"
-import { section, selectField } from "./field"
+import { plainSection, section, selectField } from "./field"
 import type { InspectorTab } from "./tab-code"
 import { tokens } from "../../core/tokens"
 
@@ -105,52 +96,18 @@ import { tokens } from "../../core/tokens"
  */
 
 /**
- * Two sentences, rather than shortened to "Remove".
- *
- * Dropping an edit from the outbox does not undo it: the page keeps the change,
- * and if it was written so does the file. A designer who read this as an undo
- * would empty the list expecting the page to go back to how it was. The second
- * sentence says the one thing "drop" does not.
+ * What the bin on an edit row does: a real withdrawal (`core/withdraw.ts`). The
+ * queued operation is taken back, the preview reverts, and the ledger entry
+ * goes with it — so the label says that, rather than "Remove".
  */
-/**
- * What the bin on an edit row does — and it changed meaning, so it changed words.
- *
- * It used to read "The change stays applied", which was an accurate description
- * of a bug. Dropping a row removed it from the list and from the brief, and
- * left the queued source operation exactly where it was: press Apply afterwards
- * and the change a designer had explicitly discarded went into their files.
- *
- * It is a real withdrawal now (`core/withdraw.ts`): the queued operation is
- * taken back, the preview on the page returns to what it was, and the ledger
- * entry goes with it. So the label says the thing that is now true.
- */
-const DROP_EDIT = "Take this change back. The preview reverts and nothing is written."
+const DROP_EDIT = "Discard change. Nothing is written."
 
 /**
- * The consequence, said on the button.
- *
- * This used to read "Resolve keeps the record, delete does not", because a tick
- * sat beside the bin and the two were a coin toss under near-identical 18px
- * buttons. The tick is gone, so naming it here would send a reader looking for
- * a control that is not on the row.
- *
- * What replaces it is the part that was always the point: what happens to the
- * note. The neighbouring edit row says the opposite about ITS bin — "the change
- * stays applied" — and the pair only works if each states its own consequence
- * rather than the other's name.
- *
- * It used to end "There is no undo.", which was true and is not any more: the
- * delete now raises a card offering the note back (see `erase`). Leaving the
- * sentence in place would have been the worse of the two possible errors — a
- * reader who believes a reversible action is final does not press it, so the
- * recovery would have paid for nothing.
- *
- * "Undo" rather than a fuller promise, because the label on the card says the
- * same word and the two have to match: a tooltip that offers "a chance to
- * restore it" and a button that says "Undo" are two affordances as far as the
- * reader is concerned.
+ * The consequence, said on the button. A delete is a step on the editor's one
+ * undo timeline (`annotations/actions.ts`), so Cmd+Z brings the note back, and
+ * so does the Undo on the card the delete raises.
  */
-const DELETE_NOTE = "Delete this note. Undo is offered once it goes."
+const DELETE_NOTE = "Delete note (undo brings it back)"
 
 /**
  * Said as "reopen", not "edit", because the note is written somewhere else.
@@ -160,7 +117,7 @@ const DELETE_NOTE = "Delete this note. Undo is offered once it goes."
  * screen. A button labelled "Edit" that moves the user's attention to another
  * surface without saying so is how a designer loses track of where they are.
  */
-const EDIT_NOTE = "Reopen this note on the page to rewrite it."
+const EDIT_NOTE = "Edit on page"
 
 /**
  * The two things this panel says to the canvas, and the whole of the coupling.
@@ -204,19 +161,16 @@ function noteWord(count: number): string {
 /**
  * The two things the clear-all button can say, and how long it stays asking.
  *
- * Lifted wholesale from the toolbar's chooser link, window included: the second
- * string is not a dialog in disguise, it is the same control saying what
- * pressing it now means, and it reverts on its own because an armed button that
- * stayed armed would let a click ten minutes later empty the list without a
- * word — the exact silence the arming exists to break.
+ * The second string is the same control saying what pressing it now means, and
+ * it reverts on its own: an armed button that stayed armed would let a click
+ * ten minutes later empty the list without a word.
  */
 const CLEAR = {
   armedMs: 6000,
   label: (count: number) =>
-    count ? `Delete all ${noteWord(count)}. Edits stay in the handover.` : "Delete all notes",
+    count ? `Delete all ${noteWord(count)} (keeps edits)` : "Delete all notes",
   // The armed state names the outcome of the NEXT click rather than asking a
-  // question and answering it: "Delete all 2 notes? Click again to confirm" was
-  // the same instruction twice, and the toast has to append the warning to it.
+  // question and answering it.
   prompt: (count: number) => `Click again to delete all ${noteWord(count)}`,
 } as const
 
@@ -298,35 +252,6 @@ function noteSubject(note: AnnotationRecord): string {
   return where
 }
 
-/** "3 notes and 2 edits", with whichever half is zero left out. */
-function outboxSummary(items: OutboxItem[]): string {
-  const notes = items.filter((item) => item.type === "note").length
-  const edits = items.length - notes
-  return [
-    notes ? `${notes} note${notes === 1 ? "" : "s"}` : null,
-    edits ? `${edits} edit${edits === 1 ? "" : "s"}` : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(" and ")
-}
-
-/**
- * The files the agent should open first.
- *
- * Filtered through the same `isProjectSourcePath` the rows are, so a compiled
- * chunk never reaches the agent as a path to go and edit. An item with no
- * usable file is not an omission — the brief still describes it by component
- * and selector, which is what an agent greps with.
- */
-function filesInOutbox(items: OutboxItem[]): string[] {
-  const files = new Set<string>()
-  for (const item of items) {
-    const path = item.type === "note" ? item.note.target?.filePath : item.edit.target?.filePath
-    if (path && isProjectSourcePath(path)) files.add(path)
-  }
-  return [...files]
-}
-
 /** How long the tick stays up after a copy, matching agentation's own. */
 const COPIED_FOR = 2000
 
@@ -340,32 +265,19 @@ const COPIED_FOR = 2000
 
 export function annotationsTab(editor: EditorContext): InspectorTab {
   /*
-   * ONE LIST PER KIND, because each kind is its own section now.
-   *
-   * This was a single list holding two `.de-ann-group` blocks inside a section
-   * called "Handover", and the panel ended up stating the same split twice: a
-   * foldable section header, and then two sub-headings under it, each with a
-   * tally of its own. Two piles that are never read together do not need a
-   * container saying they are one pile.
-   *
-   * So the groups became sections. The fold, the chevron, the title column and
-   * the trailing actions track are the panel's — the same `section()` the
-   * Design tab calls — and each list is simply the body under its own heading.
+   * ONE LIST, notes and edits interleaved in the order they happened. Each row
+   * carries the shared number from `outboxNumbers`, so row 4, pin 4 and item 4
+   * in the brief are the same thing.
    */
-  const editList = el("div", { class: "de-ann-list" })
-  const noteList = el("div", { class: "de-ann-list" })
+  const list = el("div", { class: "de-ann-list" })
 
   const copyMark = swapMark("Copy")
   let copiedTimer = 0
 
   /**
-   * The tick goes up in the CLICK TASK, not when the write resolves.
-   *
-   * A confirmation two frames behind the press reads as a dead button, and the
-   * clipboard promise is not the thing being confirmed anyway — the gesture is.
-   * If the browser then refuses, the rejection lands a microtask later and
-   * `showCopied` is undone out loud, which is the same bargain the Code tab's
-   * copy strikes.
+   * The tick goes up in the CLICK TASK, not when the write resolves: a
+   * confirmation two frames behind the press reads as a dead button. A late
+   * refusal takes it back through `undoCopied`.
    */
   function showCopied(): void {
     copyMark.show(true)
@@ -387,53 +299,20 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     {
       class: "de-button",
       type: "button",
-      title: "Copy every note and edit as one brief",
+      title: "Copy all notes and edits",
+      /*
+       * `copyHandover` is the one copy — the toolbar's `notes.copy` chord calls
+       * it too — and it writes the clipboard synchronously inside this click
+       * task, which is the only time the Clipboard API is open.
+       */
       onclick: () => {
-        const items = outboxItems()
-        if (!items.length) {
-          // "no notes, no edits" was the same statement a second time. The
-          // button is disabled over an empty outbox anyway, so this line is
-          // only ever read after a dispatched click.
-          editor.toast("Nothing to copy")
-          return
-        }
-        /*
-         * Written synchronously inside the click task, before anything awaits:
-         * the Clipboard API only works under the transient user activation the
-         * click carries, and the browser revokes it the moment the handler
-         * yields. Same shape as `copyChangePrompt` and the Code tab's copy.
-         */
-        let refused = false
-        try {
-          void navigator.clipboard
-            .writeText(buildAnnotationBrief(items))
-            .then(clearIfAsked)
-            .catch(() => {
-              undoCopied()
-              editor.toast("The browser refused the clipboard", "error")
-            })
-        } catch {
-          refused = true
-        }
-        if (refused) {
-          undoCopied()
-          editor.toast("The browser refused the clipboard", "error")
-          return
-        }
-        showCopied()
-        editor.toast(`Copied ${outboxSummary(items)}`)
+        if (copyHandover(editor.toast, undoCopied)) showCopied()
       },
     },
     /*
-     * The label does NOT become "Copied", and the glyph rung is `row`.
-     *
-     * Both are about the same 244px line. This button is the rightmost of four
-     * controls, so a wider label shoves Send leftward and back again two
-     * seconds later — a reflow announcing a copy that has already announced
-     * itself in the glyph and in the toast. And at `control` the mark stood
-     * 16px against a 12px label inside a 24px pill: bigger than the word it
-     * qualifies, which is what made the pair read as a glyph with a caption
-     * rather than a button. `row` is the rung the Code tab's copy already uses.
+     * The label does NOT become "Copied": a wider label would shove the primary
+     * button leftward and back two seconds later. The glyph and the toast
+     * already say it.
      */
     [copyMark.node, "Copy"]
   )
@@ -441,94 +320,41 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   /**
    * ONE BUTTON THAT FINISHES THE SESSION.
    *
-   * This was "Send to agent", beside a separate "Apply to code" welded into the
-   * toolbar, and the split between them was the worst thing in the product to
-   * explain. It was not a split a designer could reason about: which of the two
-   * buttons finished your change depended on whether `core/tailwind.ts` happened
-   * to have a word for the CSS property you touched. Recolouring went one way,
-   * dragging went the other, and nothing on screen said so.
-   *
-   * So there is one verb now. It writes everything the writer can spell, and
-   * hands everything else to the agent, in that order, and the rows say which
-   * happened to what. The designer is never asked to route their own change —
-   * that was never a question they had the information to answer.
-   *
-   * Order matters and is not arbitrary. The write goes FIRST so the brief that
-   * follows it describes a source tree that already contains the writable half:
-   * an agent handed "set padding to 24px" for an edit that landed a moment ago
-   * re-applies it and calls the conflict a merge. `applyAll` awaits, so by the
-   * time the brief is built the journal rows have flipped to written and
-   * `buildAnnotationBrief` files them under "already written — do not apply
-   * these again".
+   * It runs `handOver`: everything the writer can spell is written first, and
+   * whatever is left — notes, and edits no commit can write — goes to the agent
+   * with the written half in the brief as context. Its label says which of the
+   * two will happen: "Send to agent" when anything needs the agent, "Apply to
+   * code" when the session is only writable edits. The designer never routes a
+   * change themselves.
    */
   let sending = false
 
-  /*
-   * ONE BUTTON PER GROUP, because the two halves finish differently.
-   *
-   * There was a single "Apply all" here, and it was the right first move: it
-   * ended the era where a designer had to know that a padding tweak went to a
-   * codemod and a drag went to an agent. But it also hid something they DO need
-   * to know. The two halves have completely different costs — one is a hundred
-   * milliseconds and exact, the other is a round trip to a language model that
-   * may come back having done something slightly else — and one button spending
-   * both made the cheap half wait on the expensive one.
-   *
-   * So each group owns its own verb, sitting under its own rows. A session that
-   * only moved some padding presses one button and is done, and never thinks
-   * about an agent at all. A session full of drags and notes presses the other.
-   * The grouping is what makes this legible: you are not choosing a MECHANISM,
-   * you are finishing the pile you are looking at.
-   */
-  const writeButton = el(
-    "button",
-    {
-      class: "de-button de-button--primary",
-      type: "button",
-      title: "Write these straight into your files",
-      onclick: () => {
-        void writeNow()
-      },
+  const primaryButton = el("button", {
+    class: "de-button de-button--primary",
+    type: "button",
+    onclick: () => {
+      void finish()
     },
-    ["Apply to code"]
-  )
-
-  const sendButton = el(
-    "button",
-    {
-      class: "de-button de-button--primary",
-      type: "button",
-      title: "Send these to your coding agent, with the changes already written for context",
-      onclick: () => {
-        void sendNow()
-      },
-    },
-    []
-  )
+  })
 
   /**
-   * The Send label, rebuilt rather than assigned.
-   *
-   * `sendButton.textContent = …` was how the in-flight state was written, and
-   * that assignment drops every child — which was harmless while the button was
-   * a bare word and silently deletes the glyph now. One function, so the two
-   * states cannot come to disagree about whether there is a mark in here.
+   * The label, rebuilt rather than assigned: `textContent = …` drops the glyph.
+   * Painted only when it changes, so a repaint on every store write does not
+   * cut a fresh `<svg>` each time.
    */
-  function setSendLabel(text: string): void {
-    clear(sendButton)
-    sendButton.append(icon("Send", tokens.icon.row), text)
+  function setPrimaryLabel(text: string, send: boolean): void {
+    const key = `${send ? "send" : "apply"}:${text}`
+    if (primaryButton.dataset.label === key) return
+    primaryButton.dataset.label = key
+    clear(primaryButton)
+    if (send) primaryButton.append(icon("Send", tokens.icon.row))
+    primaryButton.append(text)
   }
 
-  setSendLabel("Send to agent")
-
   /**
-   * The commit, from the module the toolbar's button uses too.
-   *
-   * Built here rather than passed in because the tab outlives any one
-   * selection and the queues are module state — there is nothing per-render to
-   * close over. `onChange` is this tab's own repaint: the queues broadcast to
-   * their own subscribers, but "the write finished" is the moment the rows'
-   * badges change, and only the caller knows that.
+   * The committer, built here because the queues are module state and there is
+   * nothing per-render to close over. `onChange` repaints this tab: "the write
+   * finished" is when the rows' badges change, and only the caller knows it.
    */
   const committer = createApply({
     bridge: editor.bridge,
@@ -536,96 +362,45 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     onChange: () => render(),
   })
 
-  /**
-   * The writable half, and nothing else.
-   *
-   * Deliberately does NOT fall through to the agent when it finishes. That was
-   * "Apply all"'s behaviour and it made the fast path pay for the slow one: a
-   * designer who nudged a padding had to wait on an agent round trip they never
-   * asked for. Here the two groups are two decisions, and this one is the cheap
-   * decision taken alone.
-   *
-   * The rows do the explaining afterwards — Ready becomes In your files — so
-   * there is no summary to write here that the list does not already show.
-   */
-  async function writeNow(): Promise<void> {
-    if (sending) return
-    if (!committer.hasPendingChanges()) {
-      editor.toast("Nothing to write — these are all in your files already")
-      return
-    }
-    sending = true
-    writeButton.disabled = true
-    writeButton.textContent = "Writing…"
-    try {
-      await committer.applyAll()
-    } finally {
-      sending = false
-      writeButton.textContent = "Apply to code"
-      render()
-    }
+  /** What the primary button would do right now, or null when nothing. */
+  function primaryMode(): "send" | "apply" | null {
+    if (needsAgent()) return "send"
+    if (committer.hasPendingChanges()) return "apply"
+    return null
+  }
+
+  function paintPrimary(): void {
+    const mode = primaryMode()
+    const send = sending ? primaryButton.dataset.mode === "send" : mode === "send"
+    if (!sending) primaryButton.dataset.mode = mode ?? ""
+    primaryButton.disabled = sending || mode === null
+    primaryButton.title = send
+      ? "Write what it can to your files, send the rest to your agent"
+      : "Write these changes to your files"
+    setPrimaryLabel(
+      sending ? (send ? "Sending…" : "Applying…") : send ? "Send to agent" : "Apply to code",
+      send
+    )
   }
 
   /**
-   * Everything the editor cannot write, handed over in one brief.
-   *
-   * It sends the WHOLE outbox, not just the agent group, and that is not a
-   * mistake. A brief listing only the unwritable half would have the agent
-   * reasoning about a file it cannot see the rest of the session in — and
-   * `buildAnnotationBrief` already files the written rows under "already
-   * written to source — do not apply these again", which is exactly the context
-   * that stops it redoing finished work. The GROUPING is a fact about who acts
-   * on a row; the BRIEF is a fact about what happened, and those are different
-   * documents.
+   * Disabled while in flight, so a second click cannot write or post the same
+   * work twice while the first round trip is outstanding.
    */
-  async function sendNow(): Promise<void> {
-    if (sending) return
-    const items = outboxItems()
-    if (!items.length) {
-      editor.toast("Nothing to send")
-      return
-    }
-
+  async function finish(): Promise<void> {
+    if (sending || primaryMode() === null) return
     sending = true
-    sendButton.disabled = true
-    setSendLabel("Sending…")
+    paintPrimary()
     try {
-      const response = await requestAgent(editor.apiBase, {
-        // The outbox IS the request; this line is the subject, not the ask.
-        // Phrasing it as an instruction ("please change…") would have the agent
-        // re-derive intent it has already been handed in `brief`.
-        prompt: `${outboxSummary(items)} from DesignLayer`,
-        brief: buildAnnotationBrief(items),
-        origin: "prompts",
-        files: filesInOutbox(items),
-        selection: null,
-        ancestry: [],
-        url: window.location.href,
+      await handOver({
+        apiBase: editor.apiBase,
+        committer,
+        toast: (message, kind) => editor.toast(message, kind),
       })
-      // The server's own words, whatever they are. A manufactured "Sent!" over
-      // a route that answered with a refusal is the one thing this button must
-      // never do: the list is still full and the designer would not know.
-      editor.toast(response.message, response.ok ? "info" : "error")
-      if (response.ok) clearIfAsked()
     } finally {
       sending = false
-      setSendLabel("Send to agent")
       render()
     }
-  }
-
-  /**
-   * Empty the outbox, when the setting says a handover is the end of it.
-   *
-   * Called only once a copy has RESOLVED or a send has come back ok. Clearing
-   * in the click task instead would throw the list away on a browser that then
-   * refused the clipboard — the one failure this setting must not be able to
-   * cause.
-   */
-  function clearIfAsked(): void {
-    if (!annotationSettings().clearOnCopy) return
-    clearAnnotations()
-    clearEdits()
   }
 
   /* ---------- footer actions ---------- */
@@ -678,22 +453,15 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   })
 
   /*
-   * Delete every note, behind two clicks.
+   * Delete every note, behind two clicks, as one undoable step.
    *
-   * The per-row delete needs no confirm and this one does, and the difference
-   * is not squeamishness about the word: one row is one mistake and one marker
-   * to re-drop, the whole list is a session's work and there is no undo
-   * anywhere in this feature to get it back. So it arms, says what it would
-   * cost, and stands itself down.
+   * The per-row delete needs no confirm and this one does: one row is one
+   * mistake, the whole list is a session's work. The toast offers it back, and
+   * Cmd+Z does too, because `clearNotesStep` records on the one timeline.
    *
-   * It takes NOTES ONLY. The two halves of this list fail in different
-   * directions: deleting a note destroys the only copy of something that was
-   * never written down anywhere else, while dropping an edit does something
-   * quieter and worse — the change stays live on the page, and in the file if
-   * it was written, with nothing left in the editor that will ever mention it
-   * to an agent. One button that did both would cause the second failure every
-   * time somebody meant the first, which is why the label counts notes aloud
-   * and says the edits stay.
+   * It takes NOTES ONLY. Dropping an edit withdraws a change from the page and
+   * the queue, which is a different act with its own button on each row; one
+   * button doing both would cause that every time somebody meant to clear notes.
    */
   let armed = 0
   let noteCount = 0
@@ -702,35 +470,26 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     class: "de-mini de-mini--danger",
     type: "button",
     onclick: () => {
-      // `disabled` stops a pointer, not a dispatched event, and nothing should
-      // be able to arm a control standing over an empty list.
+      // `disabled` stops a pointer, not a dispatched event.
       if (!noteCount) return
       if (armed !== 0) {
-        const going = noteCount
         disarm()
-        clearAnnotations()
-        editor.toast(`Deleted ${noteWord(going)}`)
+        const cleared = clearNotesStep()
+        if (!cleared) return
+        editor.toast(`Deleted ${noteWord(cleared.count)}`, "info", {
+          label: "Undo",
+          onClick: () => undoNoteStep(cleared.step),
+        })
         return
       }
       armed = window.setTimeout(disarm, CLEAR.armedMs)
-      // Painted here rather than through `render()`: arming changes nothing in
-      // any store, and a repaint of the whole list to move one glyph would
-      // throw away the rows the reader is looking at mid-decision.
+      // Painted here rather than through `render()`: arming changes no store,
+      // and a full repaint would rebuild the rows the reader is looking at.
       paintClear()
-      // The words live in the toast because the control is a glyph: a trash can
-      // that has become a tick has asked "again?" and said nothing at all about
-      // what is at stake.
-      //
-      // The DEFAULT rung, not `error`, and the difference became load-bearing
-      // when `DURATION.error` went to `Infinity`. An error card stays until it
-      // is dismissed, which is right for "the write failed" and wrong for this:
-      // the arming window is `CLEAR.armedMs`, six seconds, after which
-      // `disarm()` turns the tick back into a bin. A card that outlives the
-      // window goes on saying "press again" about a control that has already
-      // stood down — so pressing again re-arms rather than clearing, which is
-      // the opposite of what the card promised. `info` is 4000ms, inside the
-      // window, so the prompt and the state it describes end together.
-      editor.toast(`${CLEAR.prompt(noteCount)}. This cannot be undone.`)
+      // The words live in the toast because the control is a glyph. The default
+      // rung, not `error`: an error card stays until dismissed and would outlive
+      // the six-second arming window it describes; `info` ends inside it.
+      editor.toast(CLEAR.prompt(noteCount))
     },
   })
 
@@ -813,10 +572,8 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * marker was dropped is a panel nobody finishes reading.
    */
   /*
-   * No `settingsOpen` flag and no fold button here any more: `section()` owns
-   * both, and it keeps the open state in the panel-level map every other
-   * section uses — which is what makes the fold survive the rebuild this tab
-   * does on every store write.
+   * No fold at all: Settings is a `plainSection()`, always open. Four switches
+   * and an address are not worth a click on every visit.
    */
   const settingsBody = el("div", { class: "de-ann-settings-body", id: "de-ann-settings-body" })
   /**
@@ -960,19 +717,19 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * reads "restart" and bounces their dev server has spent a minute on
    * something Cmd+R does, with the setting looking broken meanwhile.
    */
-  const hideMarkers = switchControl("Show markers", (value) =>
+  const hideMarkers = switchControl("Show pins", (value) =>
     updateSettings({ hideUntilRestart: !value })
   )
   const clearOnCopy = switchRow(
     "Clear on copy or send",
     // The label already says when. The hint owes the two facts it does not:
     // that the edits go too, and that a refused clipboard keeps the list.
-    "Takes the edits as well, and only once the handover has gone through.",
+    "Clears edits too, once the copy or send succeeds.",
     (value) => updateSettings({ clearOnCopy: value })
   )
   const blockInteractions = switchRow(
     "Block page interactions",
-    "Turn it off to drive the app into the state worth annotating, then turn it back on.",
+    "Turn off to use the app, for example to open a menu you want to note.",
     (value) => updateSettings({ blockPageInteractions: value })
   )
   /*
@@ -1049,11 +806,11 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     {
       class: "de-button",
       type: "button",
-      title: "Copy the address for your coding agent",
+      title: "Copy MCP address",
       onclick: () => {
         const url = mcpAddress.textContent ?? ""
         if (!url.startsWith("http")) {
-          editor.toast("No address to copy — the MCP server is not running", "error")
+          editor.toast("The MCP server is not running", "error")
           return
         }
         // Synchronous inside the click task, before any await: the clipboard
@@ -1062,13 +819,13 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         try {
           void navigator.clipboard.writeText(url).catch(() => {
             undoMcpCopied()
-            editor.toast("The browser refused the clipboard", "error")
+            editor.toast("Could not copy — clipboard access was blocked", "error")
           })
           showMcpCopied()
-          editor.toast("Address copied — paste it into your agent’s MCP settings")
+          editor.toast("Copied. Paste into your agent’s MCP settings.")
         } catch {
           undoMcpCopied()
-          editor.toast("The browser refused the clipboard", "error")
+          editor.toast("Could not copy — clipboard access was blocked", "error")
         }
       },
     },
@@ -1117,25 +874,25 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
        */
       if (!status.url || !status.listening) {
         mcpState.textContent =
-          "Not running, so no agent can connect. Another editor may hold the port."
+          "Not running. Another editor may be using the port."
         mcpState.dataset.deState = "off"
       } else if (status.agents < 1) {
-        mcpState.textContent = "No agent connected yet. Paste this address into your agent."
+        mcpState.textContent = "No agent connected. Paste this address into your agent."
         mcpState.dataset.deState = "idle"
       } else if (status.waiting > 0) {
-        mcpState.textContent = "Connected, and waiting for your changes."
+        mcpState.textContent = "Connected. Waiting for changes."
         mcpState.dataset.deState = "on"
       } else {
         // Attached but not parked in `wait_for_change`. A working setup, mid-turn
         // — and it must not read as a broken one, or a correct configuration
         // looks like a failure every time the agent goes off to do its job.
-        mcpState.textContent = "Connected. Busy right now, which is normal."
+        mcpState.textContent = "Connected. Your agent is working."
         mcpState.dataset.deState = "on"
       }
     } catch {
       // A dead route reads the same as a refusal, the bargain `ai/transport.ts`
       // makes too: say nothing confident rather than invent a state.
-      mcpState.textContent = "Could not reach the editor’s own server."
+      mcpState.textContent = "Could not reach the DesignLayer server."
       mcpState.dataset.deState = "off"
     }
   }
@@ -1146,8 +903,8 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      *
      * The order of this fold is "what stops you working" before "what you might
      * prefer". Marker colour is a preference; not having an agent attached
-     * means half of this tab — the whole agent group and the button under it —
-     * quietly does nothing when pressed. That belongs at the top.
+     * means "Send to agent" quietly does nothing when pressed. That belongs at
+     * the top.
      */
     el("div", { class: "de-ann-setting-group de-mcp" }, [
       el("div", { class: "de-ann-setting de-ann-setting--stacked" }, [
@@ -1166,9 +923,11 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
           "MCP",
           helpDot(
             "MCP",
-            "The address your coding agent connects to. Paste it into your agent’s MCP settings — it does not change between restarts."
+            "Paste into your agent’s MCP settings. It stays the same across restarts."
           )
         ),
+        // Copy under the address, not beside it: side by side, the button took
+        // the width the URL needs and pushed it onto a second line.
         el("div", { class: "de-mcp-row" }, [mcpAddress, mcpCopy]),
         mcpState,
       ]),
@@ -1183,8 +942,9 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * look the same and behave the same, separated by two hairlines, would be
      * the block claiming three kinds of setting and showing one.
      *
-     * The rule above this group stays, because MCP genuinely is another kind:
-     * it is an address and a status, not a setting anybody sets.
+     * It stays a separate group from MCP, which genuinely is another kind — an
+     * address and a status, not a setting anybody sets — but the gap between
+     * them carries that now, not a rule.
      *
      * Settings that used to live here and are gone, for the record. Output
      * detail moved to the strip above the list, where the thing it governs is.
@@ -1197,10 +957,10 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     el("div", { class: "de-ann-setting-group" }, [
       el("div", { class: "de-ann-setting" }, [
         labelWith(
-          "Show markers",
+          "Show pins",
           // Stated forward to match the switch. The hint carries the half the
           // label cannot: that turning it off is scoped to this page load.
-          helpDot("Show markers", "Turn this off to take every marker off the page until you reload.")
+          helpDot("Show pins", "Off hides pins until you reload.")
         ),
         hideMarkers,
       ]),
@@ -1227,7 +987,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
       // This button and the settings switch now share the phrase "Show markers"
       // on purpose — they are one setting, and the button names the action
       // while the switch names the state.
-      current.hideUntilRestart ? "Show markers" : "Hide markers"
+      current.hideUntilRestart ? "Show pins" : "Hide pins"
     )
     // `aria-checked` rather than `.checked`, for the same reason the switch
     // above reads it back on click: the attribute IS the state now, and the
@@ -1253,136 +1013,51 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     if (formatControl.value !== level) formatControl.value = level
   }
 
-  /* ---------- the two sections ---------- */
+  /* ---------- the section ---------- */
 
   /*
-   * What you can do with the list, directly under the list.
-   *
-   * Split by what the doing costs: the two glyphs on the left act on the outbox
-   * in place, the two labelled buttons on the right hand it over, Send leading
-   * because it is the action that finishes the job. The trash sits at the
-   * opposite end from them — they are the two controls in this tab that end the
-   * session's work, and the one that ends it irreversibly should not share an
-   * edge with the one that finishes it properly.
-   *
-   * Four controls and not one more. At 260px this row has 244px and these
-   * measure about 205 of it; a third labelled button does not fit, and the way
-   * that failure arrives is a label folding onto a second line. Anything added
-   * here has to be a glyph, or something else has to leave.
+   * What you can do with the list, directly under it: the two glyphs on the
+   * left act on the list in place, the two labelled buttons on the right hand
+   * it over. The bin sits at the opposite end from Send.
    */
   const ctas = el("div", { class: "de-ann-ctas" }, [
     el("span", { class: "de-ann-tools" }, [visibility, clearAll]),
-    /*
-     * The two WHOLE-SESSION actions, together.
-     *
-     * "Apply to code" lives up in the edits section because it acts on exactly
-     * those rows. These two do not: both hand over the entire session — every
-     * note and every edit, in one brief — so neither can sit under a heading
-     * without claiming a narrower scope than it has. Send and Copy differ in
-     * one thing, where the brief goes, which is why they are peers here rather
-     * than one being the other's fallback.
-     */
-    el("span", { class: "de-ann-actions" }, [sendButton, copyButton]),
+    el("span", { class: "de-ann-actions" }, [primaryButton, copyButton]),
   ])
 
   /*
-   * THREE SECTIONS IN ONE COLUMN: Direct edits, Notes, Settings.
-   *
-   * There were two, and the first was called "Handover" — a container holding
-   * both halves of the session, each half drawn as a small heading with its own
-   * tally inside it. That container was a level of structure nobody needed. It
-   * carried one fold for two lists that are read on two different errands
-   * ("what have I changed" is not "where is that note I left"), it printed the
-   * word Handover over a tab already called Changes, and it made the real
-   * headings — Direct edits, Notes — subordinate to a word that named no pile
-   * at all.
-   *
-   * So each half is a section in its own right, on the panel's own header: the
-   * title on the left column, the reserved actions track, the chevron, and a
-   * fold that now hides exactly the list it belongs to. A session of thirty
-   * edits can be folded away without also folding the two notes beside it.
-   *
-   * NO TALLIES ANYWHERE. The section header used to carry "1 note and 1 edit"
-   * and each group head carried its own "1" under it, so a session with one of
-   * each stated the same arithmetic three times over a list short enough to
-   * count by looking. A number earns its place when the thing it counts is off
-   * screen; these are never off screen, because the rows are the section.
-   *
-   * ORDER IS THE SESSION. Edits first — they are the half that can be written
-   * without anybody's help, and the button that writes them sits under them.
-   * Notes second, holding the detail control, because the level of detail is
-   * about what gets SAID rather than what gets written. Settings last, because
-   * it is the only block here nobody is ever mid-thought about.
+   * ONE SECTION, "Notes and edits": a sentence, the detail menu, and the list.
+   * No tally — the rows are the section and are never off screen.
    */
-  const editsSection = section(
-    "Direct edits",
+  const outboxSection = section(
+    "Notes and edits",
     el("div", { class: "de-ann-section-body" }, [
       el("div", { class: "de-ann-brief" }, [
-        "Changes you made on the canvas. Each row says whether it can be written.",
-      ]),
-      editList,
-      // The button spans the rows it acts on, so its scope is its width and its
-      // position. A CTA at the bottom of the tab would act on "everything
-      // above", which is a scope the reader has to reconstruct by scrolling.
-      el("div", { class: "de-ann-cta" }, [writeButton]),
-    ])
-  )
-
-  /*
-   * THE DETAIL MENU LIVES HERE NOW, not above the whole tab.
-   *
-   * It governs how much the brief says, and the brief is the notes' route out —
-   * the edits leave through the button one section up, which does not consult
-   * it at all. Sitting above both lists it looked like a setting for the tab;
-   * sitting over the notes it is a setting for the thing it actually changes.
-   *
-   * There is still exactly ONE of it. Two surfaces onto one setting is how a
-   * panel comes to disagree with itself, which is why this is a move and not a
-   * copy, and why Settings does not grow a second one.
-   */
-  const notesSection = section(
-    "Notes",
-    el("div", { class: "de-ann-section-body" }, [
-      el("div", { class: "de-ann-brief" }, [
-        "Pinned to the page. Your agent gets these, with the edits for context.",
+        "Sent to your agent as one brief, in this order.",
       ]),
       formats,
-      noteList,
+      list,
     ])
   )
 
   /*
-   * The empty state is the TAB's, not a section's.
-   *
-   * A session that has not started has nothing to head: two headers over two
-   * empty bodies would be the panel filing nothing under two names. Both
-   * sections leave the document, this says what would ever be here, and the
-   * first note or edit brings the structure back with it.
+   * The empty state is the TAB's, not the section's: a header over an empty
+   * body would be the panel filing nothing under a name.
    */
   const empty = emptyState()
 
   /*
-   * Settings is the one block that is ALWAYS in the column, which makes it the
-   * anchor everything above it is inserted before. Held in a variable for that
-   * reason rather than for tidiness: `place` needs a connected sibling, and
-   * `node.lastChild` would be whatever the last render happened to leave.
+   * Settings is the one block ALWAYS in the column, so it anchors everything
+   * inserted above it.
    */
-  const settingsSection = section("Settings", settings, undefined, true)
+  const settingsSection = plainSection("Settings", settings)
 
   const node = el("div", { class: "de-ann" }, [
     empty,
-    editsSection,
-    notesSection,
+    outboxSection,
     /*
-     * The whole-session buttons sit OUTSIDE both sections, which is the one
-     * thing that moved without being asked for and is worth saying why.
-     *
-     * Send and Copy hand over everything — every note and every edit, in one
-     * brief — so neither can live under a heading without claiming a narrower
-     * scope than it has, and neither may be foldable away: a button that
-     * finishes the session must not be hidden by tidying the list above it.
-     * Inside the old Handover section they were bracketed by position; out here
-     * they are bracketed by being last.
+     * The handover buttons sit OUTSIDE the section so folding the list away
+     * cannot hide the button that finishes the session.
      */
     ctas,
     settingsSection,
@@ -1470,14 +1145,9 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         "data-de-tip": DELETE_NOTE,
         "aria-label": DELETE_NOTE,
         /*
-         * The row closes first, and the store is written once it has.
-         *
-         * Deleting a note is terminal, and until now the only sign it had
-         * happened was that something the reader was looking at stopped
-         * existing — the same appearance as a list that failed to draw. The
-         * write is deferred rather than doubled up because `removeAnnotation`
-         * rebuilds this whole list through its subscription; doing both at once
-         * would race the rebuild against the row's own departure.
+         * The row closes first, and the store is written once it has: the
+         * delete rebuilds this whole list through its subscription, and doing
+         * both at once would race the rebuild against the row's departure.
          */
         onclick: (event: Event) => {
           const row = (event.currentTarget as HTMLElement).closest(".de-ann-item")
@@ -1494,33 +1164,20 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     /*
      * THE DELETE, AND THE WAY BACK FROM IT.
      *
-     * This was the last irreversible single click in the editor. Everything
-     * else destructive is recoverable — an element delete and a style change go
-     * through `core/history.ts`, a revert restores what it reverted, clear-all
-     * arms first and says what it will cost — and this one act was not, over
-     * the one thing on screen the user wrote themselves. A note is not in a
-     * source file to be recovered from; deleting it is the whole of its ending.
+     * One click, and a step on the editor's one undo timeline: Cmd+Z brings the
+     * note back, and so does the card's Undo, which is the same step
+     * (`undoNoteStep`), so the two cannot disagree.
      *
-     * The row keeps its single click, because the argument above is right: a
-     * control used on most rows in a session cannot ask twice. Confirm and undo
-     * are alternatives, and undo is the cheaper one for the reader — the common
-     * case, where the press was meant, costs nothing at all.
-     *
-     * The card names WHICH note, not "note deleted". By the time it appears the
-     * row is gone, so the sentence is the only thing left saying what was lost,
-     * and with four notes on a page "deleted" is a statement the reader cannot
-     * check. `noteSubject` is the same phrase the row itself used.
-     *
-     * Nothing is raised if the store had already dropped it — a second press
-     * arriving during the row's own departure, or a clear-all landing first.
-     * Offering to undo something that did not happen is worse than silence.
+     * The card names WHICH note, because by the time it appears the row is
+     * gone. Nothing is raised if the store had already dropped it — a second
+     * press during the row's departure, or a clear-all landing first.
      */
     function erase(): void {
-      const removed = removeAnnotation(note.id)
+      const removed = deleteNote(note.id)
       if (!removed) return
       editor.toast(`Deleted the note on ${noteSubject(removed.note)}`, "info", {
         label: "Undo",
-        onClick: () => restoreAnnotation(removed.note, removed.index),
+        onClick: () => undoNoteStep(removed.step),
       })
     }
 
@@ -1554,13 +1211,10 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     return trackHover(
       el("div", { class: "de-ann-item de-ann-item--note" }, [
         /*
-         * No "Note" chip. The row is in a list called Handover, it carries a
-         * numbered disc matching a pin on the canvas, and its first line is a
-         * sentence somebody typed — three things already saying what it is. The
-         * chip restated the obvious in a 260px column that has none to spare.
-         * A note row now carries no badge at all. It had one state to report
-         * and that state is gone; an edit row still badges, because which of
-         * three things is true of an edit is the fact its row exists to tell.
+         * No "Note" chip: the row carries a numbered disc matching its pin, and
+         * its line is a sentence somebody typed. An edit row still badges,
+         * because which of three things is true of an edit is the fact its row
+         * exists to tell.
          */
         el("div", { class: "de-ann-item-head" }, [
           el("span", { class: "de-ann-index" }, [String(index)]),
@@ -1618,14 +1272,14 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     if (isEditQueued(edit.id)) {
       return {
         label: "Ready",
-        title: "Queued. Apply writes this straight into the file.",
+        title: "Apply to code will write this.",
         kind: "ready",
       }
     }
     if (edit.written) {
       return {
         label: "In your files",
-        title: "Already written to the file, so applying it again would be a conflict.",
+        title: "Already in your files. Do not apply again.",
         kind: "written",
       }
     }
@@ -1642,12 +1296,12 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
       ? {
           label: "Needs the agent",
           title:
-            "Apply cannot write this one — it goes to your coding agent instead, with the rest of the list.",
+            "Apply to code cannot write this. It goes to your agent.",
           kind: "agent",
         }
       : {
           label: "Needs the agent",
-          title: "Apply could not write this one — your coding agent gets it with the rest.",
+          title: "Apply to code failed on this. It goes to your agent.",
           kind: "agent",
         }
   }
@@ -1708,7 +1362,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
            */
           if (!result.queueCleared && isEditQueued(edit.id)) {
             editor.toast(
-              "Row removed, but the queued write could not be taken back — apply with care",
+              "Removed from the list, but still queued. Apply to code will write it.",
               "error"
             )
           }
@@ -1766,19 +1420,16 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
              * forty times.
              *
              * It is a line in the row and not a dialog. The write has not
-             * happened yet — the button that performs it is at the bottom of
-             * this very group — so there is nothing to interrupt, only
-             * something to know before pressing it.
+             * happened yet — the button that performs it is under the list —
+             * so there is nothing to interrupt, only something to know before
+             * pressing it.
              */
             shared ? el("div", { class: "de-ann-item-shared" }, [shared]) : null,
           ]),
           el("div", { class: "de-ann-item-actions" }, [remove]),
         ]
       ),
-      // An edit has no pin, so this id matches no marker and the canvas lights
-      // nothing. Sent anyway, because the alternative is a row that stays
-      // silent on enter — which would leave the LAST note's pin lit while the
-      // pointer sits two rows further down.
+      // The canvas paints a pin for an edit too, so hovering the row lights it.
       edit.id
     )
   }
@@ -1791,65 +1442,27 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   }
 
 
-  /**
-   * "No notes yet", for a session that has edits and nothing written about
-   * them.
-   *
-   * Not the tab's empty state, which opens on "Nothing to hand over yet" — that
-   * sentence is false over a list of edits one section up. One quiet line
-   * instead, because the section is still here for a reason: it holds the
-   * detail menu, and a heading with a menu under it and no other explanation
-   * reads as a section that failed to load its rows.
-   */
-  function noNotesYet(): HTMLElement {
-    return el("div", { class: "de-ann-none" }, ["No notes yet. Pin one on the page."])
-  }
-
   function render(): void {
     /*
      * The outbox repaints on four stores, and two of them fire while the reader
      * is looking at a row halfway down it — a note deleted from its own row, an
-     * edit landing from a scrub on the canvas. Both lists are emptied and
-     * refilled below, and an emptied scroller is clamped to the top by the next
-     * layout, so without this the list jumps to the top under the hand that was
-     * working in it. `core/scroll.ts` carries the mechanism.
-     *
-     * Unconditional, unlike the Design tab's version of this: nothing in here
-     * is a view of one element, so there is no change of subject that would
-     * justify starting again from the top.
+     * edit landing from a scrub on the canvas. The list is emptied and refilled
+     * below, and an emptied scroller is clamped to the top by the next layout,
+     * so without this the list jumps under the hand working in it.
+     * `core/scroll.ts` carries the mechanism.
      */
     const hold = holdScroll(node)
-    clear(editList)
-    clear(noteList)
+    clear(list)
     const items = outboxItems()
     const filled = items.length > 0
 
     copyButton.disabled = !filled
+    paintPrimary()
 
-    /*
-     * Each verb is armed by its OWN group, not by the list.
-     *
-     * Write is armed by the queues rather than by the rows above it, because
-     * those are different facts: a drag leaves a queued removal with no visible
-     * row, and a row that has already been written leaves a row with nothing
-     * queued. The queues are what the button acts on, so the queues decide
-     * whether it is live.
-     *
-     * Send is armed by the outbox, because the brief is built from the outbox.
-     *
-     * Both stay disabled mid-flight, so a second click cannot post or write the
-     * same work twice while the first round trip is outstanding.
-     */
-    writeButton.disabled = !committer.hasPendingChanges() || sending
-    sendButton.disabled = !filled || sending
-
-    // Notes only, because clear-all is notes only. A list of edits and no notes
-    // has nothing for that button to take, and offering it anyway would be the
-    // panel promising something the click does not do.
+    // Notes only, because clear-all is notes only.
     noteCount = items.reduce((total, item) => total + (item.type === "note" ? 1 : 0), 0)
-    // An armed bin over a list that has just emptied — the last note deleted
-    // from its own row while the confirm was still up — would sit there waiting
-    // to delete nothing. The arm goes with the notes it was counting.
+    // An armed bin over a list whose last note just went would sit waiting to
+    // delete nothing. The arm goes with the notes it was counting.
     if (!noteCount) disarm()
     paintClear()
 
@@ -1857,102 +1470,36 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     refreshMcpSoon()
 
     /*
-     * TWO KINDS, AND EACH COUNTS FROM ONE.
-     *
-     * The split is what you DID, not what happens next: an edit is a thing you
-     * changed on the canvas, a note is a thing you wrote about the page. Those
-     * are the two activities a session is made of, and they are what a designer
-     * is looking for when they open this tab — "where's that note I left" is a
-     * different errand from "what have I changed".
-     *
-     * Numbering restarts per section, and that is the point of separating them.
-     * A single run of numbers across both makes the sections cosmetic: the
-     * third note being called 5 tells you only that two edits happened to be
-     * made before it, which is a fact about the clock rather than about the
-     * note. Per-section numbers mean "the third note" and "the third edit" are
-     * things a person can say out loud and point at.
-     *
-     * What this costs, stated because it is a real trade: the numbers no longer
-     * match a single position in the brief, which is one document in one
-     * chronological order. That was the argument for merged numbering and it
-     * loses to this one — the brief is read by an agent, which locates a change
-     * by its selector and its file, and the numbers in it were never what it
-     * used. The panel is read by a person, and the numbers are all they have.
+     * ONE RUN OF NUMBERS, in the order things happened. The number is the
+     * item's position in `outboxItems()`, so the row, the pin on the canvas and
+     * the brief all call it the same thing.
      */
-    const editRows: HTMLElement[] = []
-    const noteRows: HTMLElement[] = []
-    for (const item of items) {
-      if (item.type === "note") noteRows.push(noteRow(item.note, noteRows.length + 1))
-      else editRows.push(editRow(item.edit, editRows.length + 1))
-    }
-
-    editList.append(...editRows)
-    noteList.append(...(noteRows.length ? noteRows : [noNotesYet()]))
+    const numbers = outboxNumbers(items)
+    list.append(
+      ...items.map((item, index) =>
+        item.type === "note"
+          ? noteRow(item.note, numbers.get(item.note.id) ?? index + 1)
+          : editRow(item.edit, numbers.get(item.edit.id) ?? index + 1)
+      )
+    )
 
     /*
-     * WHICH SECTIONS ARE ON SCREEN, and the two rules are not symmetrical.
+     * WHAT IS ON SCREEN. The section and the buttons appear when the outbox
+     * holds anything OR a write is still owed: a deletion queues a source
+     * operation without leaving a row, and a designer who deleted a card and
+     * saw no section and no button would think the delete had not registered.
+     * Otherwise the tab's own empty state takes the column.
      *
-     * Edits appear when there are edit rows OR a write is still owed. The
-     * second half is not tidiness: a deletion queues a source operation without
-     * leaving a visible row until resolution lands, so a designer who deleted a
-     * card and saw no section and no button would reasonably conclude the
-     * delete had not registered.
-     *
-     * Notes appear whenever the session holds ANYTHING, even when no note has
-     * been written. The section carries the detail menu, and that menu governs
-     * the brief that hands the edits over too — hiding it because nobody has
-     * pinned a note yet would take a live control off the panel in the exact
-     * session that still needs it.
-     *
-     * Both hide together over an empty session, and the tab's own empty state
-     * takes the column instead of two headings over two blank bodies.
+     * A block with nothing to say LEAVES THE DOCUMENT rather than hiding, and
+     * is detached rather than rebuilt, so the detail menu and the buttons keep
+     * their listeners and whoever's focus was on them. Placed bottom-up,
+     * because each block goes in before a sibling already in the column.
      */
-    /*
-     * A block that has nothing to say LEAVES THE DOCUMENT, rather than hiding.
-     *
-     * `hidden` would have been cheaper and is what the fold uses, but the two
-     * situations are not the same. A folded section is still there and the
-     * reader put it away; a section with no rows is not there at all, and
-     * leaving it behind leaves a live "Apply to code" in the document over a
-     * list with nothing to apply, and an empty state claiming "nothing to hand
-     * over" above a section full of edits.
-     *
-     * Detached, not rebuilt. The nodes are the same objects across every
-     * render — the detail menu, the write button and their listeners come back
-     * exactly as they left — so this costs an insert, not the focus of whoever
-     * was using them.
-     */
-    /*
-     * THE BUTTONS LEAVE TOO, and they are placed FIRST so the rest can aim at
-     * them.
-     *
-     * They used to sit in the column unconditionally, which put a row of four
-     * controls directly under "Nothing to hand over yet" — Send and Copy
-     * disabled, the eye toggling the visibility of no markers, the bin armed
-     * to clear an empty list. Four controls over an empty state is the panel
-     * offering you its ending before you have started, and the one thing a
-     * first-time reader should be looking at there is the sentence saying what
-     * this tab is for.
-     *
-     * Same condition as Notes, not a narrower one: an edit made on the canvas
-     * with no note written is still a session worth handing over, and Copy and
-     * Send both carry it. The buttons come back with the first thing the
-     * session holds, whichever kind it is.
-     *
-     * Bottom-up, because each block goes in BEFORE a sibling and the sibling
-     * has to be in the column already. Settings never leaves, so it anchors
-     * the buttons; the buttons, or Settings when they are gone, anchor Notes;
-     * and Notes, or whatever is under it, anchors Direct edits.
-     */
-    const owed = committer.hasPendingChanges()
-    place(ctas, filled || owed, settingsSection)
-    const belowNotes = inColumn(ctas) ? ctas : settingsSection
-    place(notesSection, filled || owed, belowNotes)
-    place(empty, !(filled || owed), node.firstChild)
-    place(editsSection, editRows.length > 0 || owed, inColumn(notesSection) ? notesSection : belowNotes)
-    // Last, after the sections have been placed: the release measures the
-    // rebuilt column, and a section still detached at that point would make it
-    // clamp against a height the panel is about to grow past.
+    const shown = filled || committer.hasPendingChanges()
+    place(ctas, shown, settingsSection)
+    place(outboxSection, shown, inColumn(ctas) ? ctas : settingsSection)
+    place(empty, !shown, node.firstChild)
+    // Last: the release measures the rebuilt column.
     hold.release()
   }
 
@@ -1967,7 +1514,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * mounted. Every block then reported itself absent, `place` re-inserted one
    * that was already there, and an insert of a node that already has this
    * parent is a MOVE: the column quietly reordered itself, which is how the
-   * buttons ended up above the Notes section they belong under.
+   * buttons ended up above the section they belong under.
    *
    * The question this file actually asks is about membership of one parent, so
    * that is what it asks.
@@ -2048,8 +1595,6 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    */
   window.addEventListener(MARKER_HOVER_EVENT, (event) => {
     const id = (event as CustomEvent<{ id?: string | null }>).detail?.id ?? null
-    // Swept from the tab rather than from one list: the rows live in two now,
-    // and a pin belongs to whichever section its note is filed under.
     for (const row of node.querySelectorAll(".de-ann-item")) {
       row.classList.toggle("de-ann-item--hover", id !== null && row.getAttribute(ITEM_ID) === id)
     }

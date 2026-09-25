@@ -129,10 +129,11 @@ function emit(message: string, kind: ToastKind, action?: ToastAction): void {
   const options = action
     ? { duration: 8000, action: { label: action.label, onClick: action.onClick } }
     : undefined
-  // `sonner.error` rather than an option, because the type is what selects the
-  // glyph and the rich colouring — see the `--error-*` block in `css/toast.ts`.
+  // Typed calls rather than an option, because the type is what selects the
+  // glyph — and the glyph is the only thing that says which kind a card is.
+  // The card itself is the same neutral surface for both (see `css/toast.ts`).
   if (kind === "error") sonner.error(message, { duration: DURATION.error, ...options })
-  else sonner(message, { duration: DURATION.info, ...options })
+  else sonner.info(message, { duration: DURATION.info, ...options })
 }
 
 /**
@@ -225,12 +226,13 @@ export function installToaster(): () => void {
          * Sonner puts the button on every toast rather than per type, so the
          * info rung gains one it does not need. That is the cheaper of the two
          * costs — an affordance nobody uses, against an error nobody can clear.
+         * `css/toast.ts` moves it from Sonner's corner badge to the card's
+         * trailing edge.
          */
         closeButton: true,
-        // Typed toasts get their signal colour from the tokens rather than from
-        // Sonner's built-in palettes. Untyped ones — every `kind: "info"` call —
-        // are unaffected and stay the plain chrome card.
-        richColors: true,
+        // Off: severity is carried by the glyph alone, and every card is the
+        // same plain surface. A tinted card read as a second, louder signal.
+        richColors: false,
         /*
          * Narrower than Sonner's 356px default: this is tool chrome standing
          * beside a 260px inspector, and a card wider than the panel it reports

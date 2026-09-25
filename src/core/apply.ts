@@ -204,7 +204,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyAngular = async (): Promise<void> => {
     const operations = buildAngularOperations()
     if (!operations.length) {
-      toast("Could not resolve source files for these changes", "error")
+      toast("Could not find the source files for these changes", "error")
       return
     }
     toast(`Applying ${operations.length} change${operations.length === 1 ? "" : "s"}…`)
@@ -299,7 +299,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyReactBatch = (): void => {
     const operations = bridge.store.buildBatchOperations()
     if (!operations.length) {
-      toast("Could not resolve source files for these changes", "error")
+      toast("Could not find the source files for these changes", "error")
       return
     }
     bridge.send({ type: "commitBatch", operations })

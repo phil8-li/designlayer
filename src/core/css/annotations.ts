@@ -29,8 +29,12 @@ import { tokens as t, nest } from "../tokens"
  * found on and the row badge has a 260px column, so they are not the same
  * object at two sizes. They are written together here so a change to the pin
  * is made in sight of the thing that has to keep matching it.
+ *
+ * `MARKER` is exported because `canvas.ts` fans pins that share an anchor out
+ * sideways by exactly one pin and a gap, and a spacing restated there would
+ * drift the first time the pin is resized here.
  */
-const MARKER = 22
+export const MARKER = 22
 const INDEX = 16
 
 /**
@@ -261,6 +265,18 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   position: absolute; inset: -${(TARGET - MARKER) / 2}px;
   border-radius: 50%;
 }
+/*
+ * An EDIT's pin: the same fill, number and states, on a rounded square.
+ *
+ * Notes and edits share one numbering and one colour, so the colour cannot be
+ * what tells them apart — and it must not be, because a pin sits over product
+ * pixels of any hue and in front of readers who may not see the difference.
+ * Shape survives both. The disc is a remark about the page; the square is a
+ * change already made to it, and the corner is the kit's tightest so the two
+ * still read as one family at ${MARKER}px.
+ */
+.de-ann-marker--edit { border-radius: ${t.radius.sm}; }
+.de-ann-marker--edit::before { border-radius: ${t.radius.sm}; }
 /*
  * Hover grows the pin itself — Agentation's 1.1, not a ring.
  *
@@ -769,6 +785,8 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   font-size: ${t.type.micro}; font-weight: ${t.type.weightSection};
   line-height: ${t.type.leadingFlush};
 }
+/* An edit's row number takes the edit pin's square, so row and pin still read as one object. */
+.de-ann-item--edit .de-ann-index { border-radius: ${t.radius.sm}; }
 /*
  * Outlined at rest; the filled version below is reserved for "written".
  *
@@ -924,47 +942,19 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 }
 
 /*
- * THE TWO SECTIONS, AND WHAT IS LEFT OF THEM HERE.
+ * THE ONE SECTION, "Notes and edits", is a \`section()\` — the panel's own
+ * header — so this file draws no group box, head or tally for it.
  *
- * They were \`.de-ann-group\`s: a small heading, a tally, a sentence, the rows,
- * and the button that finishes them — two of those stacked inside ONE section
- * called Handover. So the tab drew a foldable header over two more headings
- * that were not foldable, and the pile a reader came for was always a level
- * down from the heading that named it.
- *
- * They are \`section()\`s now, which is the panel's own header and costs this
- * file nothing: no group box, no group head, no sub-heading rank, no tally.
- * Three rules survive, because a section header carries none of them.
- *
- * The sentence under each heading is one of them, and it does the real work of
- * the split. It is \`.de-ann-brief\` and not \`.de-ann-hint\`, which is taken: the
- * canvas pill that says "click an element to leave a note" owns that name, and a
- * section heading inheriting \`position: fixed\` from it lands the sentence over
- * the app instead of under its own title. "Editor" and
- * "agent" are this tool's words, not a designer's; one plain sentence saying
- * what will actually happen to these rows is what makes the two sections
- * explain themselves the first time somebody meets them.
+ * The sentence under the heading is \`.de-ann-brief\` and not \`.de-ann-hint\`,
+ * which is taken: the canvas pill that says "click an element to leave a note"
+ * owns that name, and inheriting its \`position: fixed\` would land the sentence
+ * over the app instead of under its title.
  */
 .de-ann-brief {
   margin-bottom: ${t.space.md}px;
   color: ${t.color.textDim};
   font-size: ${t.type.caption};
 }
-/*
- * "No notes yet", at the hint's rank and on the row column.
- *
- * The section stays on screen over a session of pure edits because it holds the
- * detail menu — so this is the line that stops a heading with a menu under it
- * and nothing else from reading as a list that failed to load.
- */
-.de-ann-none {
-  padding: ${t.space.sm}px 0;
-  color: ${t.color.textDim};
-  font-size: ${t.type.caption};
-}
-/* The button spans the rows it belongs to, so its scope is its width. */
-.de-ann-cta { margin-top: ${t.space.md}px; display: flex; }
-.de-ann-cta > .de-button { flex: 1; justify-content: center; }
 
 /*
  * THE AGENT ADDRESS.
@@ -973,9 +963,9 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
  * into another program: an ellipsis would make the one useful thing in the
  * block unreadable, and at 260px wrapping is the honest choice.
  */
-.de-mcp-row { display: flex; align-items: center; gap: ${t.space.sm}px; }
+.de-mcp-row { display: flex; flex-direction: column; align-items: flex-start; gap: ${t.space.sm}px; }
 .de-mcp-url {
-  flex: 1; min-width: 0;
+  align-self: stretch; min-width: 0;
   padding: ${t.space.xs}px ${t.space.sm}px;
   border-radius: ${t.radius.sm};
   background: ${t.color.bgHover};
@@ -1106,25 +1096,16 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 /*
  * What you do with the WHOLE session, under everything it acts on.
  *
- * It sat inside the Handover section, which was fine while one section held
- * both piles. With a section per pile it cannot: Send and Copy hand over every
- * note and every edit, so filing them under either heading would claim a
- * narrower scope than they have, and folding that heading away would hide the
- * button that finishes the session.
+ * Outside the section, so folding the list away cannot hide the button that
+ * finishes the session. The last row before Settings rather than a footer
+ * pinned to the pane. It insets its own sides, because \`.de-ann\` pads to the
+ * tab's ${GUTTER}px gutter and every section body pads ${t.space.md} more, so
+ * without this the buttons would start one step left of the rows they act on.
  *
- * Out here it is the last row of the tab rather than a footer pinned to the
- * pane — no hairline, no ground of its own, nothing to make it furniture. It
- * does take its own side padding now: \`.de-ann\` pads to the tab's ${GUTTER}px gutter
- * and every section body pads ${t.space.md} more, so without this the buttons would start
- * one step left of the rows they act on.
- *
- * One course, four controls, about 205px of the ${t.size.inspectorWidth - 16}px this row has.
- * \`flex-wrap\` stays as the relief valve — a narrower shell must fold the two
- * groups rather than let a label wrap out of its own pill.
- *
- * The slack \`space-between\` leaves is the only thing standing between the bin
- * and the button that sends everything — worth more here than anywhere else in
- * the panel.
+ * Four controls — two glyphs, the primary button and Copy — in the
+ * ${t.size.inspectorWidth - 16}px this row has. \`flex-wrap\` is the relief valve:
+ * a narrower shell folds the two groups rather than let a label wrap inside its
+ * pill. The slack \`space-between\` leaves keeps the bin away from Send.
  */
 .de-ann-ctas {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: ${t.space.md}px;
@@ -1270,6 +1251,15 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
   display: flex; flex-direction: column;
 }
 /*
+ * Settings is a plain section, drawn the way the Design tab draws one: edge to
+ * edge, so it cancels the tab's gutter, and with no hairline under it — it is
+ * the last thing in the column, so a rule there divides nothing.
+ */
+.de-ann > .de-section:has(> .de-section-body > .de-ann-settings) {
+  margin-left: -${GUTTER}px; margin-right: -${GUTTER}px;
+  border-bottom: 0;
+}
+/*
  * NO FOLD BUTTON HERE ANY MORE, and the deletion is the point.
  *
  * There was a \`.de-ann-settings-toggle\` — a whole-row target that collapsed the
@@ -1300,24 +1290,14 @@ export const annotationsCss = `/* ---------- annotation overlay ---------- */
 }
 
 /*
- * A run of rows, and a hairline only ever BETWEEN two runs.
+ * A run of rows, and space — not a hairline — between two runs.
  *
- * There are TWO groups now and the rule between them separates kinds, not
- * drawings. Above it, MCP: an address, a Copy button and a live status line —
- * a thing you read, not a thing you set. Below it, every setting, all of them
- * a switch on the right edge. The two extra rules this block used to carry
- * marked a switch/checkbox split that the controls no longer make, so they
- * were claiming three kinds of setting over one.
- *
- * A rule under the last group would close the block off from the panel edge it
- * is already sitting on and read as a second border.
+ * There are TWO groups: MCP (an address, a Copy button and a live status line,
+ * a thing you read) and every setting below it. The gap is enough to tell them
+ * apart; the rule that used to sit in it was removed at a designer's request.
  */
 .de-ann-setting-group { display: flex; flex-direction: column; }
-.de-ann-setting-group + .de-ann-setting-group {
-  margin-top: ${t.space.md}px;
-  padding-top: ${t.space.md}px;
-  border-top: 1px solid ${t.color.border};
-}
+.de-ann-setting-group + .de-ann-setting-group { margin-top: ${t.space.md}px; }
 
 /*
  * One setting, one line. The whole point of the block.

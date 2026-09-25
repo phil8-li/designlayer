@@ -396,7 +396,7 @@ check("a selection spanning two parents draws a sentence and no strip", () => {
   const view = scene({ count: 3, split: true })
   assert.equal(view.strip("Align selection"), null)
   assert.equal(view.strip("Align"), null, "it fell through to the single-selection strip")
-  assert.match(view.text(), /different containers/)
+  assert.match(view.text(), /same parent/)
 })
 
 check("a shared parent that is not flex offers the way in", () => {
@@ -416,9 +416,9 @@ check("a scattered selection offers no distribute either", () => {
 })
 
 check("the hint says which three marks place the elements one by one", () => {
-  assert.match(scene().text(), /Top, middle and bottom place each of the 3 selected elements/)
+  assert.match(scene().text(), /Top, middle and bottom align each element/)
   const column = scene({ parent: { display: "flex", flexDirection: "column" } })
-  assert.match(column.text(), /Left, center and right place each of the 3 selected elements/)
+  assert.match(column.text(), /Left, center and right align each element/)
 })
 
 /* ---------- the timeline ---------- */

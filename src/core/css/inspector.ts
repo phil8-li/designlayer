@@ -48,28 +48,19 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
 .de-tabs {
   flex: none;
   /*
-   * 2px, where the underlined strip had none.
-   *
-   * The old zero was a width measure: four icon+label tabs cleared a 260px
-   * panel by three pixels and the gap was six of the eleven they overflowed
-   * by. Dropping the icons returns about 16px per tab, so the budget that
-   * forced it is gone — and pills need the gap for a reason a text rail does
-   * not. Two adjacent backgrounds that touch read as one wider container with
-   * a seam in it, which is the wrong object.
+   * 4px between pills. Two adjacent backgrounds that touch read as one wider
+   * container with a seam in it, which is the wrong object, and at 2px the
+   * labels ran together as one phrase.
    */
-  display: flex; align-items: center; gap: ${t.space.xs}px;
+  display: flex; align-items: center; gap: ${t.space.sm}px;
   height: ${t.size.tabBar}px;
   /*
-   * The workhorse step, so the PILL'S EDGE lands on the panel's own column.
-   *
-   * Every pane below pads to 8 (\`.de-section-header\`, \`.de-section-body\`).
-   * With the underline gone, the thing that has to line up with that column is
-   * no longer a 2px rule inset inside its tab, it is the left edge of the
-   * selected tab's surface — so the strip takes the column directly instead of
-   * the 4 that used to sum to it. The label then sits 8px further in, inside
-   * the pill, which is exactly how a pill differs from a word.
+   * The \`lg\` step, so the strip has air at both ends rather than a pill
+   * pressed against the panel edge. It is the same inset the app chooser
+   * above gives its name, so the selected pill's edge and the app name share
+   * one left line; the label sits 8px further in, inside the pill.
    */
-  padding: 0 ${t.space.md}px;
+  padding: 0 ${t.space.lg}px;
   border-bottom: 1px solid ${t.color.border};
   /*
    * THE STRIP STILL SCROLLS RATHER THAN SHRINKS, though it now has room.

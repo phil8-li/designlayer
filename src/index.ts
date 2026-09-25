@@ -87,7 +87,7 @@ async function boot(): Promise<void> {
    * said anything.
    */
   const slow = setTimeout(
-    () => notify("Waiting for the app to be ready…"),
+    () => notify("Waiting for the app…"),
     SLOW_BOOT
   ) as unknown as number
   try {
@@ -97,7 +97,7 @@ async function boot(): Promise<void> {
     console.warn("[designlayer]", error)
     // The one message that has to reach the page rather than the console: the
     // editor is not coming up, and nothing else on screen will say so.
-    notify("DesignLayer could not attach to this page — reload to try again", "error")
+    notify("Could not attach to this page. Reload to try again.", "error")
     return
   }
   clearTimeout(slow)

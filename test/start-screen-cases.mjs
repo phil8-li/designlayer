@@ -1245,7 +1245,7 @@ await check("a project the editor cannot edit says so before the press, not afte
     await new Promise((resolve) => setTimeout(resolve, 400))
     // Both facts arrive with the folder, a full round-trip before the press
     // that used to be the first place either of them was mentioned.
-    assert.match($("hint").textContent, /neither React nor Angular/i)
+    assert.match($("hint").textContent, /does not use React or Angular/i)
   } finally {
     dom.window.close()
   }

@@ -90,7 +90,7 @@
  */
 
 import { onAngularQueueChange } from "../core/angular"
-import { buildAnnotationBrief, outboxItems } from "../annotations/output"
+import { copyHandover } from "../annotations/handover"
 import { onAnnotationsChange } from "../annotations/store"
 import { onEditsChange } from "../annotations/journal"
 import { onPreviewOnlyChange } from "../core/change-prompt"
@@ -487,67 +487,15 @@ export function installToolbar(context: EditorContext): void {
    */
 
   /**
-   * The notes brief, on the clipboard — a COMMAND now, with no square of its
-   * own in the bar.
+   * The notes brief, on the clipboard — a COMMAND, with no square in the bar.
    *
-   * The button came back here once because the panel that holds the same Copy
-   * can be closed, and handing the work over from behind a closed panel meant
-   * reopening 260px you had shut on purpose. What has changed is the two
-   * controls either side of it: Notes and Inspect now bring the right panel
-   * with them (see `setMode` in `core/context.ts`), so the list this copies is
-   * on screen by the time there is anything in it to copy. A second door into
-   * one action, three glyphs from the door that also shows you what you are
-   * about to hand over, is a square spent on a shortcut for a panel that is
-   * already open.
-   *
-   * The KEY survives the button, which is why this is a function rather than a
-   * deletion: `notes.copy` is registered on it below, and a chord is not a
-   * square in the bar.
-   *
-   * The write happens SYNCHRONOUSLY inside the gesture's task and before
-   * anything awaits. The Clipboard API only works under the transient user
-   * activation the press carries and the browser revokes it the moment the
-   * handler yields, so building the brief after an `await` — even an awaited
-   * count of what is in it — is how a copy comes to do nothing on every second
-   * press. Same shape as `copyChangePrompt` and the panel's own Copy.
+   * `notes.copy` is registered on it below, and a keydown is as much a user
+   * gesture as a click, so the clipboard still opens for it. The copy itself is
+   * `copyHandover`, the same call the Changes tab's Copy makes, so the chord and
+   * the button put the same text on the clipboard and say the same toast.
    */
   const copyBrief = (): void => {
-    const items = outboxItems()
-    /*
-     * Counted the way the brief counts ITSELF, which is not the same as
-     * counting the outbox: `buildAnnotationBrief` drops resolved notes, because
-     * a note the designer has ticked off is work that no longer needs doing.
-     * Count the rows instead and a session whose notes are all resolved reports
-     * "Copied 4 notes" over a clipboard holding the brief's "nothing to hand
-     * over yet" sentinel.
-     *
-     * Synchronous, like everything above the clipboard write has to be.
-     */
-    const notes = items.filter((item) => item.type === "note").length
-    const changes = items.filter((item) => item.type === "edit").length
-    if (!notes && !changes) {
-      context.toast("Nothing to copy — no notes, no edits")
-      return
-    }
-    let refused = false
-    try {
-      void navigator.clipboard
-        .writeText(buildAnnotationBrief(items))
-        .catch(() => context.toast("The browser refused the clipboard", "error"))
-    } catch {
-      // A browser with no Clipboard API at all throws here rather than
-      // rejecting, and the toast below must not then claim a success.
-      refused = true
-    }
-    if (refused) {
-      context.toast("The browser refused the clipboard", "error")
-      return
-    }
-    const parts = [
-      notes ? `${notes} ${notes === 1 ? "note" : "notes"}` : "",
-      changes ? `${changes} ${changes === 1 ? "change" : "changes"}` : "",
-    ].filter(Boolean)
-    context.toast(`Copied ${parts.join(" and ")}`)
+    copyHandover(context.toast)
   }
 
   /**
@@ -561,7 +509,14 @@ export function installToolbar(context: EditorContext): void {
   const travel = (direction: "undo" | "redo") => {
     const label = direction === "undo" ? undo() : redo()
     const verb = direction === "undo" ? "Undo" : "Redo"
-    context.toast(label ? `${verb}: ${label}` : `Nothing to ${direction}`)
+    // The card offers the step straight back: a redo can be undone from the
+    // toast, an undo redone. Nothing is offered when nothing moved.
+    const back = direction === "undo" ? "redo" : "undo"
+    context.toast(
+      label ? `${verb}: ${label}` : `Nothing to ${direction}`,
+      "info",
+      label ? { label: back === "undo" ? "Undo" : "Redo", onClick: () => travel(back) } : undefined
+    )
     // The inspector reads the element, so the panel is stale until it re-reads.
     context.refresh()
   }
@@ -707,7 +662,7 @@ export function installToolbar(context: EditorContext): void {
    * are a moving target. Which edge it is attached to is not.
    */
   const layersToggle = panelToggle({
-    label: "Toggle layers panel",
+    label: "Show or hide left panel",
     glyph: "PanelLeft",
     read: () => context.getState().layersOpen,
     write: (next) => context.setState({ layersOpen: next }),
@@ -715,7 +670,7 @@ export function installToolbar(context: EditorContext): void {
     quiet: true,
   })
   const inspectorToggle = panelToggle({
-    label: "Toggle inspector",
+    label: "Show or hide inspector",
     glyph: "PanelRight",
     read: () => context.getState().inspectorOpen,
     write: (next) => context.setState({ inspectorOpen: next }),

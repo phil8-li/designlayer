@@ -17,7 +17,7 @@ export async function requestAgent(apiBase: string, request: AgentRequest): Prom
 
     const payload = (await response.json().catch(() => null)) as Partial<AgentResponse> | null
     if (!payload || typeof payload.message !== "string") {
-      return { ok: false, message: `Agent route replied ${response.status} with no message.` }
+      return { ok: false, message: `The agent request failed (${response.status}).` }
     }
 
     return {
@@ -29,6 +29,6 @@ export async function requestAgent(apiBase: string, request: AgentRequest): Prom
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error"
-    return { ok: false, message: `Could not reach the agent route (${detail}).` }
+    return { ok: false, message: `Could not reach the agent (${detail}).` }
   }
 }

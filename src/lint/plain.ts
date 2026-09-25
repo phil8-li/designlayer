@@ -51,12 +51,12 @@ import type { LintFinding } from "./store"
  */
 const RULE_NAMES: Record<string, string> = {
   "no-raw-colors": "Hardcoded colors",
-  "no-undeclared-token": "Tokens that do not exist",
+  "no-undeclared-token": "Undefined tokens",
   "duplicate-token-values": "Duplicate tokens",
   "no-inline-styles": "Inline styles",
-  "no-restyle": "Restyled from outside",
+  "no-restyle": "Component styles overridden",
   "no-arbitrary-values": "Off-scale values",
-  "require-static-classes": "Class names built at runtime",
+  "require-static-classes": "Dynamic class names",
   "no-unknown-classes": "Unknown class names",
 }
 
@@ -153,7 +153,7 @@ export function hintFor(finding: LintFinding): string | null {
     ? finding.rule.slice(finding.rule.lastIndexOf("/") + 1)
     : finding.rule
   if (suffix === "no-raw-colors") return "No token is close — declare one"
-  if (suffix === "no-undeclared-token") return "Renders its fallback"
+  if (suffix === "no-undeclared-token") return "Showing the fallback value"
   /*
    * The generic last resort, and it is not nothing.
    *

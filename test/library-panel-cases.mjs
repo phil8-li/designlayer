@@ -757,7 +757,7 @@ await check("a documented prop the element does not carry is stated, never offer
   // And the note says so, rather than leaving the reader to infer it from the
   // absence of a control.
   const notes = [...node.querySelectorAll(".de-variant-note")].map((n) => n.textContent).join(" ")
-  assert.match(notes, /Nothing here can write them/)
+  assert.match(notes, /Read-only/)
 })
 
 await check("a documented union the element wears becomes a dropdown, and the write is a preview", async () => {
@@ -966,8 +966,8 @@ await check("an axis and a documented prop of the same name are one row, and the
   // places and a designer has to know which is which.
   const notes = [...node.querySelectorAll(".de-variant-note")].map((n) => n.textContent)
   assert.equal(notes.length, 2)
-  assert.match(notes[0], /not its prop/)
-  assert.match(notes[1], /do not reach the file/)
+  assert.match(notes[0], /writes its classes, not the/)
+  assert.match(notes[1], /not written to the file/)
 })
 
 await check("a source declaration alone still draws the block, with no owner invented", async () => {

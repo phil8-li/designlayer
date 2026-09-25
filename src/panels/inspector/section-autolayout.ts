@@ -390,8 +390,8 @@ export function autoLayoutControls(
     label: "Spacing mode",
     value: spaceBetween ? "between" : "packed",
     options: [
-      { value: "packed", label: "Packed", title: "Children sit together at the gap" },
-      { value: "between", label: "Space between", title: "Gap absorbs the free space" },
+      { value: "packed", label: "Packed", title: "Children keep the set gap" },
+      { value: "between", label: "Space between", title: "Children spread to fill the space" },
     ],
     onCommit: (next) => {
       writer.applyStyles(

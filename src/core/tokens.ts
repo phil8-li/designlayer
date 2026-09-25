@@ -1151,8 +1151,18 @@ export const tokens = {
     miniSize: 18,
     /** Toolbar hit targets: larger on purpose, they are pointer-first. */
     toolSize: 28,
-    /** The right panel's tab strip. Tall enough to be a landmark, not a row. */
-    tabBar: 34,
+    /**
+     * Both panels' tab strips. Tall enough to be a landmark, not a row: 8px of
+     * air above and below a 24px pill, where 34 left the pills pressed against
+     * the app chooser over them and the first section under them.
+     */
+    tabBar: 40,
+    /**
+     * The left panel's app chooser, the band above everything else in the
+     * chrome. Taller than a section header because it heads the whole panel,
+     * not one section of it.
+     */
+    panelHeader: 44,
     /** Handles, guides, and the marquee all share one hairline. */
     hairline: 1,
   },

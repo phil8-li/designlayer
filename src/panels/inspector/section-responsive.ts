@@ -211,7 +211,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
       // An undocumented prefix is still offered — it compiles, and hiding it
       // would make the panel lie about what the source can say — but it is not
       // dressed up as a decision the design system made.
-      note: step.documented ? undefined : "Compiles, but this design system declares no step here.",
+      note: step.documented ? undefined : "Works, but not a breakpoint in your design system.",
       prefix: step.prefix,
       bindings: authored("viewport", step.name),
       summary: `Set ${step.name} responsive utilities`,
@@ -237,7 +237,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
           title: `@${step.name} · ${step.px}px and up${activeContainer?.name === step.name ? " · active now" : ""}`,
           usage: step.usage,
           owner: step.owner,
-          note: step.documented ? undefined : "Compiles, but this design system declares no container step here.",
+          note: step.documented ? undefined : "Works, but not a container size in your design system.",
           // The first existing variant's own prefix wins, so a row authored
           // against a NAMED container keeps its name instead of being silently
           // retargeted at the nearest one.
@@ -251,7 +251,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
   const descendants = descendantContainerUtilities(selection.element)
   const notes: HTMLElement[] = [
     el("div", { class: "de-hint" }, [
-      `Viewport ${viewport}px · ${active ? `${active.name} is the active step` : "below every step"}. Base classes and every other breakpoint stay untouched.`,
+      `Viewport ${viewport}px · ${active ? `${active.name} is active` : "below all breakpoints"}. Other breakpoints stay unchanged.`,
     ]),
   ]
   if (nested.length) {
@@ -264,7 +264,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
 
   const containerToggle = containerContext && containerSteps.length > defaultContainerSteps.length
     ? miniButton({
-        label: showAllContainers ? "Show documented and authored container steps" : "Show all container steps",
+        label: showAllContainers ? "Show fewer container sizes" : "Show all container sizes",
         // The same show-more pair as the per-side token rows: this lengthens a
         // LIST of container steps rather than splitting one value into four.
         glyph: icon(showAllContainers ? "ChevronsDownUp" : "ChevronsUpDown", tokens.icon.row),
@@ -286,18 +286,18 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
   if (scope) {
     containerNotes.push(
       el("div", { class: "de-hint" }, [
-        `${scope.self ? "This element is" : "Inside"} @container${scope.name ? `/${scope.name}` : ""}. These steps measure that container’s width, not the window’s.`,
+        `${scope.self ? "This element is" : "Inside"} @container${scope.name ? `/${scope.name}` : ""}. Sizes follow the container, not the window.`,
       ]),
       el("div", { class: "de-hint" }, [
         scope.width === null
           ? "Nearest container width is not measurable in this preview."
-          : `Nearest container width: ${Math.round(scope.width)}px · ${activeContainer ? `${activeContainer.name} is the active container step` : "below every container step"}.`,
+          : `Container width ${Math.round(scope.width)}px · ${activeContainer ? `${activeContainer.name} is active` : "below all sizes"}.`,
       ])
     )
   } else if (containerBindings.length) {
     containerNotes.push(
       el("div", { class: "de-hint" }, [
-        "Container-query utilities are authored, but no container scope was found in this preview.",
+        "Uses container-query classes, but no @container parent is on this page.",
       ])
     )
   }
@@ -310,7 +310,7 @@ export const responsiveSection: InspectorSection = ({ selection, computed, write
   } else if (scope?.self) {
     containerNotes.push(
       el("div", { class: "de-hint" }, [
-        "This container has no descendant container-query utilities yet.",
+        "No children use container-query classes yet.",
       ])
     )
   }
