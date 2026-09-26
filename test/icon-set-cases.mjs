@@ -398,16 +398,17 @@ check("a swap redraws the glyph, renames it, and is one undoable step", () => {
   assert.equal(glyph.getAttribute("fill"), afterFill)
 })
 
-check("the swap says it is preview-only, every time", () => {
+check("the swap is silent, and lands in the ledger for the agent", () => {
+  editorModule.clearPreviewOnly()
   resetGlyph()
-  // Source resolution is dead app-wide (`filePath` is ""), and the source
-  // writer speaks only in classes and text — the JSX still names the component
-  // it always did. Saying so once in a hint the user scrolled past is not the
-  // same as saying it on the swap.
+  // Preview-only is the icon lane's normal outcome, not a loss: the swap goes
+  // to the Changes tab for the agent. A toast per swap narrated direct
+  // manipulation the canvas already shows.
   writer.applyIcon(selection, variant("Heart"))
   writer.applyIcon(selection, variant("Compass"))
-  assert.equal(toasts.length, 2)
-  assert.ok(toasts.every((toast) => /preview only/.test(toast.message)))
+  assert.equal(toasts.length, 0, toasts.map((toast) => toast.message).join(" | "))
+  assert.ok(editorModule.previewOnlyChanges().length > 0, "the swap never reached the ledger")
+  editorModule.clearPreviewOnly()
 })
 
 check("the swap is in the change ledger BEFORE the history event fires", () => {

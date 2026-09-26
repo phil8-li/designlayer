@@ -175,35 +175,6 @@ function isStoredNote(value: unknown): value is AnnotationRecord {
 }
 
 /**
- * The marker palette a saved setting might predate, mapped hue-for-hue.
- *
- * The presets moved to Apple's system colours when the numeral became white —
- * the hand-mixed set before them was chosen to sit under DARK ink, and white on
- * the old amber is 1.4:1. The hexes on disk did not move with them, so a
- * returning user's stored `markerColor` pointed at a colour no swatch offers:
- * the settings row would have opened with nothing selected, and their pins
- * would have stayed the one shade on the page that is not in the palette.
- *
- * Mapped rather than reset, because the colour is a choice the user made and
- * the new palette has the same seven hues in the same order. Anything not on
- * this list is left exactly as found — a hex somebody typed by hand is still
- * their hex, and this is a rename, not a policy about what a marker may be.
- */
-const RETIRED_MARKER_COLORS: Readonly<Record<string, string>> = {
-  "#7c5cff": "#6155F5", // Violet -> Indigo
-  "#2f80ff": "#0088FF", // Blue
-  "#17b0bf": "#00C3D0", // Teal -> Cyan
-  "#2ea043": "#34C759", // Green
-  "#e3b341": "#FFCC00", // Amber -> Yellow
-  "#ff7b39": "#FF8D28", // Orange
-  "#f2545b": "#FF383C", // Red
-}
-
-function migrateMarkerColor(stored: string): string {
-  return RETIRED_MARKER_COLORS[stored.trim().toLowerCase()] ?? stored
-}
-
-/**
  * Notes are rehydrated WITHOUT their live element.
  *
  * `element` is a DOM node and cannot be serialized, so a reloaded note paints
@@ -232,13 +203,14 @@ function load(): void {
        * outlives every build that ever read it. `includeComponents` is the first
        * one to go this way — the editor detects React or Angular itself now, so
        * a stored `false` is an answer to a question nobody asks. Filtering by
-       * the defaults' own keys means the next retirement needs no code here.
+       * the defaults' own keys means the next retirement needs no code here —
+       * and `markerColor` went the same way: pins wear the chrome's indigo
+       * accent now, so a stored hex from the old swatches is simply dropped.
        */
       const live = settings as unknown as Record<string, unknown>
       for (const key of Object.keys(live)) {
         if (!(key in DEFAULT_SETTINGS)) delete live[key]
       }
-      settings.markerColor = migrateMarkerColor(settings.markerColor)
     } catch {
       settings = { ...DEFAULT_SETTINGS }
     }

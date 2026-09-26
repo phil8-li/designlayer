@@ -1,7 +1,7 @@
 /** Floating bottom toolbar, drawn as one pill, plus its controls and tooltips. */
 
 import { tokens as t, accentFill, accentFillHover, accentFillText, accentFillTextHover, nest } from "../tokens"
-import { FOCUS_OUTLINE, PRESS } from "./panels"
+import { CONTROL_RADIUS, FOCUS_OUTLINE, PRESS } from "./panels"
 
 /*
  * The strip's geometry, written here rather than added to the token file.
@@ -414,13 +414,24 @@ html.designlayer-chrome-hidden .de-toolbar {
  *
  * After the two rules above, not before: same specificity, so this wins only by
  * sitting later in the sheet.
+ *
+ * BOTH HALVES, IN BOTH RULES. The hover rule above is \`accentFillHover\`, a
+ * surface AND an ink, and an opt-out that restates only the surface keeps the
+ * other half: the pressed toggle's hover used to set the plate back to
+ * \`bgHoverQuiet\` and leave \`onAccent\` on the glyph. In dark that is white
+ * against \`text\` at #fafafa, a difference nobody can see, so it passed every
+ * review done in the default theme. On paper it is a white mark on a
+ * near-white plate — the glyph vanished under the pointer.
  */
 .de-toolbar .de-tool--quiet[aria-pressed="true"] {
   background: transparent;
   color: ${t.color.text};
 }
 @media (hover: hover) and (pointer: fine) {
-  .de-toolbar .de-tool--quiet[aria-pressed="true"]:hover { background: ${t.color.bgHoverQuiet}; }
+  .de-toolbar .de-tool--quiet[aria-pressed="true"]:hover {
+    background: ${t.color.bgHoverQuiet};
+    color: ${t.color.text};
+  }
 }
 /* The press lives on \`.de-tool\` above now, at the kit's 0.98, for every square. */
 
@@ -452,11 +463,15 @@ html.designlayer-chrome-hidden .de-toolbar {
 
 /*
  * THE CHROME'S SHARED TEXT BUTTON, as the kit's secondary action at editor
- * density: the row's 24px height and 12px type, the kit's xs button geometry
- * (\`space.md\` sides, a \`space["2xs"]\` glyph gap) and the ACTION BUTTON corner,
- * \`radius["2xl"]\`, which every text button shares. At 24 tall that corner is
- * past half the height, so the button is a pill and opts out of the squircle in
- * \`css/base.ts\` like every other pill.
+ * density: the row's 24px height and 12px type, and the kit's xs button
+ * geometry (\`space.md\` sides, a \`space["2xs"]\` glyph gap).
+ *
+ * THE CORNER IS THE FIELD'S, \`CONTROL_RADIUS\` (8px squircle). The kit's 14px
+ * action radius is sized for its 32–44px buttons; on a 24px editor button it
+ * is past half the height and turns every button into a pill beside the 8px
+ * fields it sits next to. Buttons and fields are the same height here, so they
+ * share one corner — the same density adaptation \`CONTROL_RADIUS\` makes for
+ * fields — and every text button, the toast's Undo included, wears it.
  *
  * The fill is the kit's \`--secondary\`: \`bgHover\` resolves to it in light and to
  * the same 12% wash \`bgRaised\` was in dark. \`bgRaised\` is white in light, so on
@@ -466,10 +481,10 @@ html.designlayer-chrome-hidden .de-toolbar {
   height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.md}px;
   display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px;
-  border: none; border-radius: ${t.radius["2xl"]};
+  border: none; border-radius: ${CONTROL_RADIUS};
   background: ${t.color.bgHover}; color: ${t.color.text};
   font-family: inherit; font-size: ${t.type.body}; font-weight: ${t.type.weightValue};
-  /* A label on one line, as the kit's action is: a pill that wraps is two. */
+  /* A label on one line, as the kit's action is: a button that wraps is two. */
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -510,6 +525,11 @@ html.designlayer-chrome-hidden .de-toolbar {
   .de-button--primary:hover { ${accentFillTextHover} }
   .de-button--danger:hover { background: ${t.color.danger}; color: ${t.color.onSemantic}; }
 }
+/* An open menu holds its trigger's HOVER paint, and a filled button's hover is
+   its own pair. Without this the generic hold above, at equal specificity,
+   gave a primary trigger the secondary plate under the primary's white ink —
+   1.33:1 on paper. */
+.de-button--primary:is([aria-expanded="true"], [data-state="open"]) { ${accentFillTextHover} }
 /*
  * The fill AND the ink, because swapping one without the other is the bug.
  *

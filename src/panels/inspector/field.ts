@@ -9,6 +9,7 @@ import { el, round } from "../../core/dom"
 import { icon } from "../../core/icons"
 import { installIconSegmentThumb, installSegmentThumb } from "../../core/travelling-surface"
 import { tokens } from "../../core/tokens"
+import { TIP_ATTR, TIP_WRAP_ATTR } from "../../core/tooltip"
 
 /**
  * Panel-level memory. Collapse and expander state belong to the *panel*, not to
@@ -705,7 +706,16 @@ export function section(
    * below a list you are reading every time, and unfolded by default it pushes
    * that list up by the height of six rows for a block nobody asked for.
    */
-  collapsedByDefault = false
+  collapsedByDefault = false,
+  /**
+   * A sentence that explains the SECTION, shown when the title is hovered.
+   *
+   * Replaced the help dot this slot used to take: the explanation now opens
+   * from the title itself, so there is no glyph to find. The same sentence is
+   * set as the fold button's `aria-description` for keyboard and screen-reader
+   * users, since the tooltip card is `aria-hidden`.
+   */
+  hint?: string
 ): HTMLElement {
   if (collapsedByDefault && !collapsedSections.has(title)) {
     collapsedSections.set(title, true)
@@ -757,10 +767,11 @@ export function section(
     "aria-label": title,
     title: `${collapsed ? "Expand" : "Collapse"} ${title}`,
   })
+  if (hint) toggle.setAttribute("aria-description", hint)
 
   const header = el("div", { class: "de-section-header de-section-header--collapsible" }, [
     toggle,
-    el("span", { class: "de-section-title" }, [title]),
+    sectionHeading(title, hint),
     actions ? el("span", { class: "de-section-actions" }, [actions]) : null,
     el("span", { class: "de-chevron", "aria-hidden": "true" }, [icon("ChevronRight", tokens.icon.marker)]),
   ])
@@ -794,13 +805,47 @@ export function section(
 }
 
 /**
+ * The header's first track: the title. With a hint, the title carries it as
+ * its tooltip and is lifted above the fold layer so the pointer reaches it; a
+ * click on it still bubbles to the header and folds the section.
+ */
+function sectionHeading(title: string, hint?: string): HTMLElement {
+  const text = el("span", { class: "de-section-title" }, [title])
+  if (hint) setTitleHint(text, hint)
+  return text
+}
+
+function setTitleHint(text: HTMLElement, hint: string): void {
+  text.classList.add("de-section-title--hint")
+  text.setAttribute(TIP_ATTR, hint)
+  text.setAttribute(TIP_WRAP_ATTR, "")
+}
+
+/**
+ * Rewrite a section's header hint after it is built — for a sentence that
+ * changes, like the DS lint header's list of checkers.
+ */
+export function setSectionHint(section: HTMLElement, hint: string): void {
+  const text = section.querySelector<HTMLElement>(":scope > .de-section-header > .de-section-title")
+  if (text) setTitleHint(text, hint)
+  section
+    .querySelector(":scope > .de-section-header > .de-section-toggle")
+    ?.setAttribute("aria-description", hint)
+}
+
+/**
  * A section that never folds: the same header, title and body padding as
  * `section()`, with no toggle, no chevron and no hover ground. For a block that
  * is short enough that a fold would only cost a click on every visit.
  */
-export function plainSection(title: string, body: HTMLElement, actions?: HTMLElement): HTMLElement {
+export function plainSection(
+  title: string,
+  body: HTMLElement,
+  actions?: HTMLElement,
+  hint?: string
+): HTMLElement {
   const header = el("div", { class: "de-section-header" }, [
-    el("span", { class: "de-section-title" }, [title]),
+    sectionHeading(title, hint),
     actions ? el("span", { class: "de-section-actions" }, [actions]) : null,
   ])
   return el("div", { class: "de-section" }, [header, el("div", { class: "de-section-body" }, [body])])

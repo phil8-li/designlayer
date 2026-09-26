@@ -214,9 +214,9 @@ console.log("\nThe chrome's nests")
  * Re-derived for the design foundations kit's radius ladder
  * (4/8/10/12/14/16/18/22/26). Its menu recipe — a 16px card, 6px padding,
  * 10px items — is concentric by construction, and both menus take it. Modals
- * take the kit's 18px dialog rung; text buttons draw the kit's 14px action
- * radius, so a container whose corner child is a `.de-button` is sized to
- * leave 14 at the corner.
+ * take the kit's 18px dialog rung. Text buttons draw the fields' 8px corner
+ * (the kit's 14px action radius is a pill at the editor's 24px), so a
+ * container whose corner child is a `.de-button` leaves 8 at the corner.
  */
 const EXPECTED = [
   [".de-toolbar", "16px", 4, 1, "3px", "12px"],
@@ -224,12 +224,12 @@ const EXPECTED = [
      overlay shadow carries it as a layer. */
   [".de-app-menu", "16px", 6, 0, "6px", "10px"],
   [".de-layer-menu", "16px", 6, 1, "5px", "10px"],
-  /* The composer's corner children are its 14px buttons: 22 − 8 = 14. */
-  [".de-ann-composer", "22px", 8, 0, "8px", "14px"],
+  /* The composer's corner children are its 8px buttons: 16 − 8 = 8. */
+  [".de-ann-composer", "16px", 8, 0, "8px", "8px"],
   /* A note row is a kit card (16) whose top-right `.de-mini` draws 8. */
   [".de-ann-item", "16px", 8, 1, "7px", "8px"],
-  /* The ignored row's corner child is a 14px `.de-button`: 18 − 4 = 14. */
-  [".de-lint-ignored-row", "18px", 4, 0, "4px", "14px"],
+  /* The ignored row's corner child is an 8px `.de-button`: 12 − 4 = 8. */
+  [".de-lint-ignored-row", "12px", 4, 0, "4px", "8px"],
   /* The local-file drawer: its candidate rows and path field draw 8. */
   [".de-lib-panel", "12px", 4, 0, "4px", "8px"],
   /* A signed-in origin: a kit card (16) with the Forget `.de-mini` at 8. */
@@ -334,7 +334,7 @@ check("the radius a nest computed is the radius its children are given", () => {
        corner, at the radius the nest asks of it. */
     ".de-lib-signed-row": [".de-mini"],
     /* The button in its corner is shared furniture — `.de-button` draws the
-       kit's 14px action radius, and the row is sized so that IS the nest's
+       fields' 8px corner, and the row is sized so that IS the nest's
        radius. Asserted against the shared rule on purpose: if `.de-button` ever
        moves, this row stops being concentric and should say so. */
     ".de-lint-ignored-row": [".de-button"],
@@ -463,7 +463,7 @@ const LEAVES = {
   ".de-insert-ghost": "one child, `.de-insert-ghost-name`, which draws no corner.",
   ".de-lib-signin":
     "the kit's dialog: an 18px corner over its 24px modal inset. The inset erodes the corner " +
-    "to nothing, so the 14px action buttons in its foot share no centre with it.",
+    "to nothing, so the 8px buttons in its foot share no centre with it.",
 }
 
 check("every container that could share a corner has been ruled on", () => {

@@ -50,10 +50,18 @@ Object.defineProperty(window.navigator, "clipboard", {
   configurable: true,
 })
 
-// No route behind the panel in this harness. The MCP status block and the
-// component-usage lookup both fetch; both are written to treat a dead route as
-// "say nothing confident", and returning a rejection here is what proves it.
-globalThis.fetch = async () => {
+// No route behind the panel in this harness, except MCP status. The
+// component-usage lookup is written to treat a dead route as "say nothing
+// confident", and returning a rejection here is what proves it. MCP status
+// answers with `mcpStatus` — an attached agent by default, since the tab only
+// offers "Send to agent" once one has connected — or rejects when it is null.
+const AGENT_ATTACHED = { url: "http://127.0.0.1:5747/mcp", listening: true, agents: 1, waiting: 1 }
+let mcpStatus = AGENT_ATTACHED
+globalThis.fetch = async (input) => {
+  if (String(input).endsWith("/mcp/status") && mcpStatus) {
+    const payload = mcpStatus
+    return { ok: true, status: 200, json: async () => payload }
+  }
   throw new Error("no server in this harness")
 }
 
@@ -208,13 +216,14 @@ const groups = () =>
         Number(n.textContent.trim())
       ),
     }))
-    .filter((group) => group.title !== "Settings")
+    .filter((group) => group.title !== "Settings" && group.title !== "MCP")
 
 const primary = () => tab.node.querySelector(".de-ann-ctas .de-button--primary")
+// Only the buttons on screen: without an agent the primary button is `hidden`.
 const ctaLabels = () =>
-  Array.from(tab.node.querySelectorAll(".de-ann-ctas .de-button")).map((node) =>
-    node.textContent.trim()
-  )
+  Array.from(tab.node.querySelectorAll(".de-ann-ctas .de-button"))
+    .filter((node) => !node.hidden)
+    .map((node) => node.textContent.trim())
 const press = (node) =>
   node.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }))
 
@@ -328,9 +337,59 @@ await check("an unwritable edit alone makes the button send", async () => {
   reset()
   const element = mount('<span class="icon">x</span>')
   ui.recordEdit({ property: "icon", from: "Star", to: "Heart", element, written: false })
+  // The MCP status answer lands on a later task; the button waits for it.
+  await settle()
   tab.update()
   assert.equal(primary().textContent.trim(), "Send to agent")
   assert.equal(primary().disabled, false)
+})
+
+console.log("\nMCP")
+
+await check("MCP is its own section, with the status as a mark in its header", async () => {
+  reset()
+  await settle()
+  const mcp = Array.from(tab.node.querySelectorAll(".de-section")).find(
+    (node) => node.querySelector(".de-section-title").textContent.trim() === "MCP"
+  )
+  assert.ok(mcp, "there is no MCP section")
+  assert.ok(mcp.querySelector(".de-mcp-url"), "the address is not in the MCP section")
+  assert.equal(
+    tab.node.querySelector(".de-ann-settings .de-mcp-url"),
+    null,
+    "the address is still inside Settings"
+  )
+  const mark = mcp.querySelector(".de-section-header .de-mcp-state")
+  assert.ok(mark, "the status is not a mark in the MCP header")
+  assert.equal(mark.dataset.deState, "on")
+  assert.match(mark.getAttribute("aria-label"), /Connected/)
+  assert.equal(mark.textContent, "", "the status is still a sentence, not a mark")
+})
+
+await check("with no agent connected, Send to agent is never offered", async () => {
+  mcpStatus = { ...AGENT_ATTACHED, agents: 0, waiting: 0 }
+  try {
+    reset()
+    await settle()
+    const mark = tab.node.querySelector(".de-section-header .de-mcp-state")
+    assert.equal(mark.dataset.deState, "idle")
+    assert.match(mark.title, /No agent connected/)
+
+    // A note alone: nothing the button could do, so it is not there at all.
+    pin("Tighten this")
+    tab.update()
+    assert.deepEqual(ctaLabels(), ["Copy"])
+    assert.equal(primary().hidden, true)
+
+    // A writable edit beside the note: the button writes, and says so.
+    const element = mount('<button class="btn">Go</button>')
+    ui.createWriter(bridge).applyStyles(selectionOf(element), [{ property: "opacity", value: "0.5" }], "Opacity")
+    await settle()
+    tab.update()
+    assert.deepEqual(ctaLabels(), ["Apply to code", "Copy"])
+  } finally {
+    mcpStatus = AGENT_ATTACHED
+  }
 })
 
 await check("with nothing pending, the primary button is disabled", async () => {

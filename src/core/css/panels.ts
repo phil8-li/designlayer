@@ -331,7 +331,24 @@ html.designlayer-chrome-hidden .de-panel--left { transform: translateX(-100%); }
 html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
 
 .de-panel-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
-/* No scrollbar skin of its own: the kit's auto-hiding bar in css/base.ts. */
+/*
+ * NO TRACK. A classic bar reserves 12px inside the pane, and every full-bleed
+ * band (a section header's hover, a selected row) stopped that far short of the
+ * panel's outer edge. The native bar is hidden and \`shell/overlay-scrollbar.ts\`
+ * draws the thumb over the content instead, in the skin of the kit's
+ * auto-hiding bar in css/base.ts: clear at rest, inked while scrolling.
+ */
+.de-panel-body, .de-panel .de-tabpanel { scrollbar-width: none; }
+.de-scroll-thumb {
+  position: absolute; top: 0; right: 0; z-index: 2;
+  width: 12px;
+  border: 3px solid transparent; background-clip: padding-box;
+  border-radius: ${t.radius.sm}; corner-shape: round;
+  background-color: transparent;
+}
+.de-scroll-thumb[hidden] { display: none; }
+.de-scroll-thumb[data-scrolling] { background-color: ${t.color.scrollbarThumb}; }
+.de-scroll-thumb:hover, .de-scroll-thumb[data-dragging] { background-color: ${t.color.scrollbarThumbHover}; }
 
 .de-section { border-bottom: 1px solid ${t.color.border}; }
 /*
@@ -551,6 +568,18 @@ html.designlayer-chrome-hidden .de-panel--right { transform: translateX(100%); }
   grid-column: 1;
   min-width: 0;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/*
+ * A title that carries the section's hint as its tooltip. Lifted above the
+ * fold layer so the pointer reaches it; a click still bubbles to the header,
+ * so pressing the title folds the section as before. \`justify-self: start\`
+ * keeps the hover area to the words rather than the whole track.
+ */
+.de-section-title--hint {
+  position: relative; z-index: 1;
+  justify-self: start;
+  max-width: 100%;
+  cursor: pointer;
 }
 .de-section-actions {
   grid-column: 2;

@@ -100,6 +100,12 @@ already exists. A few load-bearing rules:
   `react-rewrite-cli@0.1.1`, exactly. If you bump that dependency, the patches
   are the work — the launcher is written to tell the user it could not patch
   rather than to serve a half-patched bundle.
+- `THIRD_PARTY_NOTICES.md` is generated. After adding, removing or bumping a
+  dependency, or copying anyone else's code or assets into the repo, run
+  `node tools/build-notices.mjs`; code copied by hand also needs an entry in
+  that tool's `VENDORED` map. Only bring in code under a license that allows
+  redistribution under MIT (MIT, ISC, BSD, Apache-2.0 and the like). Nothing
+  under PolyForm, GPL, or no license at all.
 - `test/host.mjs` is the single owner of "where is the host". Do not
   recompute a path to it in a suite.
 - The host application never imports this package, and this package never

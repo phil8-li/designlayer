@@ -83,7 +83,7 @@ import { smoothScroll } from "../core/motion"
 import { holdScroll } from "../core/scroll"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
-import { section } from "../panels/inspector/field"
+import { section, setSectionHint } from "../panels/inspector/field"
 import type { EditorContext } from "../core/context"
 import type { LayerElement } from "../core/types"
 import {
@@ -240,36 +240,6 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     "aria-label": "Audit",
   })
 
-  /**
-   * Which checkers run, in the section header, on hover.
-   *
-   * Same shape as the settings help dot in `tab-annotations.ts`, down to the
-   * `aria-description`: `title` is the sighted affordance and is mouse-only, so
-   * a keyboard user tabbing onto a dot that announces nothing but its own
-   * existence is the worst of both. The sentence is written by `checkerLine`
-   * and repainted whenever the tool list changes.
-   *
-   * It is a button because it has to be focusable and it has to be in the tab
-   * order; it deliberately does nothing when pressed. The one thing it must not
-   * be is a control that re-runs discovery on click, which would make a press
-   * on an explanation change the state of the feature it explains.
-   *
-   * `InfoMark` follows that dot too, and for the same reason: this is a 14px
-   * disc, so `Info`'s own ring drew a second circle 1.4px inside it and left
-   * the `i` illegible. The badge in `markers.ts` keeps the ringed `Info` — it
-   * is a rounded square plate over the app, with no circle of its own.
-   */
-  const checkers = el(
-    "button",
-    {
-      class: "de-lint-info",
-      type: "button",
-      "data-de-lint": "checkers",
-      "aria-label": "Which checkers run",
-    },
-    [icon("InfoMark", tokens.icon.marker)]
-  ) as HTMLButtonElement
-
   const summaryLine = el("div", {
     class: "de-lint-summary",
     "data-de-lint": "summary",
@@ -303,16 +273,9 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
   const footer = el("div", { class: "de-lint-footer" })
 
   /*
-   * The header's ACTIONS slot carries the explanation; the body carries the work.
-   *
-   * `section()` reserves a trailing track for actions on every section in the
-   * panel and stops a click there from folding the body, which is what makes it
-   * legal to put anything in a header that folds. Audit used to ride there, and
-   * that was right while it was the only control this section had — it is wrong
-   * now that it is the first member of a group whose other two members appear
-   * beneath it. What rides there instead is the thing that genuinely belongs to
-   * the SECTION rather than to the report: one icon saying which checkers this
-   * project gets.
+   * The header carries the explanation, on hover of the title: which checkers
+   * this project gets. It used to be a help dot beside the title; the title
+   * now opens the same sentence itself. See `paintCheckers`.
    */
   const node = section(
     // Sentence case, like the fifteen other section headings in the inspector.
@@ -320,8 +283,12 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     // `ds-lint` in lower case where it names the binary.
     "DS lint",
     el("div", { class: "de-lint" }, [controls, summaryLine, errorLine, body, footer]),
-    checkers
+    undefined,
+    false,
+    checkerLine()
   )
+  // The hook the tests and the report address the checkers sentence by.
+  node.querySelector(".de-section-title")?.setAttribute("data-de-lint", "checkers")
 
   /* ---------- the calls ---------- */
 
@@ -351,8 +318,10 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
           // a recovery the copy never mentioned, leaving the reader a reason
           // and no instruction.
           editor.toast(
-            `Fixed ${result.fixed.length}, ${result.failed.length} failed: ` +
-              `${result.failed[0].reason} Run Audit again to refresh.`,
+            {
+              title: `Fixed ${result.fixed.length}, ${result.failed.length} failed`,
+              description: `${result.failed[0].reason} Run Audit again to refresh.`,
+            },
             "error"
           )
           return
@@ -702,14 +671,9 @@ export function dsLintSection(editor: EditorContext): { node: HTMLElement; updat
     auditButton.toggleAttribute("data-de-busy", running)
   }
 
-  /** The header icon's sentence. Cheap, and it changes only when discovery does. */
+  /** The header's hover sentence. Cheap, and it changes only when discovery does. */
   function paintCheckers(): void {
-    const line = checkerLine()
-    checkers.title = line
-    // `title` is mouse-only. Without this the dot is a stop on the tab order
-    // that carries no information — the same pairing `tab-annotations.ts` makes
-    // for its settings help dots.
-    checkers.setAttribute("aria-description", line)
+    setSectionHint(node, checkerLine())
   }
 
   /** Ticks, row tint and the group button's label — no DOM is rebuilt. */

@@ -292,11 +292,13 @@ check("two siblings both go, and both come back", () => {
   assert.equal(removal.removalQueueSize(), 0)
 })
 
-check("a multi-element delete is one step and says so", () => {
+check("a multi-element delete is one step, and says nothing", () => {
   reset()
   const [first, second] = document.querySelectorAll(".card__body")
   writer.applyDelete([describe(first), describe(second)])
-  assert.equal(toasts.at(-1).message, "Delete 2 layers")
+  // Direct manipulation: the layers leaving the canvas is the report.
+  assert.deepEqual(toasts, [], "a canvas delete raised a toast")
+  assert.equal(history.canUndo(), true)
   history.undo()
   assert.equal(history.canUndo(), false, "the two deletions recorded two steps")
 })

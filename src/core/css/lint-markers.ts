@@ -15,7 +15,7 @@
  * So the distinction is carried by SHAPE, not by hue:
  *
  *   - a note pin is a ROUND disc with a NUMERAL in it, in the user's colour;
- *   - an audit badge is a SQUARE with rounded corners carrying a GLYPH.
+ *   - an audit badge is a SQUARE with rounded corners and no glyph.
  *
  * Shape survives greyscale, a monochrome display, and every colour-vision
  * deficiency there is, and it survives the one case a hue rule cannot survive
@@ -46,7 +46,6 @@ import { tokens as t } from "../tokens"
  * doing the severity work.
  */
 const BADGE = 20
-const GLYPH = t.icon.marker
 
 /**
  * The WCAG 2.5.8 floor, bought back from a transparent pad.
@@ -126,7 +125,6 @@ export const lintMarkersCss = `/* ---------- audit markers ---------- */
   transition: background-color ${t.duration.hover} ${t.ease}, transform ${t.duration.hover} ${t.ease},
     box-shadow ${t.duration.hover} ${t.ease};
 }
-.de-lint-marker svg { width: ${GLYPH}px; height: ${GLYPH}px; }
 /* ${BADGE}px drawn, ${TARGET}px hit: the pad the note pin uses, squared off. */
 .de-lint-marker::before {
   content: "";

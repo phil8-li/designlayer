@@ -34,6 +34,7 @@ import * as Shortcuts from "../src/shell/shortcuts"
 import * as Commands from "../src/core/commands"
 import * as LintMarkers from "../src/lint/markers"
 import * as LintStore from "../src/lint/store"
+import * as Icons from "../src/core/icons"
 
 const SOURCE_FILE = "app/(shop)/products/[slug]/page.tsx"
 const problems = []
@@ -431,4 +432,40 @@ export async function tokenPicker(theme) {
   return { problems }
 }
 
-window.__demo = { boot, panelBox, shortcutSheet, showLintMarkers, pressButton, openTab, tabs, setMode, toast, openStyles, tokenPicker, problems }
+/**
+ * Every glyph the chrome can draw, at the two rungs most of them are drawn at
+ * (16 and 12), on the panel ground in the current theme, in full ink.
+ */
+export async function iconSheet(theme) {
+  mountSheet(theme)
+  const names = Icons.ICON_NAMES ?? []
+  if (!names.length || typeof Icons.icon !== "function") {
+    problems.push("icons: no ICON_NAMES/icon export in this revision")
+    return { problems }
+  }
+  const sheet = document.createElement("div")
+  sheet.className = "de-demo-icons"
+  sheet.setAttribute("data-designlayer", "")
+  sheet.style.cssText =
+    "position:fixed;left:16px;top:16px;display:grid;grid-template-columns:repeat(10,64px);gap:4px;" +
+    "padding:12px;border-radius:12px;background:var(--de-color-bg);color:var(--de-color-text);" +
+    "font:10px/1.2 -apple-system,system-ui,sans-serif"
+  for (const name of names) {
+    const cell = document.createElement("div")
+    cell.style.cssText = "display:grid;justify-items:center;gap:4px;padding:6px 0"
+    const row = document.createElement("div")
+    row.style.cssText = "display:flex;align-items:center;gap:8px;height:16px"
+    for (const size of [16, 12]) {
+      try { row.append(Icons.icon(name, size)) } catch { /* a size this revision does not draw */ }
+    }
+    const label = document.createElement("span")
+    label.textContent = name.length > 11 ? `${name.slice(0, 10)}…` : name
+    label.style.cssText = "opacity:.6;max-width:62px;overflow:hidden;white-space:nowrap"
+    cell.append(row, label)
+    sheet.append(cell)
+  }
+  document.body.append(sheet)
+  return { problems }
+}
+
+window.__demo = { iconSheet, boot, panelBox, shortcutSheet, showLintMarkers, pressButton, openTab, tabs, setMode, toast, openStyles, tokenPicker, problems }

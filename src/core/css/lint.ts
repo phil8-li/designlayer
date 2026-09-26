@@ -4,8 +4,8 @@
  *
  * The chip row that used to head this section is gone — the server already
  * routes a run to the checkers that apply, so listing them was showing a
- * decision nobody makes. What is left of it is `.de-lint-info`, one dot in the
- * section header whose hover names them.
+ * decision nobody makes. What is left of it is the section title's hover,
+ * which names them.
  *
  * This is a REPORT inside a 260px section, and almost every rule below follows
  * from those two facts together.
@@ -55,13 +55,11 @@ import { tokens as t, accentFillText, nest } from "../tokens"
  * escaped the corner rather than as two shapes nested.
  *
  * Fixed from the outside in, because the button is shared furniture and the row
- * is not. The button now wears the kit's one action-button corner,
- * `radius['2xl']` (14), so the row takes `radius['5xl']`: 18 − 4 = 14. At 32px
- * tall both corners clamp to half their height, so on screen this is a pill
- * holding a pill 4px in — still concentric, and nothing had to reach into
- * `.de-button` from a file that has no business doing it.
+ * is not. The button wears the fields' 8px corner (`CONTROL_RADIUS`), so the
+ * row takes `radius.lg`: 12 − 4 = 8 — concentric, and nothing had to reach
+ * into `.de-button` from a file that has no business doing it.
  */
-const IGNORED = nest({ of: ".de-lint-ignored-row", outer: t.radius["5xl"], inset: t.space["2xs"] })
+const IGNORED = nest({ of: ".de-lint-ignored-row", outer: t.radius.lg, inset: t.space["2xs"] })
 
 /**
  * The severity dot, in CSS pixels, and deliberately not a step on the spacing
@@ -74,17 +72,6 @@ const IGNORED = nest({ of: ".de-lint-ignored-row", outer: t.radius["5xl"], inset
  * height of the first line of the message.
  */
 const DOT = 8
-
-/**
- * The info dot in the section header, and it is 14 for the reason the
- * annotation settings' help dot is 14.
- *
- * `css/annotations.ts` states it: a 14px box has a 12px padding box and an
- * INTEGER centre at 1x and at 2x, where 13 put the centre on a half pixel and
- * landed a glyph's strokes between them. The hit area comes back from the
- * 24px-tall header row it sits in rather than from the disc growing.
- */
-const HELP = 14
 
 /**
  * Keyboard focus, as the kit draws it on an action: the edge takes the accent
@@ -132,40 +119,6 @@ export const lintCss = `/* ---------- design system audit ---------- */
  */
 .de-lint-controls { display: flex; flex-wrap: wrap; gap: ${t.space["2xs"]}px; }
 .de-lint-run { flex: 1 1 auto; justify-content: center; }
-
-/*
- * The header's info dot: which checkers run, on hover.
- *
- * Same drawing as \`.de-ann-help\` in \`css/annotations.ts\` — a 14px disc on the
- * field plate, \`cursor: pointer\`, no border — because it is the same object doing
- * the same job, and two help dots in one panel that look different are two
- * things to learn. It is NOT folded into that rule: this one sits in a section
- * header's actions track rather than beside a settings label, and sharing a
- * selector across the two would make the next change to either one a change to
- * both.
- *
- * Same glyph too, and for the same reason: \`InfoMark\`, which is Lucide's
- * \`Info\` with its ring dropped, because THIS disc is the circle. The ringed
- * drawing at ${t.icon.marker}px in a ${HELP}px disc is two circles 1.4px apart with an
- * illegible \`i\` between them — the note on \`.de-ann-help\` carries the
- * measurements. The badges in \`css/lint-markers.ts\` keep the ringed \`Info\`: a
- * rounded square plate over the app has no circle of its own to lend.
- */
-.de-lint-info {
-  flex: none;
-  width: ${HELP}px; height: ${HELP}px;
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 0;
-  border: none; border-radius: 50%;
-  background: ${t.color.field};
-  /* Full ink in every state: an icon-only action's glyph is its whole label,
-     and a dim one reads as disabled (kit, icon-only action ink). */
-  color: ${t.color.text};
-  cursor: pointer;
-  transition: background-color ${t.duration.hover} ${t.ease};
-}
-${HOVER} { .de-lint-info:hover { background: ${t.color.fieldHover}; } }
-.de-lint-info:focus-visible { background: ${t.color.fieldHover}; ${FOCUS_RING} }
 
 /* The line the whole feature is judged by. \`text\` rather than \`textDim\`: it is
    a count, not a caption, and the reader checks it against the canvas. */
@@ -581,7 +534,7 @@ ${HOVER} { .de-lint-row:hover .de-lint-actions { opacity: 1; pointer-events: aut
 @media (prefers-reduced-motion: reduce) {
   .de-lint-actions { transition: none; }
 }
-/* A panel button at panel scale: the row is already padded, so the pill inside
+/* A panel button at panel scale: the row is already padded, so the button inside
    it gives back the side padding a standalone one needs. */
 .de-lint-action { height: ${t.size.rowHeight}px; padding: 0 ${t.space.sm}px; }
 
@@ -675,11 +628,12 @@ ${HOVER} { .de-lint-ignored-summary:hover { color: ${t.color.text}; } }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: ${t.color.textDim}; font-size: ${t.type.body};
 }
-/* A button laid in a well: the shared pill's fill is the well's own rung in
+/* A button laid in a well: the shared button's fill is the well's own rung in
    light (both are the kit's \`--secondary\`), so it takes the panel ground
    instead and lifts off the well in both themes. */
-.de-lint-ignored-row > .de-button:not(.de-button--primary) { background: ${t.color.bg}; }
-${HOVER} { .de-lint-ignored-row > .de-button:not(.de-button--primary):hover { background: ${t.color.bgRaisedHover}; } }
+/* Secondary buttons only — see the same pair on \`.de-lib-manual-row\`. */
+.de-lint-ignored-row > .de-button:not(.de-button--primary, .de-button--danger) { background: ${t.color.bg}; }
+${HOVER} { .de-lint-ignored-row > .de-button:not(.de-button--primary, .de-button--danger):hover { background: ${t.color.bgRaisedHover}; } }
 
 
 /*

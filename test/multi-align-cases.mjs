@@ -449,10 +449,11 @@ check("redo puts all three back together", () => {
   assert.equal(history.canRedo(), false)
 })
 
-check("three elements are one toast, not three", () => {
+check("aligning three elements says nothing", () => {
   const view = scene({ count: 3, real: true }).press("Align top")
-  assert.equal(view.toasts.length, 1, view.toasts.map((entry) => entry.message).join(" | "))
-  assert.equal(view.toasts[0].kind, "info", "align-self is expressible and must not warn")
+  // align-self is expressible, so nothing was lost — and a successful direct
+  // edit raises no toast, however many elements it moved.
+  assert.equal(view.toasts.length, 0, view.toasts.map((entry) => entry.message).join(" | "))
 })
 
 check("an element already in place is left out of the step", () => {

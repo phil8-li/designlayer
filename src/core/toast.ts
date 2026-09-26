@@ -41,6 +41,26 @@
  *
  * Nothing double-fires: with the bridge wrapped, our calls never reach `V`, so
  * the mirror only ever sees messages the vendor raised on its own.
+ *
+ * ---------------------------------------------------------------------------
+ * WHEN TO TOAST
+ *
+ * A toast is for news the reader cannot see on the canvas. Raise one for:
+ *
+ *   - an error, or a change that did not fully land ("preview only");
+ *   - a handoff: notes or change prompts copied, or sent to the agent;
+ *   - something copied to the clipboard, which has no visible trace;
+ *   - a write to source or to disk (Apply to code, a lint fix, a saved default);
+ *   - a destructive step that offers Undo (deleting notes);
+ *   - a system change: switching apps, adding a library, signing in.
+ *
+ * Never for direct manipulation — a style, class, icon or attribute edit, a
+ * drag, resize, delete, hide or lock on the canvas, undo and redo, toggling the
+ * note pins. The canvas already shows the result. The one exception is when a
+ * direct edit loses part of itself on the way to source, which is an error.
+ *
+ * `tools/toast-gallery.mjs` renders every toast the editor raises, and the
+ * silent events, on one page for review.
  */
 
 import { createElement, Fragment, useEffect, type CSSProperties } from "react"
@@ -106,12 +126,57 @@ interface Mounted {
   root: Root
 }
 
+/**
+ * What a card says: a short title, and optionally a body under it.
+ *
+ * Call sites may pass either. A plain string is split by `splitToast`, so the
+ * common "What happened. What to do." sentence gets the title/body treatment
+ * without every caller spelling it out; pass the object when the first clause
+ * is not a concise title on its own.
+ */
+export type ToastMessage = string | { title: string; description?: string }
+
+export interface ToastContent {
+  title: string
+  description?: string
+}
+
+/**
+ * Title and body from one sentence, at its first break.
+ *
+ * A break is a sentence end (". "), an ellipsis followed by more text ("… "),
+ * or a spaced em dash (" — "), whichever comes first. The title drops a closing
+ * period — a title is a label, not a sentence — but keeps an ellipsis, which
+ * means "still going". The body is capitalized after a dash, and gets a period
+ * when it ends without one, so every body reads as the sentence it is.
+ *
+ * A message with no break is all title: short news ("Copied JSX") has nothing
+ * to put underneath, and a lone line in the body style would read as a caption
+ * missing its heading.
+ */
+export function splitToast(message: ToastMessage): ToastContent {
+  if (typeof message !== "string") {
+    const title = message.title.trim()
+    const description = message.description?.trim()
+    return description ? { title, description } : { title }
+  }
+  const text = message.trim()
+  const match = /(\.|…|\s—)\s+/.exec(text)
+  if (!match || match.index === 0) return { title: text }
+  const title = text.slice(0, match.index) + (match[1] === "…" ? "…" : "")
+  let description = text.slice(match.index + match[0].length).trim()
+  if (!description) return { title: text }
+  if (match[1] !== ".") description = description[0].toUpperCase() + description.slice(1)
+  if (!/[.!?…)]$/.test(description)) description += "."
+  return { title, description }
+}
+
 let mounted: Mounted | null = null
 let ready = false
 /** Raised before the Toaster's subscription exists. Drained once, in order. */
-const pending: Array<[string, ToastKind, ToastAction | undefined]> = []
+const pending: Array<[ToastContent, ToastKind, ToastAction | undefined]> = []
 
-function emit(message: string, kind: ToastKind, action?: ToastAction): void {
+function emit(content: ToastContent, kind: ToastKind, action?: ToastAction): void {
   /*
    * An action on an INFO card lengthens it, and only that card.
    *
@@ -126,14 +191,16 @@ function emit(message: string, kind: ToastKind, action?: ToastAction): void {
    * there until dismissed would make every delete cost two clicks after all —
    * which is exactly what keeping the row's single click was for.
    */
-  const options = action
-    ? { duration: 8000, action: { label: action.label, onClick: action.onClick } }
-    : undefined
-  // Typed calls rather than an option, because the type is what selects the
-  // glyph — and the glyph is the only thing that says which kind a card is.
-  // The card itself is the same neutral surface for both (see `css/toast.ts`).
-  if (kind === "error") sonner.error(message, { duration: DURATION.error, ...options })
-  else sonner.info(message, { duration: DURATION.info, ...options })
+  const options = {
+    description: content.description,
+    ...(action ? { duration: 8000, action: { label: action.label, onClick: action.onClick } } : {}),
+  }
+  // An error is the typed call, because the type is what selects the glyph.
+  // News is the UNTYPED call, which has no glyph at all: an icon on every card
+  // made the rare one that matters look like the rest. So the only card with
+  // an icon, and the only colour in the toaster, is a failure (`css/toast.ts`).
+  if (kind === "error") sonner.error(content.title, { duration: DURATION.error, ...options })
+  else sonner(content.title, { duration: DURATION.info, ...options })
 }
 
 /**
@@ -161,7 +228,7 @@ function emit(message: string, kind: ToastKind, action?: ToastAction): void {
 function ReadyGate(): null {
   useEffect(() => {
     ready = true
-    for (const [message, kind, action] of pending.splice(0)) emit(message, kind, action)
+    for (const [content, kind, action] of pending.splice(0)) emit(content, kind, action)
   }, [])
   return null
 }
@@ -270,12 +337,12 @@ function destroy(): void {
 /**
  * Say something. The one entry point — see the header for who reaches it.
  */
-export function notify(message: string, kind: ToastKind = "info", action?: ToastAction): void {
-  const text = message.trim()
-  if (!text) return
+export function notify(message: ToastMessage, kind: ToastKind = "info", action?: ToastAction): void {
+  const content = splitToast(message)
+  if (!content.title) return
   installToaster()
   if (ready) {
-    emit(text, kind, action)
+    emit(content, kind, action)
     return
   }
   /*
@@ -287,7 +354,7 @@ export function notify(message: string, kind: ToastKind = "info", action?: Toast
    * and silently is not offering the way back — which reads as an undo that was
    * pressed and did nothing rather than as one that was never there.
    */
-  pending.push([text, kind, action])
+  pending.push([content, kind, action])
 }
 
 /*
@@ -300,6 +367,26 @@ export function notify(message: string, kind: ToastKind = "info", action?: Toast
 const VENDOR_TOAST = ".toast"
 /** The class `V` adds to show it, and removes on its own two-second timer. */
 const VENDOR_VISIBLE = "visible"
+
+/**
+ * What a vendor message becomes here: said as info, said as an error, or not
+ * said at all.
+ *
+ * The vendor's `V` takes a kind and ignores it, so every message it raises
+ * arrives as plain text — its failures included. The kind is recovered from the
+ * wording, which is the only thing that survives the trip. The vendor is pinned
+ * (`react-rewrite-cli@0.1.1`), so its sentences are a closed set; the error
+ * pattern is written against the words they share rather than each sentence,
+ * so a server error forwarded verbatim (`V(i.error)`) still reads as one.
+ *
+ * Silent: the two the vendor raises for direct manipulation — its own undo
+ * report and the reset after it — by the rule in the header.
+ */
+export function classifyVendorToast(text: string): ToastKind | null {
+  if (/^Undo: /.test(text) || text === "Everything reset") return null
+  if (/fail|error|can't|couldn't|could not|\bdisconnected\b/i.test(text)) return "error"
+  return "info"
+}
 
 /**
  * Re-emits the vendor's toasts through ours, from the node it writes into.
@@ -326,7 +413,10 @@ export function mirrorVendorToasts(root: ShadowRoot): () => void {
     if (!node) return
     const text = (node.textContent ?? "").trim()
     const visible = node.classList.contains(VENDOR_VISIBLE)
-    if (visible && text && (text !== lastText || !lastVisible)) notify(text)
+    if (visible && text && (text !== lastText || !lastVisible)) {
+      const kind = classifyVendorToast(text)
+      if (kind) notify(text, kind)
+    }
     lastText = text
     lastVisible = visible
   }

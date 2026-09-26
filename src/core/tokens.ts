@@ -230,8 +230,6 @@ const PALETTE = {
      * near-black in dark, because the dark hues are lifted into bright plates.
      */
     onSemantic: { dark: INK, light: ON_CHROME },
-    /** Ink on a colour the user picked. White in both; it rides a shadow. */
-    onUserColor: { dark: ON_CHROME, light: ON_CHROME },
     /**
      * The two halves of the canvas focus ring drawn over product pixels: a
      * near-black core inside a white halo, so one of the two always contrasts

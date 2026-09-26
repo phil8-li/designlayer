@@ -123,7 +123,7 @@ const reactStub = `
 const { build } = await import("esbuild")
 const bundled = await build({
   stdin: {
-    contents: `export { notify, installToaster, mirrorVendorToasts } from "./src/core/toast"
+    contents: `export { notify, installToaster, mirrorVendorToasts, classifyVendorToast, splitToast } from "./src/core/toast"
       export { toasterCss } from "./src/core/css/toast"`,
     resolveDir: PACKAGE_DIR,
     loader: "ts",
@@ -155,7 +155,7 @@ globalThis.__toastEffects = []
 const editor = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 )
-const { notify, installToaster, mirrorVendorToasts, toasterCss } = editor
+const { notify, installToaster, mirrorVendorToasts, classifyVendorToast, splitToast, toasterCss } = editor
 
 let passed = 0
 let failed = 0
@@ -228,7 +228,7 @@ await check("a message raised before the toaster exists is queued, not lost", ()
   flushEffects()
   assert.deepEqual(
     emitted().map((c) => [c.fn, c.message]),
-    [["info", "Applying 3 changes\u2026"]],
+    [["toast", "Applying 3 changes\u2026"]],
     "the queued message did not arrive once the subscription existed"
   )
 })
@@ -246,8 +246,38 @@ await check("an error keeps its severity all the way to the library", () => {
 await check("plain news does not come out as an error", () => {
   calls.length = 0
   notify("Copied 2 notes")
-  // `info`, not the untyped call: the glyph is the only thing marking the kind.
-  assert.deepEqual(emitted().map((c) => c.fn), ["info"])
+  // The UNTYPED call, which draws no glyph: only an error carries an icon, so
+  // the one card that matters is the one that looks different.
+  assert.deepEqual(emitted().map((c) => c.fn), ["toast"])
+})
+
+await check("a two-part message becomes a concise title over a body", () => {
+  calls.length = 0
+  notify("Could not write the changes. Check the designlayer terminal, then try again", "error")
+  const [card] = emitted()
+  assert.equal(card.message, "Could not write the changes")
+  assert.equal(card.options.description, "Check the designlayer terminal, then try again.")
+})
+
+await check("an explicit title and body pass through untouched", () => {
+  calls.length = 0
+  notify({ title: "Default not saved", description: "Radius is set here. Try again." }, "error")
+  const [card] = emitted()
+  assert.deepEqual([card.message, card.options.description], ["Default not saved", "Radius is set here. Try again."])
+})
+
+await check("the split: sentence end, ellipsis, em dash, or none", () => {
+  assert.deepEqual(splitToast("Copied JSX"), { title: "Copied JSX" })
+  assert.deepEqual(splitToast("Applying 3 changes\u2026"), { title: "Applying 3 changes\u2026" })
+  assert.deepEqual(splitToast("Nothing to copy. Pin a note or make an edit first."), {
+    title: "Nothing to copy",
+    description: "Pin a note or make an edit first.",
+  })
+  assert.deepEqual(splitToast("Delivered to your coding agent \u2014 it was waiting"), {
+    title: "Delivered to your coding agent",
+    description: "It was waiting.",
+  })
+  assert.deepEqual(splitToast("Wrote 3 to src/app.component.html"), { title: "Wrote 3 to src/app.component.html" })
 })
 
 /*
@@ -344,6 +374,50 @@ await check("its width is set where Sonner will actually obey it", () => {
   assert.ok(
     !/^\s*--width\s*:/m.test(overridesCss),
     "the editor's own overrides set --width, where an inline value beats it"
+  )
+})
+
+/* ---------------------------------------------------------------------- */
+console.log("\nThe card's layout, and the stack built from its height")
+
+/*
+ * Sonner measured each card with `getBoundingClientRect()`, which includes the
+ * entrance `scale(0.96)` the card wears at that moment — so a 40px card was
+ * recorded as 38.4px, and the collapsed stack peeked 5.4px then 7.0px. The
+ * patch in `tools/sonner-plugin.mjs` swaps in the layout height. Compiled
+ * against the real package, so a Sonner bump that moves the needle fails here.
+ */
+await check("Sonner measures a card by its layout height, not its transformed box", async () => {
+  const { patchSonner } = await import("../tools/sonner-plugin.mjs")
+  const out = await build({
+    stdin: { contents: `export * from "sonner"`, resolveDir: PACKAGE_DIR, loader: "js" },
+    bundle: true,
+    format: "esm",
+    write: false,
+    logLevel: "silent",
+    external: ["react", "react-dom"],
+    plugins: [patchSonner],
+  })
+  const code = out.outputFiles[0].text
+  assert.ok(!code.includes("toastNode.getBoundingClientRect().height"), "a measurement still reads through the transform")
+  assert.equal(code.split("toastNode.offsetHeight").length - 1, 2, "both of Sonner's height measurements should be patched")
+})
+
+/*
+ * The glyph centres on the TITLE, including a title that wraps. That needs the
+ * title and the glyph in one grid row, so the content column is dissolved —
+ * and a dissolved column has no box for Sonner's `> *` opacity rule, so the
+ * text on the cards behind the front one has to be hidden by its own rule.
+ */
+await check("the glyph shares the title's grid row, and hidden cards hide their text", () => {
+  const css = overridesCss.replace(/\/\*[\s\S]*?\*\//g, "")
+  assert.match(css, /\[data-content\] \{ display: contents; \}/, "the content column still boxes the title away from the glyph")
+  assert.match(css, /\[data-icon\] \{\s*grid-area: 1 \/ 1;/, "the glyph is not in the title's row")
+  assert.match(css, /\[data-title\] \{\s*grid-area: 1 \/ 2;/, "the title is not in the first row")
+  assert.match(
+    css,
+    /\[data-expanded='false'\]\[data-front='false'\]\[data-styled='true'\] \[data-content\] > \* \{\s*opacity: 0;/,
+    "text on the cards behind the front one would show through"
   )
 })
 
@@ -478,6 +552,53 @@ await check("releasing the mirror stops it", async () => {
   node.classList.add("visible")
   await tick()
   assert.deepEqual(emitted(), [], "a released mirror is still listening")
+  dispose()
+})
+
+/*
+ * The vendor's `V` drops its kind, so the mirror recovers it from the words —
+ * and stays silent for the two messages the vendor raises for direct
+ * manipulation. Every sentence in the pinned `react-rewrite-cli@0.1.1` overlay
+ * is listed, so a reclassification is a visible diff here.
+ */
+await check("vendor messages keep their severity, and direct manipulation is silent", () => {
+  const expected = {
+    "Undo: Set width": null,
+    "Everything reset": null,
+    "Can't reorder this element": "error",
+    "Could not resolve source files for these changes \u2014 try re-selecting": "error",
+    "Dev server disconnected": "error",
+    "Disconnected: another tab took over": "error",
+    "Disconnected. Click to reconnect.": "error",
+    "Couldn't find Card": "error",
+    "Error: Batch apply failed": "error",
+    "Revert failed: file changed": "error",
+    "Applied 2/3 \u2014 1 failed": "error",
+    "Dev server reconnected": "info",
+    "Applied 3/3 changes": "info",
+    "Applying 3 changes...": "info",
+    "Component Card removed \u2014 move cleared": "info",
+    "Nothing to confirm \u2014 make some visual changes first": "info",
+    "Operation in progress": "info",
+  }
+  const actual = Object.fromEntries(Object.keys(expected).map((text) => [text, classifyVendorToast(text)]))
+  assert.deepEqual(actual, expected)
+})
+
+await check("a silent vendor message never reaches the corner", async () => {
+  const { root, node, dispose } = vendorRoot()
+  const release = mirrorVendorToasts(root)
+  calls.length = 0
+  node.textContent = "Undo: Set width"
+  node.classList.add("visible")
+  await tick()
+  assert.deepEqual(emitted(), [], "the vendor's undo report was mirrored")
+  node.classList.remove("visible")
+  node.textContent = "Can't reorder this element"
+  node.classList.add("visible")
+  await tick()
+  assert.deepEqual(emitted().map((c) => [c.fn, c.message]), [["error", "Can't reorder this element"]])
+  release()
   dispose()
 })
 

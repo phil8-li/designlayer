@@ -23,6 +23,7 @@ import { createBrowserSignIn } from "./library-signin.mjs"
 import { createLibraryStore } from "./libraries.mjs"
 import { fetchLibraryUrl } from "./library-url.mjs"
 import { createOptionsStore, normalizeOptionSet } from "./options-store.mjs"
+import { createPageCatalog } from "./pages.mjs"
 import { createReactSource } from "./react-source.mjs"
 import { readInsertOperations } from "./source-insert.mjs"
 import { createVariantCatalog } from "./variants.mjs"
@@ -496,7 +497,7 @@ async function insertElements(angular, react, framework, body) {
   return angular.apply(operations)
 }
 
-async function route(store, defaults, agent, icons, libraries, auth, signin, lint, variants, usage, apps, angular, react, framework, prefix, mcpPort, req, res, url) {
+async function route(store, defaults, agent, icons, libraries, auth, signin, lint, variants, pages, usage, apps, angular, react, framework, prefix, mcpPort, req, res, url) {
   const { pathname, searchParams } = url
   const rest = pathname.slice(prefix.length)
 
@@ -571,6 +572,14 @@ async function route(store, defaults, agent, icons, libraries, auth, signin, lin
   // exactly the capability the guard exists to keep on this machine.
   if (rest === "/variants" && req.method === "GET") {
     sendJson(res, 200, variants.read(searchParams.get("file") ?? ""))
+    return
+  }
+
+  // The host app's routes, which canvas mode lays out as one frame each. It is
+  // read from the source tree on every request rather than cached, because the
+  // designer adding a page while the board is open is the case it must show.
+  if (rest === "/pages" && req.method === "GET") {
+    sendJson(res, 200, pages.read())
     return
   }
 
@@ -684,6 +693,7 @@ export function createDesignLayerRoutes(config = resolveConfig()) {
   )
   const lint = createDesignLint(config)
   const variants = createVariantCatalog(config)
+  const pages = createPageCatalog(config)
   const usage = createComponentUsage(config)
   // No config of its own: which chooser this session belongs to is a fact about
   // how the process was started, and the launcher reads it from the same
@@ -714,7 +724,7 @@ export function createDesignLayerRoutes(config = resolveConfig()) {
       }
 
       route(
-        store, defaults, agent, icons, libraries, auth, signin, lint, variants, usage, apps, angular, react,
+        store, defaults, agent, icons, libraries, auth, signin, lint, variants, pages, usage, apps, angular, react,
         framework, prefix, config.ports?.mcp ?? null, req, res, url
       ).catch((error) => {
         if (res.headersSent) {

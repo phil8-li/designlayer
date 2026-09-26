@@ -140,13 +140,12 @@ export const tooltipCss = `/* ---------- tooltip ---------- */
 }
 
 /*
- * The surface: INVERSE, and it opens in its final state.
+ * The surface: the PANEL GROUND, and it opens in its final state.
  *
- * The kit's tooltip is the text colour as a fill with the ground colour as its
- * ink, which is what separates it from every card in the chrome at a glance —
- * a raised panel-coloured tip over a panel reads as one more popover. The
- * contrast is the chrome's own body pair turned over, so it is the highest in
- * the editor in both themes.
+ * The tip is drawn in the panel's own colour with the panel's body ink, so it
+ * reads as part of the chrome rather than a white chip punched into it. Over a
+ * panel of the same colour its edge is the popover hairline inside
+ * \`shadow.popover\`, plus that shadow's cast.
  *
  * Open is instant (\`--de-tip-pop\` is 0 whenever the attribute is added); the
  * close is the kit's \`surface-exit\` — a 150ms fade to scale 0.99 on
@@ -157,9 +156,9 @@ export const tooltipCss = `/* ---------- tooltip ---------- */
   position: absolute;
   inset: 0;
   border-radius: ${t.radius.lg};
-  background: ${t.color.text};
-  color: ${t.color.bg};
-  box-shadow: ${t.shadow.tooltip};
+  background: ${t.color.bg};
+  color: ${t.color.text};
+  box-shadow: ${t.shadow.popover};
   transform-origin: var(--de-tip-origin, center top);
   opacity: 0;
   transform: scale(${EXIT_SCALE});

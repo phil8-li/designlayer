@@ -19,6 +19,7 @@
 
 import { isProjectSourcePath } from "../core/bridge"
 import type { Committer } from "../core/apply"
+import type { ToastMessage } from "../core/toast"
 import { requestAgent } from "../ai/transport"
 import { clearEdits } from "./journal"
 import { buildAnnotationBrief, outboxItems } from "./output"
@@ -26,7 +27,7 @@ import { annotationSettings, clearAnnotations } from "./store"
 import type { OutboxItem } from "./types"
 import { plural } from "../core/format"
 
-type Toast = (message: string, kind?: "info" | "error") => void
+type Toast = (message: ToastMessage, kind?: "info" | "error") => void
 
 /** "3 notes and 2 edits", with whichever half is zero left out. */
 export function outboxSummary(items: OutboxItem[]): string {
@@ -82,7 +83,7 @@ export function copyHandover(toast: Toast, onRefused?: () => void): boolean {
   }
   const refuse = (): void => {
     onRefused?.()
-    toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
+    toast("Clipboard access blocked. Allow it for this site, then copy again", "error")
   }
   try {
     void navigator.clipboard.writeText(buildAnnotationBrief(items)).then(clearIfAsked).catch(refuse)
@@ -121,8 +122,13 @@ export async function handOver(options: {
   apiBase: string
   committer: Committer
   toast: Toast
+  /**
+   * False when no agent has connected over MCP: the write still runs, and the
+   * rest stays in the outbox for Copy rather than going to a queue nobody reads.
+   */
+  sendToAgent?: boolean
 }): Promise<HandoverResult> {
-  const { apiBase, committer, toast } = options
+  const { apiBase, committer, toast, sendToAgent = true } = options
   let wrote = false
   if (committer.hasPendingChanges()) {
     await committer.applyAll()
@@ -130,6 +136,7 @@ export async function handOver(options: {
   }
 
   const items = outboxItems()
+  if (!sendToAgent) return { wrote, sent: false, ok: true }
   if (!needsAgent(items)) {
     // Everything was the writer's. There is nothing for an agent to do, and
     // sending it the written rows would only ask it to confirm a diff.

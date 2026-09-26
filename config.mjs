@@ -665,6 +665,12 @@ export function browserPrelude(config, runtime = {}) {
         : null,
     },
     ports: { proxy: runtime.proxyPort ?? null, ws: runtime.wsPort ?? null },
+    // This launcher keeps the served bundle out of canvas view's frames (see
+    // runtime/board-frame.mjs). Stated rather than assumed because the chrome
+    // bundle is read from dist/ per request: an editor started before the guard
+    // serves the new chrome inside the old wrapper, and the chrome has to be
+    // able to tell, or its frames would each boot a second editor.
+    boardFrames: true,
     // The screen this editor was chosen from, so the chrome can offer a way
     // back to it. Null for every session that had no such screen, and the
     // launcher has already refused anything that is not a loopback http URL —
@@ -675,6 +681,11 @@ export function browserPrelude(config, runtime = {}) {
     // prelude has never named a source path, and the chooser knowing which
     // folder it started is not a reason for the browser to.
     chooserUrl: typeof runtime.chooserUrl === "string" ? runtime.chooserUrl : null,
+    // DesignLayer.app's desk on this Mac (runtime/mac-desk.mjs), so a browser
+    // tab can offer to move the editor into the app. Null wherever the app is
+    // not installed, and the toolbar then draws no such control. Like the
+    // chooser, an origin and nothing else.
+    deskUrl: typeof runtime.deskUrl === "string" ? runtime.deskUrl : null,
     // The app under the overlay, so the chooser control can say which one is
     // being edited on first paint instead of after a round trip.
     //

@@ -641,7 +641,10 @@ await check("SW-12 emptying the outbox lands on the empty state, not on nothing"
   // And NOTHING heads it. Both outbox sections leave the document while they
   // hold nothing, so an empty session is that sentence rather than two headings
   // over two blank bodies — and no tally is left anywhere to announce a zero.
-  assert.equal(tab.node.querySelector(".de-section-title").textContent.trim(), "Settings")
+  assert.deepEqual(
+    Array.from(tab.node.querySelectorAll(".de-section-title")).map((node) => node.textContent.trim()),
+    ["MCP", "Settings"]
+  )
   assert.equal(tab.node.querySelector(".de-ann-count"), null, "the tally came back")
   /*
    * EVERY BUTTON LEAVES WITH THE THING IT ACTS ON, and there is no exception
@@ -655,7 +658,7 @@ await check("SW-12 emptying the outbox lands on the empty state, not on nothing"
    * refusing controls under it were three things to read past to reach it.
    *
    * Copy is checked by its row rather than by its name, because the MCP
-   * address in Settings has a Copy of its own and Settings does not leave. A
+   * address has a Copy of its own and the MCP section does not leave. A
    * sweep for the word would find that one and report the outbox's as present.
    */
   assert.equal(tab.node.querySelector(".de-ann-ctas"), null, "the handover row survived")

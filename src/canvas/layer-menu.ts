@@ -10,6 +10,7 @@
 
 import { el, isChrome } from "../core/dom"
 import { focusControl } from "../core/focus"
+import { playExit } from "../core/motion"
 import { getResolver, toSelectable } from "../core/resolve"
 import { selectionOwnsInput } from "../core/store"
 import type { EditorContext } from "../core/context"
@@ -35,13 +36,12 @@ export function installLayerMenu(context: EditorContext): void {
     if (!open) return
     open = false
     /*
-     * IT ARRIVES BUT IT DOES NOT LINGER — the same call the shortcuts sheet
-     * makes, for the same reason. This card is `pointer-events: auto` and it is
-     * on the Escape stack, so a copy of it still in the document is a surface
-     * that can take a click and, worse, absorb the next dismissal. A menu has
-     * to be gone at the instant it is dismissed; the entrance is where its
-     * motion belongs.
+     * Gone at the instant it is dismissed: this card is `pointer-events: auto`
+     * and on the Escape stack, so a card still in the document could take a
+     * click and absorb the next dismissal. The kit's 150ms fade plays on an
+     * inert copy instead (`playExit` in core/motion).
      */
+    playExit(menu)
     menu.classList.remove("de-arrive")
     menu.style.display = "none"
     while (menu.firstChild) menu.removeChild(menu.firstChild)

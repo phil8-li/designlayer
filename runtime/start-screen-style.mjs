@@ -41,20 +41,10 @@ export function startScreenStyle() {
   --accent: ${color.accent};
   --accent-soft: ${color.accentSoft};
   /*
-   * The TEXT rung of the accent fill, not the glyph rung — and the difference is
-   * the whole reason both tokens exist.
-   *
-   * \`accentSurface\` is Figma's \`bg-brand\`, tuned so a MARK on it clears the 3:1
-   * WCAG 1.4.11 asks of a non-text component. Every accent fill in the editor's
-   * chrome carries a glyph, so that is the right rung there. This button carries
-   * a word — 13px at weight 600, which is not large text — so 1.4.3 wants 4.5:1
-   * and the glyph rung measures 3.53:1. \`tokens.ts\` says so in the comment above
-   * \`RAIL_FILL\` in as many words: "It is NOT enough under a word."
-   *
-   * \`accentSurfaceText\` is the rung below it on Figma's own published ramp,
-   * 5.28:1 under white, and it is here for exactly this control. The hover
-   * follows it rather than staying on the glyph ramp, or the label would fail
-   * again the moment a pointer touched the one button that starts the product.
+   * The TEXT rung of the accent fill: the button carries a word, so it owes
+   * 4.5:1 rather than the 3:1 a glyph owes. With the kit's indigo one rung
+   * already clears both (white on it is 4.97:1 dark, 6.7:1 light), but the
+   * page asks for the text role by name so it stays right if the rungs split.
    */
   --accent-surface: ${color.accentSurfaceText};
   --accent-surface-hover: ${color.accentSurfaceTextHover};
@@ -66,13 +56,14 @@ export function startScreenStyle() {
   --bg-hover: ${color.bgHover};
   --segment-selected: ${color.segmentSelected};
   /*
-   * The kit's radius ladder, by role. Fields and cards take the card rung (16)
-   * — this is a full-size form, not a dense panel, so the kit's own field
-   * corner applies — action buttons the one button corner (14), and list rows
-   * the row-highlight rung (12).
+   * The kit's radius ladder, by role. Fields and the buttons beside them
+   * share ONE corner, 12 — the same proportion the editor's 8px controls keep
+   * at 24px tall; the kit's 16/14 are pills at 32–40px and made the buttons
+   * rounder than the fields next to them. Cards take the card rung (16) and
+   * list rows the row-highlight rung (12).
    */
-  --radius-field: ${radius["3xl"]};
-  --radius-button: ${radius["2xl"]};
+  --radius-field: ${radius.lg};
+  --radius-button: var(--radius-field);
   --radius-row: ${radius.lg};
   --radius-card: ${radius["3xl"]};
   --corner: ${cornerShape};
@@ -520,11 +511,11 @@ button:focus-visible, a.primary:focus-visible, .app:focus-visible {
  * The old rule was \`background: var(--row-selected); border-color:
  * var(--accent-soft)\` and it communicated nothing at all. The fill is 1.44:1
  * off an unchosen row — under the 3:1 a state indicator owes — and the two
- * tokens resolve to the SAME value (\`#4a5878\`), so the border it drew was
- * invisible against the fill it drew it on. A user with three dev servers up
+ * tokens resolved to the same value, so the border it drew was invisible
+ * against the fill it drew it on. A user with three dev servers up
  * could not see which one the big blue button was about to proxy.
  *
- * So: the accent edge at 3.76:1 off the chosen fill, the accent bar down the
+ * So: the accent edge off the chosen fill, the accent bar down the
  * leading edge, and \`.app-check\` below, which is a glyph rather than a colour
  * and is therefore the half that survives forced-colors and a colour-blind
  * reader. Colour is now the least of the three signals rather than the only one.

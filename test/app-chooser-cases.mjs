@@ -1020,16 +1020,25 @@ await check("resizing the window closes the card rather than stranding it", asyn
 await check("the card opens with no entrance, and its exit plays on an inert copy", async () => {
   await opened(withName)
   assert.ok(!withName.menu.classList.contains("de-arrive"), "the card still plays an entrance")
+  // jsdom has neither Web Animations nor layout, and `playExit` plays nothing
+  // without both — so give it an engine and a box, and restore them after.
+  const animate = window.HTMLElement.prototype.animate
+  window.HTMLElement.prototype.animate = () => ({ finished: new Promise((done) => window.setTimeout(done, 150)) })
+  const measure = withName.menu.getBoundingClientRect
+  withName.menu.getBoundingClientRect = () => ({ left: 10, top: 40, width: 240, height: 120 })
   press(withName.trigger)
+  window.HTMLElement.prototype.animate = animate
+  withName.menu.getBoundingClientRect = measure
   assert.equal(withName.menu.style.display, "none", "the real card did not close at once")
-  const ghost = window.document.querySelector(".de-app-menu--leaving")
+  const ghost = window.document.querySelector("[data-de-leaving]")
   assert.ok(ghost, "no exit was played")
   assert.equal(ghost.getAttribute("aria-hidden"), "true")
   assert.ok(ghost.inert, "the leaving copy can still take focus or a click")
   assert.equal(ghost.querySelector("[id]"), null, "the leaving copy duplicates an id")
   assert.ok(!ghost.hasAttribute("role"), "the leaving copy is still announced as a menu")
   await new Promise((resolve) => window.setTimeout(resolve, 260))
-  assert.equal(window.document.querySelector(".de-app-menu--leaving"), null, "the copy outlived its exit")
+  assert.equal(ghost.style.position, "fixed", "the copy is not pinned over the card's old box")
+  assert.equal(window.document.querySelector("[data-de-leaving]"), null, "the copy outlived its exit")
 })
 
 withName.destroy()
@@ -1121,7 +1130,7 @@ await check("with work outstanding, the first press warns and the second switche
   // row stands itself down after six seconds and the card would go on telling
   // the reader to click again, where clicking again now only re-arms.
   assert.equal(ui.toasts.at(-1).kind, "info")
-  assert.match(ui.toasts.at(-1).message, /discards \d+ unapplied change/)
+  assert.match(ui.toasts.at(-1).message.title, /discards \d+ unapplied change/)
 
   press(row)
   await settle()

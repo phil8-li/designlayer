@@ -9,7 +9,7 @@
 
 import { isAngularHost, owningComponentName, resolveAngularSource } from "./angular"
 import type { ClassUpdate } from "./tailwind"
-import { notify, type ToastAction } from "./toast"
+import { notify, type ToastAction, type ToastMessage } from "./toast"
 import type { SourceRef } from "./types"
 
 /**
@@ -134,7 +134,7 @@ export interface RewriteBridge {
    * it anywhere else would mean a second path to the toaster, which is exactly
    * what the wrapper exists to prevent.
    */
-  toast(message: string, kind?: "info" | "error", action?: ToastAction): void
+  toast(message: ToastMessage, kind?: "info" | "error", action?: ToastAction): void
   root(): HTMLElement | null
   store: RewriteStore
 }
@@ -204,7 +204,7 @@ function withAngularElementInfo(bridge: RewriteBridge): RewriteBridge {
  */
 function withEditorToast(bridge: RewriteBridge): RewriteBridge {
   const wrapped: RewriteBridge = Object.create(bridge)
-  wrapped.toast = (message: string, kind: "info" | "error" = "info", action?: ToastAction) =>
+  wrapped.toast = (message: ToastMessage, kind: "info" | "error" = "info", action?: ToastAction) =>
     notify(message, kind, action)
   return wrapped
 }

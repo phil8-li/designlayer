@@ -919,15 +919,15 @@ export function createWriter(bridge: RewriteBridge): Writer {
         )
       }
 
-      // An unqualified success toast on a partly-dropped write is worse than no
-      // toast: the change is on screen, so the only thing that could tell the
-      // user it will not reach source is this message. Drag and arrow-nudge
-      // both land here, and both write `transform`, which has no utility.
-      if (dropped.length === 0) {
-        bridge.toast(summary, "info")
-      } else if (dropped.length === writes.length) {
+      // Silent on success: the edit is on screen, and direct manipulation does
+      // not narrate itself (see "WHEN TO TOAST" in `core/toast.ts`). A dropped
+      // property is the exception — the change is on screen, so this message is
+      // the only thing that can tell the user it will not reach source. Drag
+      // and arrow-nudge both land here, and both write `transform`, which has
+      // no utility.
+      if (dropped.length === writes.length && dropped.length > 0) {
         bridge.toast(`${summary}: preview only (${dropped.join(", ")})`, "error")
-      } else {
+      } else if (dropped.length > 0) {
         bridge.toast(`${summary}: ${dropped.join(", ")} is preview only`, "error")
       }
     },
@@ -960,7 +960,6 @@ export function createWriter(bridge: RewriteBridge): Writer {
           ]
         )
       }
-      bridge.toast(summary, "info")
     },
 
     applyText(selection, text) {
@@ -1030,7 +1029,8 @@ export function createWriter(bridge: RewriteBridge): Writer {
           },
         ]
       )
-      bridge.toast(`Swapped to ${variant.name}, preview only`, "info")
+      // No toast. Preview-only is this lane's normal outcome, not a loss: the
+      // swap is in the ledger above, and the Changes tab lists it for the agent.
     },
 
     applyAttribute(selection, name, value, target) {
@@ -1078,7 +1078,7 @@ export function createWriter(bridge: RewriteBridge): Writer {
         },
         [{ property, from: before ?? "", to: value ?? "", element, written: false }]
       )
-      bridge.toast(`${summary}: preview only`, "info")
+      // No toast, for the reason `applyIcon` gives.
     },
 
     applyDelete(selections) {
@@ -1108,7 +1108,6 @@ export function createWriter(bridge: RewriteBridge): Writer {
           written: true,
         }))
       )
-      bridge.toast(summary, "info")
     },
 
     applyStylesBatch(edits, summary) {
@@ -1181,18 +1180,16 @@ export function createWriter(bridge: RewriteBridge): Writer {
         )
       }
 
-      // One toast, in the three branches `applyStyles` uses, counted across
-      // the whole batch. Aggregated by PROPERTY NAME rather than by
-      // occurrence: five elements that all failed to spell `align-self` lost
-      // one thing, said once, not the same word five times in a row.
+      // At most one toast, in the branches `applyStyles` uses (silent on
+      // success), counted across the whole batch. Aggregated by PROPERTY NAME
+      // rather than by occurrence: five elements that all failed to spell
+      // `align-self` lost one thing, said once, not the same word five times.
       const dropped = planned.flatMap((edit) => edit.dropped)
       const names = [...new Set(dropped)]
       const total = planned.reduce((count, edit) => count + edit.writes.length, 0)
-      if (dropped.length === 0) {
-        bridge.toast(summary, "info")
-      } else if (dropped.length === total) {
+      if (dropped.length === total && dropped.length > 0) {
         bridge.toast(`${summary}: preview only (${names.join(", ")})`, "error")
-      } else {
+      } else if (dropped.length > 0) {
         bridge.toast(`${summary}: ${names.join(", ")} is preview only`, "error")
       }
     },

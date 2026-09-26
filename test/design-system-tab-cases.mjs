@@ -1662,7 +1662,7 @@ await check("it is a de-section titled DS lint, with the bespoke header bar gone
   )
 })
 
-await check("Audit is in the body; the checkers dot takes the header's actions slot", () => {
+await check("Audit is in the body; the section title explains the checkers", () => {
   const audit = lintHook("audit")
   assert.ok(audit, "the audit button is gone")
   // Audit led the group it belongs to out of the header: the two buttons that
@@ -1675,21 +1675,11 @@ await check("Audit is in the body; the checkers dot takes the header's actions s
   )
   assert.ok(audit.closest(".de-lint-controls"), "Audit is not in the button group")
 
-  const info = lintHook("checkers")
-  assert.ok(info, "nothing in the header says which checkers run")
-  assert.ok(
-    info.closest(".de-section-actions"),
-    "the checkers dot is in the body rather than in the header's actions slot"
-  )
-  // The slot stops its own clicks from reaching the fold layer, which is the
-  // property that makes it legal to put a control in a header that folds.
-  const header = lint.node.querySelector(".de-section-header")
-  assert.equal(header.getAttribute("aria-expanded"), null, "the header itself claims a fold state")
-  const expanded = () =>
-    lint.node.querySelector(".de-section-toggle").getAttribute("aria-expanded")
-  const before = expanded()
-  click(info)
-  assert.equal(expanded(), before, "pressing the checkers dot folded the section")
+  const title = lintHook("checkers")
+  assert.ok(title, "nothing in the header says which checkers run")
+  assert.ok(title.closest(".de-section-header"), "the checkers sentence is not in the section header")
+  assert.ok(title.getAttribute("data-de-tip"), "the section title opens no hint on hover")
+  assert.equal(lint.node.querySelector(".de-section-info"), null, "the checkers dot is still drawn")
 })
 
 await check("the report keeps every data-de-lint hook it had", async () => {

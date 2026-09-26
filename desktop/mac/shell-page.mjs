@@ -162,12 +162,15 @@ export function shellPage({ repoRoot }) {
   function uid() { return Math.random().toString(36).slice(2, 9) }
   function persist() {
     localStorage.setItem(KEY, JSON.stringify({
-      tabs: tabs.map(({ id, kind, url, name, key }) => ({ id, kind, url, name, key })),
+      tabs: tabs.map(({ id, kind, url, src, name, key }) => ({ id, kind, url, src, name, key })),
       active, dismissed: [...dismissed].slice(-50),
     }))
   }
   const editorKey = (e) => e.url + "#" + e.pid
-  const tabUrl = (t) => (t.kind === "home" ? homeUrl : t.url)
+  // An editor tab is addressed by its editor's origin (url); src is the page in
+  // it to load, when one was asked for — "Open in Mac app" hands over a path.
+  const tabUrl = (t) => (t.kind === "home" ? homeUrl : t.src || t.url)
+  const originOf = (u) => { try { return new URL(u).origin } catch { return null } }
 
   function toast(text, ms = 3200) {
     const el = $("toast"); el.textContent = text; el.hidden = false
@@ -225,6 +228,9 @@ export function shellPage({ repoRoot }) {
       if (!f && url) {
         f = document.createElement("iframe")
         f.dataset.id = t.id
+        // The editor inside reads its window.name to know it is in the app, and
+        // leaves "Open in Mac app" out of its toolbar (src/shell/desk.ts).
+        f.name = "designlayer-desk:" + t.id
         f.allow = "clipboard-read; clipboard-write; fullscreen"
         f.title = t.kind === "home" ? "DesignLayer start screen" : t.name || "Editor"
         f.src = url
@@ -257,6 +263,31 @@ export function shellPage({ repoRoot }) {
     tabs.push(t)
     if (focus) active = t.id
     render()
+  }
+
+  // "Open in Mac app", pressed in an editor in a browser tab. The desk forwards
+  // the page here, and it opens in the tab already showing that editor, or in
+  // a new one.
+  function openUrl(href) {
+    const origin = originOf(href)
+    if (!origin) return
+    const e = editors.find((x) => originOf(x.url) === origin)
+    let t = tabs.find((x) => x.kind === "editor" && originOf(x.url) === origin)
+    const frame = t && framesEl.querySelector('iframe[data-id="' + t.id + '"]')
+    if (!t) {
+      t = { id: uid(), kind: "editor", url: e ? e.url : origin, name: e ? e.name : new URL(href).host,
+        key: e ? editorKey(e) : null, projectRoot: e ? e.projectRoot : null }
+      tabs.push(t)
+    }
+    t.src = href
+    offers = offers.filter((o) => originOf(o.url) !== origin)
+    active = t.id
+    render()
+    // Loaded again even when this frame already shows the editor: the browser
+    // tab took the editor's one socket from it, and only a fresh load takes it back.
+    if (frame) frame.src = href
+    toast("Opened " + t.name + " from the browser")
+    window.focus()
   }
 
   async function poll() {
@@ -374,6 +405,15 @@ export function shellPage({ repoRoot }) {
   render()
   poll()
   setInterval(poll, 2000)
+  // Pages handed over by "Open in Mac app". The window says whether it is the
+  // app or this page in an ordinary browser tab, because the desk sends a page
+  // to the app's windows first.
+  if ("EventSource" in window) {
+    const kind = matchMedia("(display-mode: browser)").matches ? "tab" : "app"
+    new EventSource("/api/events?window=" + kind).addEventListener("open-url", (ev) => {
+      try { openUrl(JSON.parse(ev.data).url) } catch {}
+    })
+  }
 })()
 </script>
 </body>

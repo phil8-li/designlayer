@@ -98,7 +98,7 @@ import { config } from "../core/config"
 import { el } from "../core/dom"
 import { focusControl } from "../core/focus"
 import { icon } from "../core/icons"
-import { arriveFrom, prefersReducedMotion } from "../core/motion"
+import { arriveFrom, playExit } from "../core/motion"
 import { tokens } from "../core/tokens"
 import { tip } from "../core/tooltip"
 import type { EditorContext } from "../core/context"
@@ -292,45 +292,6 @@ function isCurrentApp(app: RunningApp, currentUrl: string | null): boolean {
   }
 }
 
-
-/** The kit's menu dismissal, parsed once from the ramp it is written on. */
-const EXIT_MS = Number.parseFloat(tokens.duration.exit)
-
-/**
- * Plays the menu's 150ms exit on an inert COPY of the card.
- *
- * The card itself has to be gone the instant it is dismissed: still in the
- * document it would absorb the next Escape, keep its rows in the tab order and
- * answer a click aimed at whatever is under it. The kit still wants a bounded
- * fade so the card does not vanish in the same frame as the click that closed
- * it — so the fade plays on a clone that is `inert`, `aria-hidden`, id-less and
- * pointer-dead (`.de-app-menu--leaving`), placed where the card was and removed
- * when its animation ends. "Closed" and "still painted" stop being one question.
- *
- * The timer is the backstop for an `animationend` that never comes (jsdom, a
- * tab in the background), and it is skipped under reduced motion along with
- * the clone, because the base blanket takes the fade to nothing anyway.
- */
-function playExit(card: HTMLElement): void {
-  if (card.style.display === "none" || prefersReducedMotion()) return
-  const ghost = card.cloneNode(true) as HTMLElement
-  ghost.removeAttribute("id")
-  ghost.removeAttribute("role")
-  ghost.removeAttribute("aria-label")
-  for (const node of ghost.querySelectorAll("[id]")) node.removeAttribute("id")
-  ghost.setAttribute("aria-hidden", "true")
-  ghost.inert = true
-  ghost.classList.add("de-app-menu--leaving")
-  card.after(ghost)
-  let gone = false
-  const remove = (): void => {
-    if (gone) return
-    gone = true
-    ghost.remove()
-  }
-  ghost.addEventListener("animationend", remove, { once: true })
-  window.setTimeout(remove, EXIT_MS + 50)
-}
 
 export function installAppChooser(context: EditorContext): {
   node: HTMLElement
@@ -868,7 +829,10 @@ export function installAppChooser(context: EditorContext): {
         // on instructing a second click that now re-arms instead of switching.
         // The same correction is made, for the same reason, on the notes tab's
         // Clear all.
-        context.toast(`Switching to ${label} discards ${changeWord(owed)}. Click again to go anyway.`)
+        context.toast({
+          title: `Switching discards ${changeWord(owed)}`,
+          description: `Click again to go to ${label} anyway.`,
+        })
         return
       }
       disarm()

@@ -638,9 +638,11 @@ await check("an audit badge is a rounded square where a note pin is a disc", () 
     assert.doesNotMatch(corner, /50%|999|9999|100%/, `${name} is as round as a note pin: ${corner}`)
   }
 
-  // And the plate carries a glyph where the pin carries a number, which is the
-  // half of the difference a reader sees before any measurement.
-  assert.ok(badgeFor("card-bg").querySelector("svg"), "the audit badge carries no glyph")
+  // No info glyph on the plate: shape and colour are the mark, and the hover
+  // tip says what was found.
+  const badge = badgeFor("card-bg")
+  assert.equal(badge.querySelector("svg"), null, "the audit badge still draws a glyph")
+  assert.ok((badge.getAttribute("title") ?? "").length > 0, "the audit badge explains nothing on hover")
 })
 
 // ── One canvas, two layers, never both ─────────────────────────────────────
@@ -993,37 +995,34 @@ await check("the chip row is gone — nobody picks a checker here", () => {
   )
 })
 
-await check("one info dot in the header names what runs and what does not", () => {
-  const info = one("checkers")
-  assert.ok(info, "there is nothing in the section saying which checkers run")
-  assert.ok(
-    info.closest(".de-section-actions"),
-    "the info dot is in the body rather than beside the section title"
+await check("hovering the section title names what runs and what does not", () => {
+  const title = one("checkers")
+  assert.ok(title, "there is nothing in the section saying which checkers run")
+  assert.ok(title.classList.contains("de-section-title"), "the checkers sentence is not on the section title")
+  assert.equal(title.textContent, "DS lint", "the hint landed on something other than the title")
+  assert.equal(
+    panel.node.querySelector(".de-lint-info, .de-section-info"),
+    null,
+    "the info dot is still drawn"
   )
 
   // The sentence is the whole contract: a checker that will NOT run must still
   // be named, or a green audit reads as "everything was checked".
-  const line = info.getAttribute("title") ?? ""
-  assert.match(line, /Running Tokens \(Stylelint\)/, `the dot never says what runs: ${line}`)
-  assert.match(line, /Not running: ds-lint, shadcn\/lint/, `the dot hides the skipped ones: ${line}`)
+  const line = title.getAttribute("data-de-tip") ?? ""
+  assert.match(line, /Running Tokens \(Stylelint\)/, `the title never says what runs: ${line}`)
+  assert.match(line, /Not running: ds-lint, shadcn\/lint/, `the title hides the skipped ones: ${line}`)
 
-  // `title` is mouse-only, so the same sentence has to reach a screen reader.
-  assert.equal(info.getAttribute("aria-description"), line, "the dot is silent to a screen reader")
-  assert.ok((info.getAttribute("aria-label") ?? "").length > 0, "the dot has no accessible name")
+  // The tooltip card is aria-hidden, so the fold button carries the sentence.
+  assert.equal(
+    panel.node.querySelector(".de-section-toggle").getAttribute("aria-description"),
+    line,
+    "the checkers sentence is silent to a screen reader"
+  )
 
   // Concise: names and nothing else. The server's full reason for shadcn runs
   // to two sentences about Tailwind, and a hover is not where it belongs.
   assert.ok(line.length < 120, `the hover copy is ${line.length} characters: ${line}`)
-  assert.ok(!line.includes("Tailwind"), `the dot spent a checker's whole reason on a hover: ${line}`)
-})
-
-await check("pressing the info dot changes nothing", async () => {
-  server.calls.length = 0
-  const before = one("checkers").getAttribute("title")
-  click(one("checkers"))
-  await settle()
-  assert.deepEqual(server.calls, [], "the explanation re-ran discovery when it was pressed")
-  assert.equal(one("checkers").getAttribute("title"), before, "the explanation changed under a press")
+  assert.ok(!line.includes("Tailwind"), `the title spent a checker's whole reason on a hover: ${line}`)
 })
 
 // ── The button group ───────────────────────────────────────────────────────
@@ -1178,10 +1177,10 @@ await check("on an untouched editor the group is Audit alone", async () => {
   // "Nothing audited yet" said only that nothing had happened. The first state a
   // designer meets has to say what the section is for.
   assert.match(said, /design tokens/, "the untouched section does not say what an audit looks for")
-  // The dot is already answering, because the tool list is fetched on first
-  // paint rather than waiting for a run.
+  // The title's hint is already answering, because the tool list is fetched on
+  // first paint rather than waiting for a run.
   assert.match(
-    hook("checkers").getAttribute("title") ?? "",
+    hook("checkers").getAttribute("data-de-tip") ?? "",
     /Running Tokens \(Stylelint\)/,
     "the fresh section cannot say which checkers it would use"
   )

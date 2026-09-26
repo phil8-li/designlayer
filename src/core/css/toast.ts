@@ -33,6 +33,7 @@
  */
 
 import { tokens as t } from "../tokens"
+import { CONTROL_RADIUS } from "./panels"
 import { sonnerCss } from "./sonner-css"
 
 /**
@@ -68,6 +69,16 @@ const FOCUS_RING = `inset 0 0 0 1px ${t.color.accent}, 0 0 0 3px ${HALO}`
  */
 const CARD_RADIUS = t.radius["3xl"]
 const CLOSE_RADIUS = t.radius.sm
+
+/**
+ * How far a \`rowHeight\` button overhangs a one-line title, above and below.
+ *
+ * The buttons take it back as negative block margins, so the title row is as
+ * tall as the TITLE and not as tall as the buttons — which is what lets the
+ * glyph centre on the title itself (see the card grid below).
+ */
+const TITLE_LINE = Math.round(parseFloat(t.type.body) * t.type.leadingRow)
+const BUTTON_BLEED = (TITLE_LINE - t.size.rowHeight) / 2
 
 const overrides = `
 /*
@@ -146,8 +157,14 @@ const overrides = `
     box-shadow ${t.duration.hover} ${t.ease};
 }
 /* Sonner fades the card's contents in as the stack expands, on its own 400ms.
-   Same argument, same rung. */
-[data-sonner-toast] > * { transition: opacity ${t.duration.reveal} ${t.easeReveal}; }
+   Same argument, same rung. The title and body are listed too: the content
+   column is \`display: contents\` (see the card grid), which has no box for an
+   opacity to act on, so Sonner's \`> *\` rule no longer reaches them. */
+[data-sonner-toast] > *,
+[data-sonner-toast] [data-content] > * { transition: opacity ${t.duration.reveal} ${t.easeReveal}; }
+[data-sonner-toast][data-expanded='false'][data-front='false'][data-styled='true'] [data-content] > * {
+  opacity: 0;
+}
 
 /*
  * THE ENTRANCE SCALES IN PLACE; IT DOES NOT SLIDE UP FROM THE EDGE.
@@ -227,9 +244,7 @@ const overrides = `
  * kit's floating-card elevation whole: \`shadow.popover\` is the overlay cast,
  * the one card-family hairline (drawn as a shadow layer, so it costs no
  * layout) and, in dark, the top rim light. The glyph alone says what kind a
- * card is. The right padding is \`space.sm\`, the same as the top and bottom,
- * so the close button sits concentric in the card's corner (see
- * \`CLOSE_RADIUS\`).
+ * card is. The padding is set with the grid below, which it depends on.
  *
  * THE LEADING IS A ROLE NOW, AND THE DESCRIPTION'S WAS UNDER THE FLOOR.
  *
@@ -247,16 +262,53 @@ const overrides = `
  * reader reads as a sentence rather than as a label.
  */
 [data-sonner-toast][data-styled='true'] {
-  padding: ${t.space.sm}px ${t.space.sm}px ${t.space.sm}px ${t.space.md}px;
-  gap: ${t.space.sm}px;
+  padding: ${t.space.md}px ${t.space.sm}px ${t.space.md}px ${t.space.md}px;
   border: none;
   font-size: ${t.type.body};
   line-height: ${t.type.leadingRow};
   box-shadow: ${t.shadow.popover};
 }
 
+/*
+ * THE CARD IS A GRID, SO THE GLYPH CAN CENTRE ON THE TITLE.
+ *
+ * Sonner lays the card out as a flex row: glyph, then a content column holding
+ * title and body, then the buttons. In that row the glyph is a sibling of the
+ * COLUMN, so it can centre on the whole column (between title and body) or sit
+ * at its top — never on the title alone. A title that wraps, which a server's
+ * own error text does ("The agent route returned an error (500)"), left the
+ * glyph on its first line, 8px above the title's middle.
+ *
+ * So the content column is \`display: contents\` and the title and body become
+ * grid items of the card: row 1 is the title with the glyph, the action and the
+ * close button beside it; row 2 is the body under the title. Every item in
+ * row 1 centres on that row, and the row is exactly as tall as the title,
+ * because the 24px buttons give back their overhang (\`BUTTON_BLEED\`).
+ *
+ * No grid gaps: the glyph's column is empty on a news card, and a column gap
+ * would still indent the text past it. The spacing lives on the items instead.
+ *
+ * THE PADDING IS \`space.md\` TOP AND BOTTOM, \`space.sm\` ON THE RIGHT. With a
+ * 16px title row that puts a 24px close button 8px from the top and the right
+ * edge, concentric in the card's corner (see \`CLOSE_RADIUS\`), and makes a
+ * one-line card 40px — the height it had before.
+ */
+[data-sonner-toast][data-styled='true'] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0;
+}
+[data-sonner-toast][data-styled='true'] [data-content] { display: contents; }
+
+/*
+ * Title and body. The title is a short label in full ink; the body is the
+ * sentence under it, in muted ink at body weight. Same size, per the kit's
+ * rule that hierarchy is carried by weight and colour, not a pixel of size.
+ */
 [data-sonner-toast][data-styled='true'] [data-title] {
-  font-weight: ${t.type.weightValue};
+  grid-area: 1 / 2;
+  font-weight: ${t.type.weightSection};
   line-height: ${t.type.leadingRow};
   /* A title is a phrase that must not be left with one word alone on line two.
      \`pretty\` is the declaration for that and costs nothing where it does not
@@ -270,44 +322,58 @@ const overrides = `
  * so it is spelled at (0,3,0) here.
  */
 [data-sonner-toast][data-styled='true'] [data-description] {
+  grid-area: 2 / 2;
+  margin-top: ${t.space["3xs"]}px;
   color: ${t.color.textMuted};
   font-size: ${t.type.caption};
+  font-weight: ${t.type.weightBody};
   line-height: ${t.type.leadingBody};
   text-wrap: pretty;
 }
 
 /*
- * The glyph is the whole of the severity signal, in the signal colour; the
- * words stay in the chrome's own ink.
+ * Only an error has a glyph (news is raised untyped, see \`emit\` in
+ * \`core/toast.ts\`), so the danger ink below is the only colour in the toaster.
+ *
+ * THE GAP AFTER THE GLYPH EQUALS THE GAP BEFORE IT. The card's leading padding
+ * is \`space.md\`, and so is the glyph's trailing margin. Sonner's own nudges
+ * (\`--toast-icon-margin-*\`, \`--toast-svg-margin-*\`, a -3px pull toward the
+ * edge and 4px push away) are zeroed, since they are what made the two sides
+ * differ. The glyph's own inset in its box is the same on both sides, so equal
+ * boxes read as equal gaps.
+ *
+ * It sits in the title's row and centres on it — on both lines when the title
+ * wraps (see the card grid above).
  */
 [data-sonner-toast][data-styled='true'] [data-icon] {
+  grid-area: 1 / 1;
   height: ${t.icon.inline}px;
   width: ${t.icon.inline}px;
+  margin: 0 ${t.space.md}px 0 0;
 }
 [data-sonner-toast][data-type='error'] [data-icon] { color: ${t.color.danger}; }
-[data-sonner-toast][data-type='success'] [data-icon] { color: ${t.color.success}; }
-[data-sonner-toast][data-type='warning'] [data-icon] { color: ${t.color.lintWarning}; }
-[data-sonner-toast][data-type='info'] [data-icon] { color: ${t.color.accent}; }
 [data-sonner-toast][data-styled='true'] [data-icon] > svg {
   height: ${t.icon.inline}px;
   width: ${t.icon.inline}px;
+  margin: 0;
 }
 
 /*
- * The action ("Undo"): a text button in the accent ink, no fill. A filled pill
+ * The action ("Undo"): a text button in the accent ink, no fill. A filled button
  * on a card this small outweighs the sentence it belongs to. \`accentText\` is
  * the accent rung measured for text on a panel ground.
  *
- * \`radius["2xl"]\`, the one corner every action button in the kit shares, and
+ * \`CONTROL_RADIUS\`, the one corner every text button in the chrome shares, and
  * the ghost hover lands on \`bgRaisedHover\` because the card is \`bgRaised\` —
  * \`bgHover\` is the same rung as the card in dark and would paint nothing.
  * Hover paint only on a real pointer; press is the kit's 2% dip.
  */
 [data-sonner-toast][data-styled='true'] [data-button] {
+  grid-area: 1 / 3;
   height: ${t.size.rowHeight}px;
   padding: 0 ${t.space.sm}px;
-  margin: 0;
-  border-radius: ${t.radius["2xl"]};
+  margin: ${BUTTON_BLEED}px 0 ${BUTTON_BLEED}px ${t.space.sm}px;
+  border-radius: ${CONTROL_RADIUS};
   font-size: ${t.type.body};
   font-weight: ${t.type.weightValue};
   background: transparent;
@@ -335,16 +401,19 @@ const overrides = `
  * hover. It is an icon-only action, so its glyph is its whole label and it
  * wears full ink in every state — a muted ✕ reads as disabled (kit § 5).
  *
- * Sonner renders it FIRST in the card's DOM, so \`order\` is what puts it last in
- * the flex row. Spelled at (0,5,0) to beat both of the vendor's themed rules for
- * it — the dark one is (0,4,0), and both \`:hover\` rules are (0,5,0) and lose
- * on order.
+ * Sonner renders it FIRST in the card's DOM; its grid column is what puts it
+ * last. It keeps to the TOP of the title row rather than its middle, so a
+ * title that wraps leaves it in the corner it is concentric with — on a
+ * one-line title the two are the same place. Spelled at (0,5,0) to beat both
+ * of the vendor's themed rules for it — the dark one is (0,4,0), and both
+ * \`:hover\` rules are (0,5,0) and lose on order.
  */
 [data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  order: 1;
+  grid-area: 1 / 4;
+  align-self: start;
+  margin: ${BUTTON_BLEED}px 0 ${BUTTON_BLEED}px ${t.space.sm}px;
   position: static;
   transform: none;
-  flex-shrink: 0;
   height: ${t.size.rowHeight}px;
   width: ${t.size.rowHeight}px;
   border: none;
@@ -430,7 +499,8 @@ export const toasterCss = `${sonnerCss}\n${overrides}
 @media (prefers-reduced-motion: reduce) {
   [data-sonner-toaster] { transition: none !important; }
   [data-sonner-toast],
-  [data-sonner-toast] > * {
+  [data-sonner-toast] > *,
+  [data-sonner-toast] [data-content] > * {
     transition: opacity ${t.duration.exit} linear !important;
     animation: none !important;
   }

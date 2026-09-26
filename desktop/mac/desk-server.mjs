@@ -7,7 +7,9 @@
  * Run by the `dev.designlayer.desk` LaunchAgent (see install.mjs). It adds no
  * editor logic of its own: the start screen (cli.mjs --start) still chooses
  * apps and spawns editors, and runtime/editor-registry.mjs still says which
- * editors are running. This process only puts them in one window.
+ * editors are running. This process only puts them in one window, and passes
+ * that window the pages an editor in a browser tab asks to move into it
+ * ("Open in Mac app": POST /api/open, delivered over GET /api/events).
  *
  * Env:
  *   DESIGNLAYER_DESK_PORT        port to bind (default 3454)
@@ -23,12 +25,14 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { listEditors } from "../../runtime/editor-registry.mjs"
+import { DEFAULT_DESK_PORT } from "../../runtime/mac-desk.mjs"
 import { PREFERRED_START_SCREEN_PORT } from "../../runtime/start-screen.mjs"
+import { CHROME_BINARY, chromeProfileDir } from "./chrome-pipe.mjs"
 import { offlinePage, shellPage } from "./shell-page.mjs"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT = path.resolve(HERE, "..", "..")
-export const DEFAULT_DESK_PORT = 3454
+export { DEFAULT_DESK_PORT }
 const LOOPBACK = "127.0.0.1"
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"])
 const ICONS = new Map([
@@ -246,6 +250,134 @@ export function createSupervisor({ repoRoot = REPO_ROOT, port = PREFERRED_START_
   }
 }
 
+/**
+ * CORS for the editor, which lives on another loopback port.
+ *
+ * "Open in Mac app" is a POST from the chrome in a browser tab, a different
+ * origin from the desk, so the answer needs `Access-Control-Allow-Origin` to be
+ * readable there. Only a loopback Origin is echoed; `isLocalRequest` has
+ * already refused the rest.
+ */
+function corsHeaders(req) {
+  const origin = req.headers.origin
+  return origin && isLoopbackHost(origin) ? { "access-control-allow-origin": origin, vary: "Origin" } : {}
+}
+
+/**
+ * A page the Mac app may be asked to open: an http(s) URL on this machine's
+ * loopback, and not the desk itself (the desk inside one of its own tabs is not
+ * an editor). Anything else is refused with a sentence the editor can show.
+ */
+export function openableUrl(value, deskPort) {
+  let url
+  try {
+    url = new URL(String(value ?? ""))
+  } catch {
+    return { error: "Open needs a full URL, like http://127.0.0.1:3466/studio" }
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return { error: "Only http pages can open in the Mac app" }
+  if (!isLoopbackHost(url.host)) return { error: "Only pages on this Mac (127.0.0.1 or localhost) can open in the Mac app" }
+  if (Number(url.port) === Number(deskPort)) return { error: "That is the Mac app's own page" }
+  // One spelling of this machine. The desk and every editor it lists are on
+  // 127.0.0.1, and a frame on `localhost` would be a different site from the
+  // page around it, with its storage partitioned away from theirs.
+  if (url.hostname === "localhost") url.hostname = LOOPBACK
+  return { url: url.href }
+}
+
+const SHIM = path.join(os.homedir(), "Applications", "Chrome Apps.localized", "DesignLayer.app")
+const shimInstalled = () => fs.existsSync(path.join(SHIM, "Contents", "MacOS", "app_mode_loader"))
+let lastLaunch = 0
+
+/**
+ * Brings the Mac app forward, launching it if it is not running, and says
+ * whether it did anything.
+ *
+ * `open` on the installed shim is what clicking the Dock icon does: it raises
+ * the window that is up, or launches the app. Without the shim (the
+ * `--app-window` fallback) there is no app to raise, only Chrome, and starting
+ * it again opens a second window instead of raising the first. So that path
+ * runs only while no window is listening and no launch is already under way;
+ * a window that is up gets the page over its event stream either way.
+ */
+function activateApp(deskUrl, { listening = 0 } = {}) {
+  const done = (error) => {
+    if (error) console.warn(`${new Date().toISOString()} [desk] could not bring the app forward: ${error.message}`)
+  }
+  if (shimInstalled()) {
+    execFile("/usr/bin/open", [SHIM], done)
+    return true
+  }
+  if (listening > 0 || Date.now() - lastLaunch < 15_000) return false
+  lastLaunch = Date.now()
+  // The same command line as install.mjs --app-window.
+  const child = spawn(
+    CHROME_BINARY,
+    [`--user-data-dir=${chromeProfileDir()}`, `--app=${deskUrl}/`, "--no-first-run", "--no-default-browser-check"],
+    { detached: true, stdio: "ignore" }
+  )
+  child.on("error", done)
+  child.unref()
+  return true
+}
+
+/**
+ * Pages waiting to be opened, and the windows listening for them.
+ *
+ * A request made while the app window is up goes straight to it over the event
+ * stream. One made while it is closed waits here — for a minute at most, so a
+ * stale request does not ambush the next launch — and is handed to the first
+ * window that connects, which is usually the launch the request caused.
+ *
+ * The app's own windows come first. The desk page can also be open in an
+ * ordinary browser tab, and that tab takes a page only when no app window is
+ * up: "Open in Mac app" should land in the app.
+ */
+export function createHandoff({ maxAgeMs = 60_000 } = {}) {
+  const clients = new Map()
+  let pending = []
+  let nextId = 1
+  const fresh = (item) => Date.now() - item.at < maxAgeMs
+  const write = (res, item) => res.write(`event: open-url\ndata: ${JSON.stringify(item)}\n\n`)
+  return {
+    request(url) {
+      const item = { id: nextId++, url, at: Date.now() }
+      const apps = [...clients].filter(([, client]) => client.app).map(([res]) => res)
+      const targets = apps.length ? apps : [...clients.keys()]
+      for (const res of targets) write(res, item)
+      if (!targets.length) pending = [...pending.filter(fresh), item].slice(-10)
+      return { item, delivered: targets.length }
+    },
+    subscribe(res, { app = false } = {}) {
+      clients.set(res, { app })
+      const due = pending.filter(fresh)
+      pending = []
+      for (const item of due) write(res, item)
+      return () => clients.delete(res)
+    },
+    get listening() {
+      return clients.size
+    },
+  }
+}
+
+async function readBody(req, limit = 16 * 1024) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > limit) throw Object.assign(new Error("Request body too large"), { status: 413 })
+    chunks.push(chunk)
+  }
+  const text = Buffer.concat(chunks).toString("utf8").trim()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw Object.assign(new Error("Request body must be JSON"), { status: 400 })
+  }
+}
+
 function send(res, status, type, body, extra = {}) {
   const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body)
   res.writeHead(status, {
@@ -257,7 +389,8 @@ function send(res, status, type, body, extra = {}) {
   })
   res.end(buffer)
 }
-const sendJson = (res, status, payload) => send(res, status, "application/json; charset=utf-8", JSON.stringify(payload))
+const sendJson = (res, status, payload, extra) =>
+  send(res, status, "application/json; charset=utf-8", JSON.stringify(payload), extra)
 
 let picking = null
 function pickFolder() {
@@ -290,10 +423,13 @@ export async function createDeskServer({
   logDir = path.join(os.homedir(), "Library", "Logs", "DesignLayer"),
   log = (line) => console.log(`${new Date().toISOString()} ${line}`),
   pickFolder: picker = pickFolder,
+  activate = activateApp,
 } = {}) {
   const supervisor = createSupervisor({ repoRoot, port: startScreenPort, logDir, enabled: supervise, log })
+  const handoff = createHandoff()
   const startedAt = Date.now()
   const iconsDir = path.join(HERE, "icons")
+  const origin = () => `http://${LOOPBACK}:${server.address().port}`
 
   const routes = {
     "GET /": (_req, res) =>
@@ -326,12 +462,57 @@ export async function createDeskServer({
           detail: s.detail,
           editing: s.editing,
         },
+        app: { installed: shimInstalled(), windows: handoff.listening },
       })
     },
     "GET /api/editors": (_req, res) => sendJson(res, 200, { editors: normalizeEditors(listEditors()) }),
     "POST /api/pick-folder": async (_req, res) => {
       const result = await picker()
       sendJson(res, result.error ? 500 : 200, result)
+    },
+    // "Open in Mac app" from an editor in a browser tab. The editor sends its
+    // JSON as text/plain, which needs no preflight; OPTIONS below answers for
+    // any client that sends application/json instead.
+    "POST /api/open": async (req, res) => {
+      const cors = corsHeaders(req)
+      const raw = await readBody(req)
+      const body = raw && typeof raw === "object" ? raw : {}
+      const target = openableUrl(body.url, server.address().port)
+      if (target.error) return sendJson(res, 400, { error: target.error }, cors)
+      const { item, delivered } = handoff.request(target.url)
+      // `activate: false` hands the page over without raising a window, for a
+      // caller that is checking the hand-off rather than using it.
+      const launched = body.activate !== false && Boolean(activate(origin(), { listening: handoff.listening }))
+      log(`[desk] open ${item.url}: ${delivered ? `sent to ${delivered} window(s)` : "held for the next window"}${launched ? ", app raised" : ""}`)
+      sendJson(res, 200, { ok: true, id: item.id, url: item.url, delivered, launched }, cors)
+    },
+    "OPTIONS /api/open": (req, res) => {
+      res.writeHead(204, {
+        ...corsHeaders(req),
+        "access-control-allow-methods": "POST",
+        "access-control-allow-headers": "content-type",
+        "access-control-max-age": "600",
+        "cache-control": "no-store",
+      })
+      res.end()
+    },
+    // The desk page's side of the hand-off: one event per page to open.
+    "GET /api/events": (req, res, url) => {
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      })
+      // EventSource reconnects on its own; two seconds matches the page's poll.
+      res.write("retry: 2000\n\n")
+      const unsubscribe = handoff.subscribe(res, { app: url.searchParams.get("window") === "app" })
+      // A comment now and then keeps an idle stream from being taken for dead.
+      const beat = setInterval(() => res.write(": keep-alive\n\n"), 25_000)
+      res.on("error", () => {})
+      req.on("close", () => {
+        clearInterval(beat)
+        unsubscribe()
+      })
     },
   }
 
@@ -343,8 +524,10 @@ export async function createDeskServer({
     }
     const handler = routes[`${req.method} ${url.pathname}`]
     if (handler) return handler(req, res, url)
-    const known = Object.keys(routes).find((key) => key.endsWith(` ${url.pathname}`))
-    if (known) return sendJson(res, 405, { error: `${url.pathname} accepts ${known.split(" ")[0]} only` })
+    const methods = Object.keys(routes)
+      .filter((key) => key.endsWith(` ${url.pathname}`) && !key.startsWith("OPTIONS "))
+      .map((key) => key.split(" ")[0])
+    if (methods.length) return sendJson(res, 405, { error: `${url.pathname} accepts ${methods.join(", ")} only` })
     sendJson(res, 404, { error: `No desk route for ${url.pathname}` })
   }
 
@@ -352,7 +535,7 @@ export async function createDeskServer({
     if (!isLocalRequest(req)) return sendJson(res, 403, { error: "The DesignLayer desk is loopback-only" })
     route(req, res).catch((error) => {
       if (res.headersSent) return res.end()
-      sendJson(res, 500, { error: error?.message ?? "desk route failed" })
+      sendJson(res, error?.status ?? 500, { error: error?.message ?? "desk route failed" }, corsHeaders(req))
     })
   })
 

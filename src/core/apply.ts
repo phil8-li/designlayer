@@ -39,6 +39,7 @@ import {
 } from "./removal"
 import { untranslatedProperties } from "./writer"
 import type { RewriteBridge } from "./bridge"
+import type { ToastMessage } from "./toast"
 import { formatCount, plural } from "./format"
 
 /**
@@ -107,7 +108,7 @@ export function recordRefusedWrite(operation: AngularOperation): void {
 export interface ApplyOptions {
   bridge: RewriteBridge
   /** The editor's toast, so a commit reports in the same voice as everything else. */
-  toast: (message: string, kind?: "info" | "error") => void
+  toast: (message: ToastMessage, kind?: "info" | "error") => void
   /**
    * Called after each queue empties.
    *
@@ -126,6 +127,17 @@ export interface Committer {
   hasPendingChanges: () => boolean
   /** How many operations a commit would send, for a count on a button or a tab. */
   pendingCount: () => number
+}
+
+const NO_SOURCE = {
+  title: "Source files not found",
+  description: "Send these changes to your agent instead.",
+}
+
+/** A server's lowercase reason, as the opening of a toast body (no end stop). */
+function sentence(reason: string): string {
+  const text = reason.trim().replace(/\.$/, "")
+  return text ? text[0].toUpperCase() + text.slice(1) : text
 }
 
 export function createApply({ bridge, toast, onChange }: ApplyOptions): Committer {
@@ -205,7 +217,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyAngular = async (): Promise<void> => {
     const operations = buildAngularOperations()
     if (!operations.length) {
-      toast("Could not find the source files for these changes. Send them to your agent instead", "error")
+      toast(NO_SOURCE, "error")
       return
     }
     toast(`Applying ${plural(operations.length, "change")}…`)
@@ -222,10 +234,10 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
       changed()
       if (!result.failed.length) {
         const files = new Set(result.applied.map((entry) => entry.filePath))
-        toast(
-          `Wrote ${plural(result.applied.length, "change")}` +
-            ` to ${[...files].join(", ")}`
-        )
+        toast({
+          title: `Wrote ${plural(result.applied.length, "change")}`,
+          description: [...files].join(", "),
+        })
         return
       }
       // A refusal is a change that still wants making, so it goes where every
@@ -247,8 +259,10 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
       const [first] = result.failed
       const others = result.failed.length - 1
       toast(
-        `Wrote ${formatCount(result.applied.length)}, skipped ${formatCount(result.failed.length)}` +
-          `: ${first.reason}${others > 0 ? ` (+${others} more)` : ""}. Queued in Changes.`,
+        {
+          title: `Wrote ${formatCount(result.applied.length)}, skipped ${formatCount(result.failed.length)}`,
+          description: `${sentence(first.reason)}${others > 0 ? ` (+${others} more)` : ""}. Queued in Changes.`,
+        },
         "error"
       )
     } catch (error) {
@@ -273,7 +287,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     try {
       result = await applyRemovals(operations)
     } catch (error) {
-      toast(error instanceof Error ? error.message : "Could not delete the element in code. Check the designlayer terminal, then try again", "error")
+      toast(error instanceof Error ? error.message : "Could not delete in code. Check the designlayer terminal, then try again", "error")
       return
     }
     // Cleared on any reply, including a partial one, for the same reason the
@@ -284,14 +298,16 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     const count = result.applied.length
     if (!result.failed.length) {
       const files = new Set(result.applied.map((entry) => entry.filePath))
-      toast(`Deleted ${plural(count, "element")} in ${[...files].join(", ")}`)
+      toast({ title: `Deleted ${plural(count, "element")}`, description: [...files].join(", ") })
       return
     }
     const [first] = result.failed
     const others = result.failed.length - 1
     toast(
-      `Deleted ${formatCount(count)}, skipped ${formatCount(result.failed.length)}` +
-        `: ${first.reason}${others > 0 ? ` (+${others} more)` : ""}`,
+      {
+        title: `Deleted ${formatCount(count)}, skipped ${formatCount(result.failed.length)}`,
+        description: `${sentence(first.reason)}${others > 0 ? ` (+${others} more)` : ""}.`,
+      },
       "error"
     )
   }
@@ -300,7 +316,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
   const applyReactBatch = (): void => {
     const operations = bridge.store.buildBatchOperations()
     if (!operations.length) {
-      toast("Could not find the source files for these changes. Send them to your agent instead", "error")
+      toast(NO_SOURCE, "error")
       return
     }
     bridge.send({ type: "commitBatch", operations })
@@ -325,7 +341,7 @@ export function createApply({ bridge, toast, onChange }: ApplyOptions): Committe
     if (lost.length === 0) {
       toast(applying)
     } else {
-      toast(`${applying} ${lost.join(", ")} cannot be written to code`, "error")
+      toast({ title: applying, description: `Cannot be written to code: ${lost.join(", ")}.` }, "error")
     }
   }
 

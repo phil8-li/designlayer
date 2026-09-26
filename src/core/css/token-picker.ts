@@ -203,7 +203,20 @@ export const tokenPickerCss = `/* ---------- token field ---------- */
  * fill and the word cannot be written apart: selection is a hue, never a grey.
  */
 .de-token-row[aria-selected="true"] { ${accentFillText} }
-.de-token-row[aria-selected="true"] .de-token-row-detail { color: ${t.color.onAccent}; }
+/*
+ * Every part of the row that names its own ink has to name it again here, or it
+ * keeps the resting one on the indigo. The glyph preview is the part that did:
+ * \`.de-token-swatch--glyph\` states \`text\` so the mark wears full ink at rest,
+ * and that declaration beats the row's inherited \`onAccent\` — so the chosen
+ * icon in the icon picker was near-black on indigo in light (2.85:1, under the
+ * 3:1 a mark is owed) while the dark theme's near-white passed and hid it.
+ */
+.de-token-row[aria-selected="true"] .de-token-row-detail,
+.de-token-row[aria-selected="true"] .de-token-swatch--glyph { color: ${t.color.onAccent}; }
+/* The radius chip IS its outline, and \`borderInteractive\` on the indigo is
+   1.85:1 dark and 1.8:1 light — the preview disappeared on the one row whose
+   value the reader is checking. */
+.de-token-row[aria-selected="true"] .de-token-swatch--radius { box-shadow: inset 0 0 0 1px ${t.color.onAccent}; }
 /* An accent rule on the accent is no rule at all, so the ink draws it instead. */
 .de-token-row[aria-selected="true"][data-active="true"] {
   box-shadow: inset 0 0 0 1px ${t.color.onAccent};

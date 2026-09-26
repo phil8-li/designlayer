@@ -251,7 +251,10 @@ function sourceDefaultActions(control: LevaControl, editor: EditorContext): HTML
       // The live value already moved; only the durable copy did not. Saying so
       // is the difference between "try again" and "redo the whole adjustment".
       editor.toast(
-        `${control.label} is set here, but its default was not saved to code. Try again.`,
+        {
+          title: "Default not saved",
+          description: `${control.label} is set here, but its default was not saved to code. Try again.`,
+        },
         "error"
       )
     }
@@ -356,7 +359,12 @@ function folderNode(
     ...folder.folders.map((child) => folderNode(child, editor, depth + 1, expand)),
   ])
 
-  return el("details", { class: "de-opt-folder", open: expand || depth > 0 }, [summary, body])
+  // The depth is what lets the summary's hover band reach both panel edges from
+  // inside however many indented folder bodies it sits in (`css/options.ts`).
+  return el("details", { class: "de-opt-folder", open: expand || depth > 0, style: `--de-opt-depth:${depth}` }, [
+    summary,
+    body,
+  ])
 }
 
 /**

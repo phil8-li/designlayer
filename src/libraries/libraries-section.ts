@@ -54,6 +54,7 @@ import { clear, el } from "../core/dom"
 import { leaveRow } from "../core/leave"
 import { holdScroll } from "../core/scroll"
 import { focusControl } from "../core/focus"
+import { playExit } from "../core/motion"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
 import { section } from "../panels/inspector/field"
@@ -791,8 +792,9 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib-id": fact.key,
         onclick: () => copyLibrarySnippet(editor, value.textContent ?? "", fact.copy),
       },
-      // `icon.action` because every `.de-mini` in this section carries one at
-      // that size — the remove button on a library row is the same 18px box.
+      // `icon.action`: the copy glyph needs the detail. The X buttons in this
+      // section sit in the same 18px box at `icon.marker`, because an X that
+      // size fills the box.
       [icon("Copy", tokens.icon.action)]
     )
     const row = el(
@@ -1343,7 +1345,7 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
       // it, which is a different and much worse statement than "the scan
       // failed". The path box below is still the way in either way.
       scanError = "Could not scan this project for design-system files. Add one by path below."
-      editor.toast(scanError, "error")
+      editor.toast({ title: "Could not scan this project", description: "Add a design-system file by path below." }, "error")
     } finally {
       scanning = false
       renderCandidates()
@@ -1836,11 +1838,11 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
     if (!signInDialog.open) return
     signInDialog.classList.remove("de-arrive")
     /*
-     * It arrives but it does not linger — the same asymmetry the shortcuts
-     * sheet states at length. A modal playing an exit is a backdrop still
-     * covering the page, still taking clicks, and still the front-most thing
-     * Escape would reach.
+     * Closed at once, for the reason the shortcuts sheet gives: a modal still
+     * open for a fade is a backdrop over the page that takes clicks and
+     * Escapes. The kit's modal exit plays on an inert copy instead.
      */
+    playExit(signInDialog, "modal")
     if (typeof signInDialog.close === "function") signInDialog.close()
     else signInDialog.removeAttribute("open")
     if (back?.isConnected) focusControl(back)
@@ -2256,7 +2258,8 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "forget",
         "data-de-lib-id": entry.origin,
       },
-      [icon("X", tokens.icon.action)]
+      // Same size as the library row's remove X.
+      [icon("XSmall", tokens.icon.marker)]
     ) as HTMLButtonElement
     forget.addEventListener("click", () => {
       forget.disabled = true
@@ -2518,7 +2521,9 @@ export function librariesSection(editor: EditorContext): { node: HTMLElement; up
         "data-de-lib": "remove",
         "data-de-lib-id": library.id,
       },
-      [icon("X", tokens.icon.action)]
+      // `icon.marker`, like the annotation row's X: a 16px X fills the 18px
+      // box edge to edge and reads louder than the name beside it.
+      [icon("XSmall", tokens.icon.marker)]
     ) as HTMLButtonElement
     remove.addEventListener("click", () => {
       remove.disabled = true

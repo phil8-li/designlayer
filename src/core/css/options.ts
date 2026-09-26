@@ -328,12 +328,24 @@ export const optionsCss = `/* ---------- options / variants ---------- */
   color: ${t.color.textMuted}; font-size: ${t.type.body}; line-height: ${t.type.leadingBody};
 }
 
-.de-opt-folder { border-top: 1px solid ${t.color.border}; }
+/* The folder's rule is drawn by its summary, so it bleeds with the band below. */
 /* \`sectionHeader\`: a fold target, and the token exists because a fold target
    wants to be taller than the rows it folds. 28 was neither that nor a row. */
+/*
+ * FULL BLEED, like \`.de-section-header\`. The summary sits inside \`.de-opt-body\`'s
+ * side padding and, nested, inside each folder body's leading indent, so its
+ * hover band stopped short of both panel edges. The margins pull the box back
+ * out by exactly that inset and the padding puts the text back where it was.
+ */
 .de-opt-summary {
+  --de-opt-inset: calc(${t.space.sm}px + var(--de-opt-depth, 0) * ${t.space.lg}px);
   display: flex; align-items: center; gap: ${t.space.sm}px;
-  height: ${t.size.sectionHeader}px; padding: 0 ${t.space["2xs"]}px;
+  /* content-box so the rule sits on top of the 32px band rather than inside it. */
+  box-sizing: content-box;
+  height: ${t.size.sectionHeader}px;
+  border-top: 1px solid ${t.color.border};
+  margin: 0 -${t.space.sm}px 0 calc(-1 * var(--de-opt-inset));
+  padding: 0 ${t.space.sm + t.space["2xs"]}px 0 calc(var(--de-opt-inset) + ${t.space["2xs"]}px);
   cursor: pointer; list-style: none;
   font-size: ${t.type.body}; font-weight: ${t.type.weightSection};
   transition: background-color ${t.duration.hover} ${t.ease}, box-shadow ${t.duration.hover} ${t.ease};

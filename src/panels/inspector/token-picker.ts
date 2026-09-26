@@ -13,7 +13,7 @@
  */
 
 import { clamp, clear, el } from "../../core/dom"
-import { smoothScroll } from "../../core/motion"
+import { playExit, smoothScroll } from "../../core/motion"
 import { focusControl } from "../../core/focus"
 import { icon } from "../../core/icons"
 import { tokens } from "../../core/tokens"
@@ -297,6 +297,8 @@ function openPicker(field: HTMLElement, options: TokenFieldOptions): void {
     window.removeEventListener("pointerdown", onPointerDown, true)
     window.removeEventListener("keydown", onKeyDown, true)
     window.removeEventListener("scroll", onScroll, true)
+    // Closed now; the kit's 150ms dismissal plays on an inert copy.
+    playExit(popover)
     popover.remove()
     field.setAttribute("aria-expanded", "false")
     if (restoreFocus) focusControl(field)

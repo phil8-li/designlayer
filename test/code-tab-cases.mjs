@@ -262,10 +262,14 @@ const slot = () => {
   window.document.body.append(node)
   return node
 }
+/** Every toast the lane raised, in order: the Code tab's copy reports here. */
+const toasts = []
 const bridge = {
   elementInfo: () => null,
   send() {},
-  toast() {},
+  toast(message, kind) {
+    toasts.push({ message, kind })
+  },
   subscribe: () => () => {},
   store: {
     setActiveTool() {},
@@ -447,9 +451,13 @@ check("the clipboard write happens in the click task, before any await", () => {
   assert.equal(written, text("jsx"))
 })
 
-check("the button flips to a check and the status says so", () => {
+// The success toast waits for the clipboard write to resolve, a microtask on.
+await Promise.resolve()
+check("the button flips to a check, and a toast names what was copied", () => {
   assert.match(copyButton().textContent, /Copied/)
-  assert.match(status().className, /de-code-status--success/)
+  assert.deepEqual(toasts.at(-1), { message: "Copied JSX", kind: "info" })
+  // The footer line keeps describing the view; it is not a feedback channel.
+  assert.doesNotMatch(status().className, /--success|--error/)
 })
 
 check("what is copied is the view you are looking at, not always the JSX", () => {
@@ -474,7 +482,8 @@ check("a refused clipboard is reported, not swallowed", () => {
     configurable: true,
   })
   copyButton().dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
-  assert.match(status().className, /de-code-status--error/)
+  assert.equal(toasts.at(-1).kind, "error")
+  assert.match(toasts.at(-1).message, /Allow it for this site, then copy again/)
   assert.match(copyButton().textContent, /^Copy$/)
 })
 

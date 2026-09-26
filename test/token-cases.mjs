@@ -208,7 +208,6 @@ check("the light theme is a recomputation, not the dark one copied across", () =
    * ground.
    */
   const OVER_THE_APP = new Set([
-    "--de-color-on-user-color",
     "--de-color-focus-halo",
     "--de-color-focus-core",
     // The modal veil: the kit's static 70% scrim, the same in both appearances.
@@ -650,25 +649,25 @@ check("no control says it is disabled by fading itself", () => {
 })
 
 /*
- * A fill the theme does not control must not carry ink that it does.
+ * No surface paints a colour the palette does not own.
  *
- * `--de-ann-color` is one of seven presets the user picks, and it is the same
- * hex in both themes. `onAccent` is near-black in dark and white in light —
- * correctly, because the accent it names swaps ends too. Pair them and the
- * numeral on a note pin measures 5.7:1 in dark and 3.4:1 in light: same pin,
- * same green, readable in only one of them.
+ * The note pins used to take a user-picked hex through `--de-ann-color`, the
+ * one fill in the chrome outside both theme blocks. They wear the indigo
+ * accent now, so any custom property that is not a palette role, painted as a
+ * colour, is a regression to a private palette.
  */
-check("a user-chosen fill carries ink that does not flip with the theme", () => {
-  const offenders = []
-  for (const rule of chrome.shellCss.matchAll(/(^|\n)([^{}@\n][^{}]*)\{([^{}]*)\}/g)) {
-    if (!/background:[^;]*--de-ann-color/.test(rule[3])) continue
-    const ink = rule[3].match(/(?:^|[;\s])color:\s*([^;]+);/)
-    if (!ink) continue
-    if (!/--de-color-on-user-color/.test(ink[1])) {
-      offenders.push(`${rule[2].trim().replace(/\s+/g, " ")} { color: ${ink[1].trim()} }`)
-    }
+check("every painted colour comes from the palette, not a private property", () => {
+  // A local pass-through (`--de-lint-bg: var(--de-color-accent-soft, …)`) is
+  // fine: every value it is ever given is a palette role or transparent.
+  const passThrough = (property) => {
+    const values = [...chrome.shellCss.matchAll(new RegExp(`${property}:\\s*([^;]+);`, "g"))].map((m) => m[1].trim())
+    return values.length > 0 && values.every((value) => value === "transparent" || /^var\(--de-color-[a-z-]+,/.test(value))
   }
-  assert.deepEqual(offenders, [], "ink on a user-picked fill must be `tokens.color.onUserColor`")
+  const strays = new Set()
+  for (const match of chrome.shellCss.matchAll(/(?:background|color|border(?:-color)?|fill|stroke):[^;]*var\((--de-[a-z-]+)/g)) {
+    if (!DARK_BLOCK.has(match[1]) && !passThrough(match[1])) strays.add(match[1])
+  }
+  assert.deepEqual([...strays], [], "a colour is read from a property the theme blocks do not declare")
 })
 
 /*

@@ -104,7 +104,7 @@ export const classesSection: InspectorSection = ({ editor, selection, writer, in
     navigator.clipboard
       .writeText(path)
       .then(() => editor.toast("Source path copied"))
-      .catch(() => editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error"))
+      .catch(() => editor.toast("Clipboard access blocked. Allow it for this site, then copy again", "error"))
   }
 
   const body = el("div", { class: "de-stack" }, [

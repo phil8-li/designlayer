@@ -251,6 +251,25 @@ const SCENARIOS = [
     },
   },
   {
+    id: "dismiss",
+    title: "Dismissal: 60ms after Escape",
+    caption: "The shortcut sheet 60ms after Escape. Before: already gone. After: the dialog is closed, and an inert copy fades to 0.98.",
+    viewport: { width: 1440, height: 1000 },
+    drive: async (page, log) => {
+      if (!(await page.evaluate(() => window.__demo.shortcutSheet()))) log("help.shortcuts is not registered")
+      await page.waitForTimeout(300)
+      await page.keyboard.press("Escape")
+      await page.waitForTimeout(60)
+      const state = await page.evaluate(() => ({
+        open: Boolean(document.querySelector("dialog.de-shortcuts[open]:not([data-de-leaving])")),
+        ghosts: document.querySelectorAll("[data-de-leaving]").length,
+        modal: Boolean(document.querySelector("dialog:modal")),
+      }))
+      if (state.open || state.modal) log(`the real sheet is still open (${JSON.stringify(state)})`)
+      return "viewport"
+    },
+  },
+  {
     id: "libraries",
     title: "Design system tab: library added",
     caption: "One enabled library (4 colors, 2 spacing, 1 radius, 3 components).",
@@ -313,6 +332,14 @@ const SCENARIOS = [
       await page.waitForTimeout(250)
       return [{ panel: ".de-panel--left" }]
     },
+  },
+  {
+    id: "icons",
+    title: "Icons: the whole set at 16 and 12",
+    caption: "Every glyph the chrome draws, in full ink on the panel ground.",
+    kind: "icons",
+    viewport: { width: 760, height: 720 },
+    drive: async () => [".de-demo-icons"],
   },
   {
     id: "token-picker",
@@ -626,6 +653,9 @@ async function shoot(browser, side, spec, theme) {
       }
       if (spec.kind === "token") {
         const r = await page.evaluate((t) => window.__demo.tokenPicker(t), theme)
+        problems.push(...(r?.problems ?? []))
+      } else if (spec.kind === "icons") {
+        const r = await page.evaluate((t) => window.__demo.iconSheet(t), theme)
         problems.push(...(r?.problems ?? []))
       } else {
         const r = await page.evaluate((o) => window.__demo.boot(o), spec.boot ?? {})

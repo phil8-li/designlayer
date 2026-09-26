@@ -267,3 +267,256 @@ export function sweep(shellCss, { theme, palette, glyphOnly = [], ignore = [] })
   }
   return { results, unresolvable }
 }
+
+/* ---------- the pairs no single rule writes ---------- */
+
+/** Top-level commas only: `:is(a, b)` is one selector, not two. */
+function splitList(selector) {
+  const out = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < selector.length; i += 1) {
+    const ch = selector[i]
+    if (ch === "(" || ch === "[") depth += 1
+    else if (ch === ")" || ch === "]") depth -= 1
+    else if (ch === "," && depth === 0) {
+      out.push(selector.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  out.push(selector.slice(start).trim())
+  return out.filter(Boolean)
+}
+
+/**
+ * A complex selector as its key compound's conditions and its ancestors'.
+ *
+ * Conditions are kept as the literal text of each simple selector, so two
+ * spellings of one attribute test are two conditions — deliberately dumb, like
+ * the rest of this file. A BEM modifier implies its block (`.de-tool--quiet`
+ * is only ever written beside `.de-tool`), which is the one piece of this
+ * codebase's grammar the comparison has to know to see a modifier's rule as a
+ * refinement of the block's.
+ */
+function parseComplex(selector) {
+  const parts = []
+  let depth = 0
+  let current = ""
+  for (const ch of selector) {
+    if (ch === "(" || ch === "[") depth += 1
+    if (ch === ")" || ch === "]") depth -= 1
+    if (depth === 0 && /[\s>+~]/.test(ch)) {
+      if (current) parts.push(current)
+      current = ""
+      continue
+    }
+    current += ch
+  }
+  if (current) parts.push(current)
+  const simples = (compound) => {
+    const found = compound.match(/::?[\w-]+(\((?:[^()]|\([^()]*\))*\))?|\.[\w-]+|#[\w-]+|\[[^\]]+\]|^[a-z][\w-]*|^\*/gi) ?? []
+    const set = new Set(found.map((s) => s.replace(/\s+/g, " ")))
+    for (const s of [...set]) {
+      const block = /^(\.[\w-]+?)--[\w-]+$/.exec(s)
+      if (block) set.add(block[1])
+    }
+    return set
+  }
+  const key = simples(parts.pop() ?? "")
+  const ancestors = new Set(parts.flatMap((part) => [...simples(part)]))
+  return { key, ancestors }
+}
+
+/** `(a, b, c)` specificity, enough for the selectors this chrome writes. */
+function specificity(selector) {
+  let a = 0
+  let b = 0
+  let c = 0
+  const body = selector.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, "")
+  for (const inner of body.matchAll(/:(?:is|not|has)\(((?:[^()]|\([^()]*\))*)\)/g)) {
+    const best = splitList(inner[1])
+      .map(specificity)
+      .sort((x, y) => y[0] - x[0] || y[1] - x[1] || y[2] - x[2])[0] ?? [0, 0, 0]
+    a += best[0]
+    b += best[1]
+    c += best[2]
+  }
+  const rest = body.replace(/:(?:is|not|has)\((?:[^()]|\([^()]*\))*\)/g, "")
+  a += (rest.match(/#[\w-]+/g) ?? []).length
+  b += (rest.match(/\.[\w-]+|\[[^\]]+\]|(?<!:):(?!:)[\w-]+/g) ?? []).length
+  c += (rest.match(/::[\w-]+|(?:^|[\s>+~])[a-z][\w-]*/gi) ?? []).length
+  return [a, b, c]
+}
+
+const beats = (x, y) => x.spec[0] - y.spec[0] || x.spec[1] - y.spec[1] || x.spec[2] - y.spec[2] || x.order - y.order
+
+/**
+ * Whether an element in the state `specific` describes matches `general`.
+ *
+ * A plain condition has to be stated. `:is()` needs one of its alternatives
+ * stated, and `:not()` needs none of them — which is a closed-world reading:
+ * a state that does not say a row is disabled is taken to be a row that is
+ * not, the same thing the browser concludes about an element without the
+ * attribute.
+ */
+function implies(specific, general) {
+  const stated = (compound) => {
+    const simples = compound.match(/::?[\w-]+(\((?:[^()]|\([^()]*\))*\))?|\.[\w-]+|#[\w-]+|\[[^\]]+\]|^[a-z][\w-]*/gi) ?? []
+    return simples.length > 0 && simples.every((simple) => specific.key.has(simple))
+  }
+  for (const simple of general.key) {
+    if (specific.key.has(simple)) continue
+    const logical = /^:(is|where|not)\((.*)\)$/.exec(simple)
+    if (!logical) {
+      if (!specific.key.has(simple)) return false
+      continue
+    }
+    const any = splitList(logical[2]).some(stated)
+    if (logical[1] === "not" ? any : !any) return false
+  }
+  for (const s of general.ancestors) if (!specific.ancestors.has(s) && !specific.key.has(s)) return false
+  return true
+}
+
+/** Attribute tests in a compound, as name → required value (`*` for presence). */
+function attributeTests(set) {
+  const out = new Map()
+  for (const simple of set) {
+    const test = /^\[([\w-]+)(?:=["']?([^"'\]]*)["']?)?\]$/.exec(simple)
+    if (test) out.set(test[1], test[2] ?? "*")
+  }
+  return out
+}
+
+/**
+ * Whether one element can be in both states at once.
+ *
+ * Refused only on evidence in the selectors themselves: one attribute required
+ * at two values, a `:not()` naming something the other requires, two element
+ * types, or two modifiers of one block — `.de-button--primary` and
+ * `--danger` are alternatives by construction in this codebase, and treating
+ * them as combinable would report pairs no builder can produce.
+ */
+function compatible(a, b) {
+  const aa = attributeTests(a.key)
+  const bb = attributeTests(b.key)
+  for (const [name, value] of aa) {
+    const other = bb.get(name)
+    if (other !== undefined && other !== value && other !== "*" && value !== "*") return false
+  }
+  const negates = (x, y) =>
+    [...x.key].some((simple) => {
+      const inner = /^:not\((.*)\)$/.exec(simple)
+      return inner && splitList(inner[1]).some((negated) => y.key.has(negated))
+    })
+  if (negates(a, b) || negates(b, a)) return false
+  const modifiers = (set) => [...set].map((simple) => /^(\.[\w-]+?)--[\w-]+$/.exec(simple)).filter(Boolean)
+  for (const [modA, blockA] of modifiers(a.key)) {
+    for (const [modB, blockB] of modifiers(b.key)) if (blockA === blockB && modA !== modB) return false
+  }
+  const tag = (set) => [...set].find((simple) => /^[a-z]/i.test(simple))
+  if (tag(a.key) && tag(b.key) && tag(a.key) !== tag(b.key)) return false
+  return true
+}
+
+/**
+ * Pairs the CASCADE writes: the fill one rule wins, measured against the ink
+ * another rule wins, for one element in one state.
+ *
+ * `sweep` above sees a rule only when it declares both halves, and says so. The
+ * bug that exposed the gap was a state override — the toolbar's pressed panel
+ * toggle, on hover — that set the plate back to the neutral hover and said
+ * nothing about the ink, so the ink stayed where the ACCENT hover rule had put
+ * it: `onAccent`, white, on a near-white plate. Each rule was right on its own.
+ * The pair was only ever written by the cascade, and white on `#fafafa` is
+ * indistinguishable from `text` on it in the dark theme, so it survived every
+ * review done in the default one.
+ *
+ * The same audit found the mirror image in the app menu: the armed row's
+ * danger rule set BOTH halves, but the generic row hover out-specified it for
+ * the plate alone, so an armed row under the pointer was `onSemantic` on the
+ * neutral lift. No single rule there is wrong, and no rule implies the other —
+ * the element is simply in both states at once.
+ *
+ * So the states resolved are: every rule's own conditions, and every
+ * combination of two rules that share a class on the element and do not
+ * exclude each other (see `compatible`). For each, the rules whose every
+ * condition that state satisfies are ordered by specificity and then source
+ * order, as the browser orders them. Where the winning fill and the winning
+ * ink come from different rules, that pair is on screen, and it is measured.
+ *
+ * It does not know which classes a builder actually puts together, so a
+ * combination that cannot occur can still be reported; `compatible` refuses
+ * the ones the selectors themselves rule out, and the suite names the rest.
+ * A state whose ink no rule sets is inherited from an ancestor, which is out
+ * of reach here, and is skipped rather than guessed at.
+ */
+export function cascadeSweep(shellCss, { theme, palette, glyphOnly = [], ignore = [] }) {
+  const css = shellCss.replace(/\/\*[\s\S]*?\*\//g, "")
+  const entries = []
+  let order = 0
+  for (const [, rawSelector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const list = rawSelector.replace(/\s+/g, " ").trim()
+    if (!list || list.startsWith("@")) continue
+    order += 1
+    const ink = lastDeclaration(body, "color")
+    let fill = lastDeclaration(body, "background-color") ?? lastDeclaration(body, "background")
+    if (fill && /(gradient|url\(|image-set)/i.test(fill)) fill = null
+    if (fill) fill = firstToken(fill)
+    if (!ink && !fill) continue
+    for (const selector of splitList(list)) {
+      // A pseudo-element is a different box from its originating element; the
+      // two never share a cascade.
+      if (/::/.test(selector)) continue
+      entries.push({ selector, ink, fill, order, spec: specificity(selector), parsed: parseComplex(selector) })
+    }
+  }
+
+  const page = parseColor("var(--de-color-bg)", palette) ?? { r: 0, g: 0, b: 0, a: 1 }
+  const results = []
+  const unresolvable = []
+  const seen = new Set()
+  const resolve = (state) => {
+    const cascade = entries.filter((entry) => implies(state, entry.parsed))
+    const fillWinner = cascade.filter((entry) => entry.fill).sort(beats).pop()
+    const inkWinner = cascade.filter((entry) => entry.ink).sort(beats).pop()
+    if (!fillWinner || !inkWinner || fillWinner === inkWinner) return
+    if (ignore.some((probe) => probe.test(fillWinner.selector))) return
+    const id = `${fillWinner.selector}\n${inkWinner.selector}`
+    if (seen.has(id)) return
+    seen.add(id)
+    const inkColor = parseColor(inkWinner.ink, palette)
+    const fillColor = parseColor(fillWinner.fill, palette)
+    if (!inkColor || !fillColor) {
+      unresolvable.push({ selector: fillWinner.selector, ink: inkWinner.ink, fill: fillWinner.fill })
+      return
+    }
+    if (fillColor.a === 0) return
+    const ground = over(fillColor, page)
+    const glyph = glyphOnly.some((probe) => probe.test(fillWinner.selector) || probe.test(inkWinner.selector))
+    results.push({
+      theme,
+      selector: fillWinner.selector,
+      inkFrom: inkWinner.selector,
+      ink: inkWinner.ink,
+      fill: fillWinner.fill,
+      floor: glyph ? 3 : 4.5,
+      measured: ratio(over(inkColor, ground), ground),
+    })
+  }
+
+  for (const entry of entries) resolve(entry.parsed)
+  const classesOf = (entry) => [...entry.parsed.key].filter((simple) => simple.startsWith("."))
+  for (const withFill of entries.filter((entry) => entry.fill)) {
+    const shared = new Set(classesOf(withFill))
+    for (const withInk of entries.filter((entry) => entry.ink && entry !== withFill)) {
+      if (!classesOf(withInk).some((name) => shared.has(name))) continue
+      if (!compatible(withFill.parsed, withInk.parsed)) continue
+      resolve({
+        key: new Set([...withFill.parsed.key, ...withInk.parsed.key]),
+        ancestors: new Set([...withFill.parsed.ancestors, ...withInk.parsed.ancestors]),
+      })
+    }
+  }
+  return { results, unresolvable }
+}

@@ -39,7 +39,7 @@ import assert from "node:assert/strict"
 import { build } from "esbuild"
 
 import { PACKAGE_DIR } from "./host.mjs"
-import { sweep, themeBlock } from "../tools/contrast.mjs"
+import { cascadeSweep, sweep, themeBlock } from "../tools/contrast.mjs"
 
 let passed = 0
 let failed = 0
@@ -119,6 +119,27 @@ const EXEMPT = [
 ]
 
 /**
+ * Combinations the cascaded sweep reports that no builder can produce.
+ *
+ * `cascadeSweep` pairs any two rules that share a class and do not exclude each
+ * other in their own selectors. It cannot read the builders, so a pairing the
+ * DOM never makes can still come back measured; each such pairing is named here
+ * by BOTH rules, so it silences that one combination and nothing else about
+ * either rule. Same terms as `EXEMPT`: capped, and every row argues itself.
+ */
+const IMPOSSIBLE = [
+  {
+    fill: /^\.de-toolbar \.de-tool\[aria-pressed="true"\]$/,
+    ink: /^\.de-toolbar \.de-tool--commit:not\(\[disabled\]\)$/,
+    why:
+      "The commit square is an action, never a toggle: nothing writes `aria-pressed` " +
+      "on it, and `css/toolbar.ts` says no code path renders it at all today — the " +
+      "rule is kept only so the fill-versus-ink argument beside it stays pinned by " +
+      "toolbar-cases. A pressed commit is a state with no element.",
+  },
+]
+
+/**
  * Rules whose pair is real but whose ground this cannot resolve statically.
  *
  * Deliberately tiny, and the cap below is what keeps it that way.
@@ -151,6 +172,103 @@ for (const { theme, results } of swept) {
     )
   })
 }
+
+/*
+ * The pairs no single rule writes.
+ *
+ * Everything above reads one rule at a time, so it cannot see a state override
+ * that sets only the plate and keeps an ink some OTHER rule won. That is how
+ * the toolbar's open-panel toggles went white-on-white under the pointer in the
+ * light theme: the accent hover rule set `onAccent`, the toggles' own hover
+ * rule reset the plate to the neutral hover and said nothing about ink, and in
+ * the dark theme white and `text` are the same to the eye — so every review
+ * done in the default theme passed it. The armed row in the app menu was the
+ * mirror image — its danger rule set both halves, and the generic row hover
+ * out-ranked it for the plate alone.
+ *
+ * `cascadeSweep` resolves those: every rule's own state and every compatible
+ * pair of states, with the fill and the ink each won as the browser orders
+ * the rules.
+ */
+const cascaded = THEMES.map(([theme, selector]) => {
+  const palette = themeBlock(shellCss, selector)
+  return { theme, ...cascadeSweep(shellCss, { theme, palette, glyphOnly: GLYPH_ONLY }) }
+})
+const impossible = (row) => IMPOSSIBLE.some((entry) => entry.fill.test(row.selector) && entry.ink.test(row.inkFrom))
+
+for (const { theme, results } of cascaded) {
+  check(`every ${theme} state that keeps another rule's ink can still be read`, () => {
+    const under = results
+      .filter((row) => row.measured < row.floor)
+      .filter((row) => !EXEMPT.some((exempt) => exempt.probe.test(row.selector)))
+      .filter((row) => !impossible(row))
+      .sort((a, b) => a.measured - b.measured)
+      .map(
+        (row) =>
+          `      ${row.measured}:1 (owes ${row.floor}) ${row.selector}\n` +
+          `        ink ${row.ink} (won by ${row.inkFrom}) on ${row.fill}`
+      )
+    assert.equal(
+      under.length,
+      0,
+      `${under.length} ${theme} cascaded pair(s) under their floor — a rule sets the plate and leaves the ink to another:\n${under.join("\n")}`
+    )
+  })
+}
+
+check("the cascaded sweep is reading the real stylesheet, including the state that motivated it", () => {
+  const TOGGLE_HOVER = '.de-toolbar .de-tool--quiet[aria-pressed="true"]:hover'
+  for (const { theme, results, unresolvable } of cascaded) {
+    assert.ok(results.length >= 30, `only ${results.length} ${theme} cascaded pairs — the resolver stopped seeing the sheet`)
+    assert.ok(
+      unresolvable.length <= UNRESOLVABLE_CAP,
+      `${unresolvable.length} ${theme} cascaded pair(s) cannot be resolved, over the cap of ${UNRESOLVABLE_CAP}`
+    )
+    // A pressed panel toggle under the pointer, which now states both halves
+    // and so is measured by the one-rule sweep. If a refactor drops its ink
+    // again, it has to reappear here instead — asserted by name so neither
+    // sweep can go green by losing sight of it.
+    const measured =
+      results.some((row) => row.selector === TOGGLE_HOVER) ||
+      swept.find((row) => row.theme === theme).results.some((row) => row.selector === TOGGLE_HOVER)
+    assert.ok(measured, `${theme}: the pressed panel toggle's hover is measured by neither sweep`)
+  }
+})
+
+/*
+ * The inside of a filled row, which neither sweep can see.
+ *
+ * A token row takes the accent fill and `onAccent` when it is the binding, and
+ * its parts inherit that ink — unless a part declares its own, which beats an
+ * inherited value at any specificity. The glyph preview did: `text` on the
+ * indigo, 2.85:1 in light and a passing 4.76:1 in dark, so the chosen icon in
+ * the icon picker failed only in the theme nobody reviewed it in. Nothing in
+ * the selector says the swatch sits in the row, so no cascade read of the sheet
+ * can pair them; this pins the rule instead.
+ *
+ * Read off the sheet rather than listed, so a part that gains a colour next
+ * month is held to it the day it does.
+ */
+check("every token-row part with its own ink is re-inked on the selected row", () => {
+  const css = shellCss.replace(/\/\*[\s\S]*?\*\//g, "")
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, selector, body]) => ({
+    selectors: selector.split(",").map((s) => s.replace(/\s+/g, " ").trim()),
+    body,
+  }))
+  const inked = rules
+    .filter(({ body }) => /(^|[;\s])color\s*:/.test(body))
+    .flatMap(({ selectors }) => selectors)
+    .filter((s) => /^\.de-token-(row-[\w-]+|swatch[\w-]*)$/.test(s))
+  assert.ok(inked.includes(".de-token-swatch--glyph"), "the glyph preview no longer declares an ink — re-read this case")
+  for (const part of inked) {
+    const restated = rules.some(
+      ({ selectors, body }) =>
+        selectors.includes(`.de-token-row[aria-selected="true"] ${part}`) &&
+        /(^|[;\s])color\s*:\s*var\(--de-color-on-accent\b/.test(body)
+    )
+    assert.ok(restated, `${part} declares its own ink and keeps it on the selected row's indigo`)
+  }
+})
 
 /*
  * The sweep has to be MEASURING something, and this is the case that says so.
@@ -201,6 +319,16 @@ check("the exemptions are still few, and every one still matches something", () 
   // stopping the list above from becoming one.
   for (const { probe, why } of EXEMPT) {
     assert.ok(why && why.length > 80, `${probe} is exempt without saying why`)
+  }
+  // The same terms for combinations declared impossible: few, argued, and each
+  // still naming a pairing the sweep actually produces.
+  assert.ok(IMPOSSIBLE.length <= 2, `${IMPOSSIBLE.length} impossible combinations — each one is an unmeasured state`)
+  for (const entry of IMPOSSIBLE) {
+    assert.ok(entry.why && entry.why.length > 80, `${entry.fill} + ${entry.ink} is excused without saying why`)
+    assert.ok(
+      cascaded.some(({ results }) => results.some(impossible)),
+      `${entry.fill} + ${entry.ink} excuses nothing — the pairing is gone, so the entry is stale`
+    )
   }
 })
 

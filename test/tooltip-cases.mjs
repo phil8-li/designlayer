@@ -500,11 +500,11 @@ check("a card caught mid-close is pulled back at once", () => {
   assert.equal(popMs(), "0ms")
 })
 
-check("the surface is the kit's: inverse, 12px, 6x12, radius.lg", () => {
+check("the surface is the panel's ground, 12px, 6x12, radius.lg", () => {
   const box = /\.de-tip-box \{([^}]*)\}/s.exec(editor.tooltipCss)[1]
   assert.match(box, /border-radius: 12px/)
-  assert.match(box, /background: var\(--de-color-text/)
-  assert.match(box, /color: var\(--de-color-bg,/)
+  assert.match(box, /background: var\(--de-color-bg,/)
+  assert.match(box, /color: var\(--de-color-text/)
   const faceRule = /\.de-tip-face \{([^}]*)\}/s.exec(editor.tooltipCss)[1]
   assert.match(faceRule, /padding: 6px 12px/)
   assert.match(faceRule, /font-size: 12px/)

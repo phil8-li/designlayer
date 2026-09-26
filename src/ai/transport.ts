@@ -29,6 +29,6 @@ export async function requestAgent(apiBase: string, request: AgentRequest): Prom
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown error"
-    return { ok: false, message: `Could not reach the agent (${detail}). Check that designlayer is running, then send again.` }
+    return { ok: false, message: `Could not reach the agent. Check that designlayer is running, then send again (${detail}).` }
   }
 }

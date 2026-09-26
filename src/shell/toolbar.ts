@@ -101,7 +101,7 @@ import { canRedo, canUndo, onHistoryChange, redo, undo } from "../core/history"
 import { icon, type IconName, type IconWeight } from "../core/icons"
 import { swapMark, type SwapMark } from "../core/swap-mark"
 import { chordLabel, SHORTCUTS } from "../core/keymap"
-import { registerCommand } from "../core/commands"
+import { registerCommand, runCommand } from "../core/commands"
 import { onRemovalQueueChange } from "../core/removal"
 import { tokens, type ThemeName } from "../core/tokens"
 import type { EditorContext } from "../core/context"
@@ -501,22 +501,17 @@ export function installToolbar(context: EditorContext): void {
   /**
    * The button and the shortcut are the same call, not two that agree.
    *
-   * `travel` is what Cmd+Z runs and what the button runs, so the toast, the
-   * refresh and the disabled state cannot drift apart — which is the shape the
-   * old Undo button failed at from the other direction: it asked the vendor
-   * engine whether there was anything to undo, and the answer was always no.
+   * `travel` is what Cmd+Z runs and what the button runs, so the refresh and
+   * the disabled state cannot drift apart — which is the shape the old Undo
+   * button failed at from the other direction: it asked the vendor engine
+   * whether there was anything to undo, and the answer was always no.
+   *
+   * No toast. Undo and redo are direct manipulation: the canvas moving back is
+   * the report, and a card per ⌘Z stacked over the corner on every press.
    */
   const travel = (direction: "undo" | "redo") => {
-    const label = direction === "undo" ? undo() : redo()
-    const verb = direction === "undo" ? "Undo" : "Redo"
-    // The card offers the step straight back: a redo can be undone from the
-    // toast, an undo redone. Nothing is offered when nothing moved.
-    const back = direction === "undo" ? "redo" : "undo"
-    context.toast(
-      label ? `${verb}: ${label}` : `Nothing to ${direction}`,
-      "info",
-      label ? { label: back === "undo" ? "Undo" : "Redo", onClick: () => travel(back) } : undefined
-    )
+    if (direction === "undo") undo()
+    else redo()
     // The inspector reads the element, so the panel is stale until it re-reads.
     context.refresh()
   }
@@ -676,6 +671,36 @@ export function installToolbar(context: EditorContext): void {
     write: (next) => context.setState({ inspectorOpen: next }),
     quiet: true,
   })
+
+  /**
+   * Canvas view: every page of the app on one board, and back to the live page.
+   *
+   * Third in the bar, straight after the two modes: it is the other half of
+   * "where am I working" — one live page, or every page on a board — and it is
+   * reached for as often as they are. It is QUIET for the reason the panel
+   * toggles are: pressing it replaces the page with a board of frames, so an
+   * accent chip would be the third report of a change nobody can miss.
+   *
+   * It goes through commands rather than importing the board. The board installs
+   * after the toolbar (it needs the panels' insets to size itself), and a name
+   * resolved at click time is the same seam the keymap already uses — so the
+   * button and ⇧1 cannot drift into doing two different things.
+   *
+   * Hovering it starts loading the current page's frame, so the frame the page
+   * shrinks into on the way out has usually painted by the time the motion ends.
+   */
+  const canvasToggle = panelToggle({
+    label: "Canvas view",
+    glyph: "Grid2x2",
+    read: () => context.getState().canvasView,
+    write: () => void runCommand("view.canvas.toggle"),
+    key: keyFor("view.canvas"),
+    quiet: true,
+  })
+  canvasToggle.button.setAttribute("data-de-control", "canvas")
+  const prewarmCanvas = () => void runCommand("view.canvas.prewarm")
+  canvasToggle.button.addEventListener("pointerenter", prewarmCanvas)
+  canvasToggle.button.addEventListener("focus", prewarmCanvas)
 
   /**
    * Annotation mode, beside the mode switch rather than the panel toggles.
@@ -860,10 +885,13 @@ export function installToolbar(context: EditorContext): void {
   // What the clusters were protecting survives as ORDER, which costs nothing
   // and cannot be misread as a stray gap. Left to right: the mode leads, because
   // every other control's answer depends on which mode you are in; the notes
-  // toggle sits with it, because it is the other thing a click can mean; then
-  // time travel over what you did; then the chrome — how it is painted, the
-  // left panel, the right panel, and then all of it away. Hide is last because
-  // nothing is read after the control that takes the bar off screen.
+  // toggle sits with it, because it is the other thing a click can mean; the
+  // canvas view comes third, because it is the other half of "where am I
+  // working" — one live page, or every page on a board — and it is reached for
+  // as often as the modes are; then time travel over what you did; then the
+  // chrome — how it is painted, the left panel, the right panel, and then all
+  // of it away. Hide is last because nothing is read after the control that
+  // takes the bar off screen.
   //
   // The mirrored pair still has to stay adjacent and in screen order — a panel
   // on the left, a panel on the right — which is the one adjacency in this run
@@ -873,6 +901,7 @@ export function installToolbar(context: EditorContext): void {
     el("div", { class: "de-toolbar-group" }, [
       interactiveButton,
       annotateToggle.button,
+      canvasToggle.button,
       undoButton,
       redoButton,
       themeButton,
@@ -993,6 +1022,7 @@ export function installToolbar(context: EditorContext): void {
     layersToggle.paint()
     inspectorToggle.paint()
     annotateToggle.paint()
+    canvasToggle.paint()
     undoButton.toggleAttribute("disabled", !canUndo())
     redoButton.toggleAttribute("disabled", !canRedo())
     /*
@@ -1044,6 +1074,7 @@ export function installToolbar(context: EditorContext): void {
       next.annotating === previous.annotating &&
       next.layersOpen === previous.layersOpen &&
       next.inspectorOpen === previous.inspectorOpen &&
+      next.canvasView === previous.canvasView &&
       next.dirty === previous.dirty
     ) {
       return

@@ -139,6 +139,22 @@ export interface DesignLayerConfig {
   designSystem: DesignSystemCatalog
   icons: IconSetConfig
   host: HostConfig
+  /**
+   * Whether the launcher serving this page keeps the bundle out of the board's
+   * frames (runtime/board-frame.mjs). A prelude that does not say so came from
+   * an editor started before that guard, and canvas view refuses to open there
+   * rather than load pages that would each start a second editor. No prelude at
+   * all — a test, a bundle loaded by hand — has no launcher to be stale.
+   */
+  boardFrames: boolean
+  /**
+   * DesignLayer.app's desk on this Mac, as an origin, or null where the app is
+   * not installed — every machine that is not a Mac with it, and every page
+   * with no prelude. The launcher decides (runtime/mac-desk.mjs); the chrome
+   * never probes for it, because a probe that fails prints into the console of
+   * the app under the overlay.
+   */
+  deskUrl: string | null
 }
 
 
@@ -264,6 +280,8 @@ const FALLBACK: DesignLayerConfig = {
   designSystem: emptyDesignSystem(STANDARD_BREAKPOINTS),
   icons: { attribute: "", available: false },
   host: { framework: "react", tailwind: true },
+  boardFrames: true,
+  deskUrl: null,
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -339,6 +357,16 @@ function readLoopbackUrl(value: unknown): string | null {
 }
 
 /**
+ * The same check, down to the origin. `URL.href` writes an empty path back as a
+ * trailing slash, and an origin compared against `http://127.0.0.1:3000` or
+ * joined to a path must not carry one.
+ */
+function readLoopbackOrigin(value: unknown): string | null {
+  const checked = readLoopbackUrl(value)
+  return checked === null ? null : new URL(checked).origin
+}
+
+/**
  * Read per leaf, like `readHost`: a session that knows the app's name but not
  * its port yet is the normal state during a `--dev` launch, not a broken
  * payload, and losing the name over the missing URL would blank the control
@@ -346,13 +374,12 @@ function readLoopbackUrl(value: unknown): string | null {
  */
 function readApp(value: unknown): AppConfig {
   if (!isRecord(value)) return FALLBACK.app
-  const checked = readLoopbackUrl(value.url)
   return {
-    // The origin, not the checked href. `URL.href` writes an empty path back as
-    // a trailing slash, and the chooser's rows carry `http://127.0.0.1:3000`
-    // with none — so the two spellings of the same app would never compare
-    // equal and the menu would mark no row as the one already open.
-    url: checked === null ? null : new URL(checked).origin,
+    // The origin, not the checked href: the chooser's rows carry
+    // `http://127.0.0.1:3000` with no trailing slash, so the two spellings of
+    // the same app would never compare equal and the menu would mark no row as
+    // the one already open.
+    url: readLoopbackOrigin(value.url),
     name: typeof value.name === "string" && value.name.length > 0 ? value.name : null,
   }
 }
@@ -433,6 +460,8 @@ function read(): DesignLayerConfig {
     designSystem: readDesignSystem(raw.designSystem, breakpoints, containerBreakpoints),
     icons: readIconSet(raw.icons),
     host: readHost(raw.host),
+    boardFrames: raw.boardFrames === true,
+    deskUrl: readLoopbackOrigin(raw.deskUrl),
   }
 }
 

@@ -360,7 +360,9 @@ check("no glyph's stroke is clipped by the viewBox at any rung", () => {
  * closed stroked silhouette — and a flood fills that correctly. The
  * requirement left with the drawing.
  */
-const COUNTERPARTS = ["PanelLeft", "PanelRight", "Cursor"]
+// `Grid2x2` is the second kind: the canvas toggle's frame and two dividers,
+// which a flood turns into a blank square in the one state that matters.
+const COUNTERPARTS = ["PanelLeft", "PanelRight", "Cursor", "Grid2x2"]
 
 check("a glyph is one drawing, unless a flood cannot draw it at all", () => {
   for (const name of ICON_NAMES) {
@@ -982,9 +984,11 @@ check("no glyph is re-windowed, because a stroke cannot survive it", () => {
  * grid). They are no longer twins: `X` is the kit's own drawing and `Plus` is
  * the Lucide glyph the kit retains, drawn to Lucide's smaller budget. The
  * kit's budget is "painted extent about 22 of 24" (ADOPTION-GUIDE § 6), which
- * its frames — `Image`, `ExternalLink` — fill exactly, and the kit's cross is
- * pulled in from that. If a future change reintroduced box normalisation, the
- * cross would come out at 22 and this would fail. That is the point: the naive
+ * its frames — `Image`, `ExternalLink` — fill exactly; the build scales the
+ * kit's family uniformly onto this set's 20-unit budget, so the frames ink 20
+ * and the kit's cross stays pulled in from them by the kit's own ratio. If a
+ * future change reintroduced per-glyph box normalisation, the cross would come
+ * out at the frame's size and this would fail. That is the point: the naive
  * fix for "the icons are inconsistent sizes" is exactly the change that breaks
  * them.
  */
@@ -994,7 +998,7 @@ check("a diagonal glyph is drawn smaller than an axis-aligned one", () => {
     return Math.max(ink.width, ink.height)
   }
   const frame = box("Image")
-  assert.ok(Math.abs(frame - 22) < 0.5, `the kit's frame inks ${frame.toFixed(2)}, not its 22-unit budget`)
+  assert.ok(Math.abs(frame - 20) < 0.5, `the kit's frame inks ${frame.toFixed(2)}, not the set's 20-unit budget`)
   const x = box("X")
   assert.ok(x < frame - 2, `X (${x.toFixed(2)}) is not pulled in from the frame (${frame.toFixed(2)})`)
   // And not so far in that it stops reading as the same size mark.

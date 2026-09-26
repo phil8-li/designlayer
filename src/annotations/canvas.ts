@@ -19,7 +19,7 @@
 import { clamp, el, isCanvasElement, isChrome } from "../core/dom"
 import { icon } from "../core/icons"
 import { tokens } from "../core/tokens"
-import { arriveFrom, prefersReducedMotion } from "../core/motion"
+import { arriveFrom, playExit, prefersReducedMotion } from "../core/motion"
 import { editorOwnsInput } from "../core/store"
 import type { EditorContext } from "../core/context"
 import { MARKER } from "../core/css/annotations"
@@ -150,50 +150,6 @@ interface Gesture {
   selectedText: string | null
 }
 
-
-/** The kit's popover dismissal, parsed once from the ramp it is written on. */
-const EXIT_MS = Number.parseFloat(tokens.duration.exit)
-
-/**
- * Plays the composer's 150ms exit on an inert COPY, in a sibling layer.
- *
- * The composer has to be gone the instant it is saved or cancelled — its
- * Escape handler is released, the pin it made is already landing, and every
- * caller (and suite) treats "closed" as "not in the layer". The kit still asks
- * for a bounded fade so the card does not vanish in the frame of the click, so
- * the fade plays on a clone: typed text copied over (a clone keeps a
- * textarea's default value, not its current one), ids and the dialog role
- * stripped, `inert` and `aria-hidden`, in a shallow copy of the layer placed
- * after it so it lands on the same coordinates without being a child of the
- * real one. Both go when the animation ends, or on the timer when it never
- * does (jsdom, a background tab). Skipped under reduced motion, where the base
- * blanket takes the fade to nothing anyway.
- */
-function playExit(card: HTMLElement, layer: HTMLElement): void {
-  if (prefersReducedMotion() || !card.isConnected || !layer.parentElement) return
-  const ghost = card.cloneNode(true) as HTMLElement
-  const typed = card.querySelector("textarea")
-  const copy = ghost.querySelector("textarea")
-  if (typed && copy) copy.value = typed.value
-  ghost.removeAttribute("role")
-  ghost.removeAttribute("aria-label")
-  for (const node of ghost.querySelectorAll("[id]")) node.removeAttribute("id")
-  ghost.classList.add("de-ann-composer--leaving")
-  const stage = layer.cloneNode(false) as HTMLElement
-  stage.removeAttribute("id")
-  stage.setAttribute("aria-hidden", "true")
-  stage.inert = true
-  stage.append(ghost)
-  layer.after(stage)
-  let gone = false
-  const remove = (): void => {
-    if (gone) return
-    gone = true
-    stage.remove()
-  }
-  ghost.addEventListener("animationend", remove, { once: true })
-  window.setTimeout(remove, EXIT_MS + 50)
-}
 
 export function installAnnotations(context: EditorContext): void {
   const layer = el("div", { class: "de-ann-layer" })
@@ -460,7 +416,8 @@ export function installAnnotations(context: EditorContext): void {
 
     const close = (): void => {
       window.removeEventListener("keydown", onKey, true)
-      if (composer) playExit(composer, layer)
+      // Gone now, faded on an inert copy (`playExit` in core/motion).
+      if (composer) playExit(composer)
       composer?.remove()
       composer = null
       dismiss = () => {}
@@ -801,7 +758,6 @@ export function installAnnotations(context: EditorContext): void {
    * every frame of a scroll.
    */
   const paint = (): void => {
-    const settings = annotationSettings()
     // Stood-down chrome answers the same way `hideUntilRestart` does: an editor
     // that has handed the page back must not leave its own marks over it. And
     // the audit layer answers alongside it: `notePinsVisible` is the hide
@@ -814,24 +770,6 @@ export function installAnnotations(context: EditorContext): void {
     // just the hide setting: a mode whose surfaces have stood down must not have
     // one of them painted back in by the next frame of a scroll.
     const hoverRect = showing && hovered?.isConnected ? hovered.getBoundingClientRect() : null
-
-    /*
-     * On the DOCUMENT, not on the layer.
-     *
-     * Once, rather than on each pin: the colour is one fact about the set, and
-     * a hundred inline fills would be a hundred style writes per settings
-     * change to say it. But the layer is the wrong place to say it, because the
-     * pins are not the only thing wearing this colour — the Notes panel draws
-     * the same numbered disc beside every row, and the panel is a sibling
-     * subtree, not a descendant of the canvas layer.
-     *
-     * Published on the layer, `var(--de-ann-color, …)` resolved for the pins
-     * and fell through to the fallback everywhere else, so picking blue turned
-     * the canvas blue and left every disc in the panel coral. `<html>` is the
-     * only ancestor the canvas overlay, the docked panels and the popovers all
-     * share — the same reason `css/base.ts` declares the theme palette there.
-     */
-    document.documentElement.style.setProperty("--de-ann-color", settings.markerColor)
 
     /**
      * Which items ended up on screen this frame.

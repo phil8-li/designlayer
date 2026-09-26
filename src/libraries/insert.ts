@@ -915,7 +915,7 @@ export async function insertComponent(
       return
     }
     const reason = result.failed[0]?.reason ?? "the server wrote nothing"
-    editor.toast(`Could not insert ${component.name}: ${reason}`, "error")
+    editor.toast({ title: `Could not insert ${component.name}`, description: `${reason[0].toUpperCase()}${reason.slice(1)}.` }, "error")
   } catch (error) {
     editor.toast(error instanceof Error ? error.message : `Could not insert ${component.name}`, "error")
   } finally {

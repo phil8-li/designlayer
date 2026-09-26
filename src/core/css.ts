@@ -11,6 +11,7 @@ import { panelsCss } from "./css/panels"
 import { inspectorCss } from "./css/inspector"
 import { leftTabsCss } from "./css/left-tabs"
 import { appChooserCss } from "./css/app-chooser"
+import { macAppCss } from "./css/mac-app"
 import { codeCss } from "./css/code"
 import { annotationsCss } from "./css/annotations"
 import { layersCss } from "./css/layers"
@@ -56,6 +57,9 @@ export const shellCss =
   // card declares its own stacking outright — it cannot be reordered into or
   // out of correctness, so the trigger is what decides where this entry lands.
   appChooserCss +
+  // The foot of the same panel, drawn as the chooser's mirror, so the two read
+  // side by side here the way they do on screen.
+  macAppCss +
   codeCss +
   annotationsCss +
   layersCss +

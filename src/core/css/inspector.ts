@@ -320,5 +320,5 @@ export const inspectorCss = `/* ---------- inspector tabs ---------- */
 }
 /* An author \`display\` beats the UA [hidden] rule, so restate it. */
 .de-tabpanel[hidden] { display: none; }
-/* No scrollbar skin of its own: the kit's auto-hiding bar in css/base.ts. */
+/* No native bar inside a panel: the overlay thumb in css/panels.ts. */
 `

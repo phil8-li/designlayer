@@ -38,6 +38,7 @@ import { holdScroll } from "../../core/scroll"
 import { leaveRow } from "../../core/leave"
 import { swapMark } from "../../core/swap-mark"
 import { icon, type IconName } from "../../core/icons"
+import { TIP_ATTR, TIP_WRAP_ATTR } from "../../core/tooltip"
 import {
   annotationSettings,
   markersVisible,
@@ -59,7 +60,8 @@ import {
   type OutputDetail,
 } from "../../annotations/types"
 import type { EditorContext } from "../../core/context"
-import { plainSection, section, selectField } from "./field"
+import type { ToastMessage } from "../../core/toast"
+import { section, selectField } from "./field"
 import type { InspectorTab } from "./tab-code"
 import { tokens } from "../../core/tokens"
 import { plural } from "../../core/format"
@@ -88,12 +90,8 @@ import { plural } from "../../core/format"
  * Settings for, and this block is small enough that every row in it has to
  * earn the line.
  *
- * `markerColor` survives untouched — `annotations/types.ts` still defaults it,
- * `annotations/store.ts` still migrates a stored one off the retired palette,
- * and `annotations/canvas.ts` still paints `--de-ann-color` from it. A project
- * that needs a different pin sets it there, once, rather than by hunting seven
- * circles in a fold. Nothing downstream learned that the picker went away,
- * which is the same bargain the `<input type="color">` removal made.
+ * `markerColor` is retired with it: the pin wears the chrome's indigo accent,
+ * and `annotations/store.ts` drops a stored value like any other retired key.
  */
 
 /**
@@ -359,13 +357,22 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    */
   const committer = createApply({
     bridge: editor.bridge,
-    toast: (message: string, kind?: "info" | "error") => editor.toast(message, kind),
+    toast: (message: ToastMessage, kind?: "info" | "error") => editor.toast(message, kind),
     onChange: () => render(),
   })
 
+  /**
+   * Has an agent completed an MCP handshake during this page load?
+   *
+   * Latched rather than live: an agent that drops off mid-session is still
+   * configured, and the queue holds a send until it comes back. Before the
+   * first handshake there is nobody to send to, so the button never offers it.
+   */
+  let agentReady = false
+
   /** What the primary button would do right now, or null when nothing. */
   function primaryMode(): "send" | "apply" | null {
-    if (needsAgent()) return "send"
+    if (agentReady && needsAgent()) return "send"
     if (committer.hasPendingChanges()) return "apply"
     return null
   }
@@ -374,6 +381,9 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     const mode = primaryMode()
     const send = sending ? primaryButton.dataset.mode === "send" : mode === "send"
     if (!sending) primaryButton.dataset.mode = mode ?? ""
+    // With no agent and nothing writable the button has nothing it could ever
+    // do, so it leaves rather than sitting disabled beside Copy.
+    primaryButton.hidden = !sending && mode === null && !agentReady
     primaryButton.disabled = sending || mode === null
     primaryButton.title = send
       ? "Write what it can to your files, send the rest to your agent"
@@ -397,6 +407,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         apiBase: editor.apiBase,
         committer,
         toast: (message, kind) => editor.toast(message, kind),
+        sendToAgent: agentReady,
       })
     } finally {
       sending = false
@@ -573,56 +584,24 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * marker was dropped is a panel nobody finishes reading.
    */
   /*
-   * No fold at all: Settings is a `plainSection()`, always open. Four switches
-   * and an address are not worth a click on every visit.
+   * Settings folds like every other `section()`, but starts open: the fold is
+   * there for a reader who wants the list alone, not a default that hides it.
    */
   const settingsBody = el("div", { class: "de-ann-settings-body", id: "de-ann-settings-body" })
   /**
-   * The explanation, moved off the row and onto a dot beside the label.
+   * A setting's name, carrying its hint as the tooltip on hover.
    *
-   * Every setting used to carry its hint as a two-to-three line paragraph
-   * underneath it. Six of those turned a 260px panel into an essay and pushed
-   * the marker color row below the fold on a 900px screen — the setting most
-   * likely to be wrong on any given project was the one you had to scroll a
-   * wall of prose to reach. Moving them in here made a row one line again —
-   * and then it made the length of a hint invisible, which is how three of them
-   * grew a second sentence defending the default. ONE SENTENCE each, and it has
-   * to say something the label does not: a hint that restates its own label is
-   * a dot the reader learns to stop pressing.
+   * Every setting used to carry its hint as a paragraph under it, then as a
+   * help dot beside the label. The dot is gone too: hovering the name is how a
+   * reader asks what a setting means, so the name opens the sentence itself.
+   * ONE SENTENCE each, and it has to say something the label does not.
    *
-   * `title` is the sighted affordance and is mouse-only, so the same sentence
-   * is repeated in `aria-description`: without it, a keyboard user tabbing
-   * through hits a dot that announces nothing but its own existence, which is
-   * the worst of both — a stop on the tab order that carries no information.
-   * `aria-description` rather than a visually hidden `aria-describedby` span
-   * because the stylesheet has no hidden-text class to lend, and faking one
-   * inline would be the only inline style in this file that is not a swatch's
-   * own color.
-   *
-   * `InfoMark` and not `Info`: the dot IS the circle. `Info` is a ring with an
-   * `i` in it, and drawn at 12px inside this 14px disc the two circles sat
-   * 1.4px apart and the `i` between them came to a 1.25px stroke over 2px of
-   * stem — which is what the dot was reported for, a ring with a smudge in it.
-   * `InfoMark` is the same glyph with Lucide's ring dropped and the `i` scaled
-   * to fill the disc that was already drawing one.
+   * The tooltip card is `aria-hidden` and the label is not focusable, so the
+   * same sentence goes on the row's switch as `aria-description` — see
+   * `switchRow` and the Show pins row.
    */
-  function helpDot(setting: string, hint: string): HTMLButtonElement {
-    return el(
-      "button",
-      {
-        class: "de-ann-help",
-        type: "button",
-        title: hint,
-        "aria-label": `Help: ${setting}`,
-        "aria-description": hint,
-      },
-      [icon("InfoMark", tokens.icon.marker)]
-    )
-  }
-
-  /** Name and dot as ONE flex child, so a control can sit opposite the pair. */
-  function labelWith(text: Node | string, help: HTMLElement): HTMLElement {
-    return el("span", { class: "de-ann-setting-label" }, [text, help])
+  function hintedLabel(text: string, hint: string): HTMLElement {
+    return el("span", { class: "de-ann-setting-label", [TIP_ATTR]: hint, [TIP_WRAP_ATTR]: "" }, [text])
   }
 
   /**
@@ -684,10 +663,8 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
     onCommit: (value: boolean) => void
   ): { row: HTMLElement; toggle: HTMLButtonElement } {
     const toggle = switchControl(label, onCommit)
-    const row = el("div", { class: "de-ann-setting" }, [
-      labelWith(label, helpDot(label, hint)),
-      toggle,
-    ])
+    toggle.setAttribute("aria-description", hint)
+    const row = el("div", { class: "de-ann-setting" }, [hintedLabel(label, hint), toggle])
     return { row, toggle }
   }
 
@@ -718,9 +695,11 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * reads "restart" and bounces their dev server has spent a minute on
    * something Cmd+R does, with the setting looking broken meanwhile.
    */
+  const SHOW_PINS_HINT = "Off hides pins until you reload."
   const hideMarkers = switchControl("Show pins", (value) =>
     updateSettings({ hideUntilRestart: !value })
   )
+  hideMarkers.setAttribute("aria-description", SHOW_PINS_HINT)
   const clearOnCopy = switchRow(
     "Clear on copy or send",
     // The label already says when. The hint owes the two facts it does not:
@@ -772,7 +751,26 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
    * stays the same across restarts and can be typed into a config file once.
    */
   const mcpAddress = el("code", { class: "de-mcp-url" }, ["checking…"])
-  const mcpState = el("div", { class: "de-mcp-state" }, [""])
+  /*
+   * The status, as a mark in the MCP section header rather than a sentence
+   * under the address. The sentence survives as its name and tooltip; the
+   * mark's SHAPE carries the state as well as its colour — filled when an
+   * agent is attached, a ring while waiting for one, dashed when the port is
+   * down — so the state is not left to colour alone.
+   */
+  const mcpState = el("span", {
+    class: "de-mcp-state",
+    role: "img",
+    "data-de-state": "checking",
+    "aria-label": "MCP: checking",
+    title: "Checking…",
+  })
+
+  function setMcpState(state: "on" | "idle" | "off", sentence: string): void {
+    mcpState.dataset.deState = state
+    mcpState.setAttribute("aria-label", `MCP: ${sentence}`)
+    mcpState.title = sentence
+  }
 
   /*
    * The SAME Copy, because it is the same panel.
@@ -820,13 +818,13 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
         try {
           void navigator.clipboard.writeText(url).catch(() => {
             undoMcpCopied()
-            editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
+            editor.toast("Clipboard access blocked. Allow it for this site, then copy again", "error")
           })
           showMcpCopied()
-          editor.toast("Copied. Paste into your agent’s MCP settings.")
+          editor.toast({ title: "Copied the MCP address", description: "Paste it into your agent’s MCP settings." })
         } catch {
           undoMcpCopied()
-          editor.toast("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
+          editor.toast("Clipboard access blocked. Allow it for this site, then copy again", "error")
         }
       },
     },
@@ -874,67 +872,46 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
        * worth reading rather than worth ignoring.
        */
       if (!status.url || !status.listening) {
-        mcpState.textContent =
-          "Not running. Another editor may be using the port."
-        mcpState.dataset.deState = "off"
+        setMcpState("off", "Not running. Another editor may be using the port.")
       } else if (status.agents < 1) {
-        mcpState.textContent = "No agent connected. Paste this address into your agent."
-        mcpState.dataset.deState = "idle"
+        setMcpState("idle", "No agent connected. Paste this address into your agent.")
       } else if (status.waiting > 0) {
-        mcpState.textContent = "Connected. Waiting for changes."
-        mcpState.dataset.deState = "on"
+        setMcpState("on", "Connected. Waiting for changes.")
       } else {
         // Attached but not parked in `wait_for_change`. A working setup, mid-turn
         // — and it must not read as a broken one, or a correct configuration
         // looks like a failure every time the agent goes off to do its job.
-        mcpState.textContent = "Connected. Your agent is working."
-        mcpState.dataset.deState = "on"
+        setMcpState("on", "Connected. Your agent is working.")
+      }
+      // The first handshake is what makes "Send to agent" worth offering.
+      if (!agentReady && status.url && status.listening && status.agents > 0) {
+        agentReady = true
+        paintPrimary()
       }
     } catch {
       // A dead route reads the same as a refusal, the bargain `ai/transport.ts`
       // makes too: say nothing confident rather than invent a state.
-      mcpState.textContent = "Could not reach the DesignLayer server."
-      mcpState.dataset.deState = "off"
+      setMcpState("off", "Could not reach the DesignLayer server.")
     }
   }
 
+  /*
+   * MCP IS ITS OWN SECTION, above Settings.
+   *
+   * It is an address and a status, not a setting anybody sets, so it no longer
+   * sits in the Settings fold as a stacked row. "MCP", not "Your coding agent":
+   * a designer told "your coding agent" is not working restarts their agent,
+   * when what is actually down is this editor's MCP server.
+   */
+  const mcpBody = el("div", { class: "de-mcp" }, [
+    // A field-and-action pair: Copy sits beside the address at its height, and
+    // wraps under it only when the panel cannot fit the whole address.
+    el("div", { class: "de-mcp-row" }, [mcpAddress, mcpCopy]),
+  ])
+
   settingsBody.append(
     /*
-     * FIRST, above everything about markers.
-     *
-     * The order of this fold is "what stops you working" before "what you might
-     * prefer". Marker colour is a preference; not having an agent attached
-     * means "Send to agent" quietly does nothing when pressed. That belongs at
-     * the top.
-     */
-    el("div", { class: "de-ann-setting-group de-mcp" }, [
-      el("div", { class: "de-ann-setting de-ann-setting--stacked" }, [
-        /*
-       * "MCP", not "Your coding agent".
-       *
-       * The friendlier phrasing described the PERSON'S tool rather than the
-       * thing on this row, and that mattered the moment something went wrong:
-       * a designer told "your coding agent" is not working goes and restarts
-       * their agent, when what is actually down is this editor's MCP server.
-       * The field names what it is, and the help text says what to do with it —
-       * which is the split that lets a designer describe the problem to
-       * somebody else accurately.
-       */
-        labelWith(
-          "MCP",
-          helpDot(
-            "MCP",
-            "Paste into your agent’s MCP settings. It stays the same across restarts."
-          )
-        ),
-        // Copy under the address, not beside it: side by side, the button took
-        // the width the URL needs and pushed it onto a second line.
-        el("div", { class: "de-mcp-row" }, [mcpAddress, mcpCopy]),
-        mcpState,
-      ]),
-    ]),
-    /*
-     * Group two is everything else, and it is ONE group now.
+     * ONE group, everything a designer sets.
      *
      * There were three: Show markers on its own, Marker colour on its own, and
      * the three checkboxes under a rule. The rules between them were drawing a
@@ -942,10 +919,6 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * edge versus left — and the controls stopped making it. Four rows that
      * look the same and behave the same, separated by two hairlines, would be
      * the block claiming three kinds of setting and showing one.
-     *
-     * It stays a separate group from MCP, which genuinely is another kind — an
-     * address and a status, not a setting anybody sets — but the gap between
-     * them carries that now, not a rule.
      *
      * Settings that used to live here and are gone, for the record. Output
      * detail moved to the strip above the list, where the thing it governs is.
@@ -957,12 +930,9 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      */
     el("div", { class: "de-ann-setting-group" }, [
       el("div", { class: "de-ann-setting" }, [
-        labelWith(
-          "Show pins",
-          // Stated forward to match the switch. The hint carries the half the
-          // label cannot: that turning it off is scoped to this page load.
-          helpDot("Show pins", "Off hides pins until you reload.")
-        ),
+        // Stated forward to match the switch. The hint carries the half the
+        // label cannot: that turning it off is scoped to this page load.
+        hintedLabel("Show pins", SHOW_PINS_HINT),
         hideMarkers,
       ]),
       clearOnCopy.row,
@@ -1048,10 +1018,17 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
   const empty = emptyState()
 
   /*
-   * Settings is the one block ALWAYS in the column, so it anchors everything
-   * inserted above it.
+   * MCP and Settings are the two blocks ALWAYS in the column; MCP comes first,
+   * so it anchors everything inserted above it.
    */
-  const settingsSection = plainSection("Settings", settings)
+  const mcpSection = section(
+    "MCP",
+    mcpBody,
+    mcpState,
+    false,
+    "Paste into your agent’s MCP settings. It stays the same across restarts."
+  )
+  const settingsSection = section("Settings", settings)
 
   const node = el("div", { class: "de-ann" }, [
     empty,
@@ -1061,6 +1038,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * cannot hide the button that finishes the session.
      */
     ctas,
+    mcpSection,
     settingsSection,
   ])
 
@@ -1363,7 +1341,7 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
            */
           if (!result.queueCleared && isEditQueued(edit.id)) {
             editor.toast(
-              "Removed from the list, but still queued. Apply to code will write it.",
+              { title: "Still queued", description: "Removed from the list, but Apply to code will still write it." },
               "error"
             )
           }
@@ -1497,8 +1475,8 @@ export function annotationsTab(editor: EditorContext): InspectorTab {
      * because each block goes in before a sibling already in the column.
      */
     const shown = filled || committer.hasPendingChanges()
-    place(ctas, shown, settingsSection)
-    place(outboxSection, shown, inColumn(ctas) ? ctas : settingsSection)
+    place(ctas, shown, mcpSection)
+    place(outboxSection, shown, inColumn(ctas) ? ctas : mcpSection)
     place(empty, !shown, node.firstChild)
     // Last: the release measures the rebuilt column.
     hold.release()

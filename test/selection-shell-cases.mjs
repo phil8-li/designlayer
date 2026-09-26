@@ -85,6 +85,7 @@ const bundled = await build({
       export { shellCss } from "./src/core/css"
       export { mountShell } from "./src/shell/shell"
       export { editorOwnsInput, setState } from "./src/core/store"
+      export { record, canUndo, canRedo, resetHistory } from "./src/core/history"
     `,
     resolveDir: PACKAGE_DIR,
     loader: "ts",
@@ -786,15 +787,24 @@ await check("a bare period, and one typed into a field, are left alone", () => {
  * ⌘. branch now runs first.
  */
 await check("cmd+z and shift+cmd+z reach history, not just the keymap", () => {
-  // The toolbar routes its report through `bridge.toast`, which the stub at the
-  // top of this file owns — so the words are readable from here without
-  // reaching into the shell.
+  // One real step on the timeline, so each press has something to move — the
+  // step's own callbacks are the proof the handler reached history.
+  editorModule.resetHistory()
+  const moved = []
+  editorModule.record({
+    label: "Probe",
+    undo: () => moved.push("undo"),
+    redo: () => moved.push("redo"),
+  })
   toasts.length = 0
   press({ key: "z", ...accelerator })
+  assert.equal(editorModule.canRedo(), true, "cmd+z did not reach history")
   press({ key: "z", shiftKey: true, ...accelerator })
-  // An empty stack still reports, and that report is the proof the handler ran:
-  // nothing else in the chrome says these words.
-  assert.deepEqual(toasts, ["Nothing to undo", "Nothing to redo"])
+  assert.equal(editorModule.canUndo(), true, "shift+cmd+z did not reach history")
+  assert.deepEqual(moved, ["undo", "redo"])
+  // Undo and redo are direct manipulation: the canvas is the report.
+  assert.deepEqual(toasts, [], "undo or redo raised a toast")
+  editorModule.resetHistory()
 })
 
 await check("cmd+z is claimed from the page and the vendor's guard", () => {

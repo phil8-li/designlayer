@@ -644,7 +644,7 @@ console.log("\nThe settings")
 
 check("hideUntilRestart is refused on read, however it got onto disk", () => {
   reset()
-  editor.updateSettings({ hideUntilRestart: true, markerColor: "#00a0ff" })
+  editor.updateSettings({ hideUntilRestart: true, clearOnCopy: true })
   assert.equal(editor.markersVisible(), false, "hiding the markers did nothing in the live session")
 
   const raw = window.localStorage.getItem(SETTINGS_KEY)
@@ -656,7 +656,7 @@ check("hideUntilRestart is refused on read, however it got onto disk", () => {
   assert.equal(editor.annotationSettings().hideUntilRestart, false, "the hide survived a restart")
   assert.equal(editor.markersVisible(), true)
   // And the rest of the blob did come back, or the case above proves nothing.
-  assert.equal(editor.annotationSettings().markerColor, "#00a0ff", "no setting was restored at all")
+  assert.equal(editor.annotationSettings().clearOnCopy, true, "no setting was restored at all")
 })
 
 check("a settings blob from an older build merges over the defaults", () => {
@@ -736,12 +736,11 @@ check("a settings change wakes the marker layer too, not just the settings panel
   const woken = []
   const stopNotes = editor.onAnnotationsChange(() => woken.push("notes"))
   const stopSettings = editor.onSettingsChange(() => woken.push("settings"))
-  editor.updateSettings({ markerColor: "#123456" })
+  editor.updateSettings({ clearOnCopy: true })
   stopNotes()
   stopSettings()
-  // Colour and visibility live in settings and the canvas reads both, so a
-  // settings write that only told the settings panel would change the colour
-  // of markers that never repaint.
+  // The canvas reads visibility and scope from settings, so a settings write
+  // that only told the settings panel would leave markers that never repaint.
   assert.deepEqual(woken, ["settings", "notes"])
 })
 
@@ -1821,13 +1820,14 @@ check("an empty session is the empty state and Settings — no headings, no butt
    * A row of controls over an empty state is the panel offering its ending
    * before anything has begun.
    *
-   * What is left is the sentence saying what the tab is for, and Settings.
+   * What is left is the sentence saying what the tab is for, MCP, and Settings.
    */
   assert.deepEqual(
     Array.from(pane.children).map((node) => node.className),
-    ["de-empty de-ann-empty", "de-section"]
+    ["de-empty de-ann-empty", "de-section", "de-section"]
   )
-  assert.ok(sections()[0].querySelector(".de-ann-settings"), "the one section left is not Settings")
+  assert.ok(sections()[0].querySelector(".de-mcp"), "the first section left is not MCP")
+  assert.ok(sections()[1].querySelector(".de-ann-settings"), "the last section left is not Settings")
   // The old shapes, stated as negatives so neither can quietly come back.
   assert.equal(pane.querySelector(".de-ann-footer"), null, "the footer survived the restructure")
   assert.equal(pane.querySelector(".de-ann-group"), null, "the groups came back inside a section")
@@ -1839,11 +1839,11 @@ check("the whole-session buttons arrive with the first thing the session holds",
 
   note(saveButton, "Something to hand over")
   assert.ok(pane.querySelector(".de-ann-ctas"), "a note did not bring the buttons back")
-  // Under the list and above Settings, which is the position that makes their
-  // scope readable: they act on everything written above them.
+  // Under the list and above MCP and Settings, which is the position that makes
+  // their scope readable: they act on everything written above them.
   assert.deepEqual(
     Array.from(pane.children).map((node) => node.className),
-    ["de-section", "de-ann-ctas", "de-section"]
+    ["de-section", "de-ann-ctas", "de-section", "de-section"]
   )
 
   seedTab()
@@ -1860,7 +1860,7 @@ check("a note brings the Notes and edits section with it, holding the detail men
    */
   assert.deepEqual(
     Array.from(pane.children).map((node) => node.className),
-    ["de-section", "de-ann-ctas", "de-section"]
+    ["de-section", "de-ann-ctas", "de-section", "de-section"]
   )
   const notes = sections()[0]
   assert.equal(notes.querySelector(".de-section-title").textContent.trim(), "Notes and edits")
@@ -1911,21 +1911,29 @@ check("one outbox heading, and Settings is said once", () => {
    */
   assert.deepEqual(
     titles.map((node) => node.textContent.trim()),
-    ["Notes and edits", "Settings"]
+    ["Notes and edits", "MCP", "Settings"]
   )
-  assert.equal(titles[1].tagName, "SPAN", "the settings title is a control again")
-  // Settings never folds: no toggle, no chevron, and the body is always open.
-  const settingsHeader = sections()[1].querySelector(".de-section-header")
-  assert.equal(settingsHeader.querySelector(".de-section-toggle"), null, "settings grew a fold")
-  assert.equal(settingsHeader.querySelector(".de-chevron"), null, "settings grew a chevron")
+  assert.equal(titles[2].tagName, "SPAN", "the settings title is a control again")
+  // Settings folds like the outbox: a toggle and a chevron, open on arrival.
+  const settingsHeader = sections()[2].querySelector(".de-section-header")
+  const toggle = settingsHeader.querySelector(".de-section-toggle")
+  assert.ok(toggle, "settings has no fold")
+  assert.ok(settingsHeader.querySelector(".de-chevron"), "settings has no chevron")
+  assert.equal(toggle.getAttribute("aria-expanded"), "true", "settings arrived folded")
 })
 
-check("settings is always open and survives a repaint", () => {
+check("settings starts open, folds, and survives a repaint", () => {
   seedTab()
   const settingsSection = sections().at(-1)
   const body = settingsSection.querySelector(".de-section-body")
   const inner = pane.querySelector(".de-ann-settings-body")
   assert.equal(body.hidden, false, "settings arrived folded")
+
+  const header = settingsSection.querySelector(".de-section-header")
+  header.querySelector(".de-section-toggle").click()
+  assert.equal(body.hidden, true, "the settings header did not fold it")
+  header.querySelector(".de-section-toggle").click()
+  assert.equal(body.hidden, false, "the settings header did not unfold it")
 
   // Dropping a marker repaints the list, and a settings block rebuilt with it
   // would take the focus of whoever had just used a control in it.
@@ -2337,18 +2345,15 @@ console.log("\nThe pin's treatment")
  * another product. Pinning the decisions that MAKE it that treatment is the only
  * way the resemblance survives someone tidying this file.
  */
-check("the numeral is white, through the role that cannot flip with the theme", () => {
-  const marker = /\.de-ann-marker \{([^}]*)\}/.exec(editor.annotationsCss)
-  assert.ok(marker, "the marker has no rule at all")
-  assert.match(
-    marker[1],
-    /color:\s*var\(--de-color-on-user-color/,
-    "the pin's ink is no longer the fixed user-fill role"
-  )
-  // That role resolves to white in both blocks, which token-cases owns. Here it
-  // is enough that the pin reaches for it and not for `onAccent`, which flips
-  // with the theme and put the numeral at 3.4:1 in light.
-  assert.doesNotMatch(marker[1], /color:\s*var\(--de-color-on-accent/, "the pin's ink flips again")
+check("the pin and its row disc wear the indigo accent under a white numeral", () => {
+  for (const selector of [".de-ann-marker", ".de-ann-index"]) {
+    const rule = new RegExp(`\\${selector} \\{([^}]*)\\}`).exec(editor.annotationsCss)
+    assert.ok(rule, `${selector} has no rule at all`)
+    assert.match(rule[1], /background:\s*var\(--de-color-accent-surface,/, `${selector} is off the accent fill`)
+    assert.match(rule[1], /color:\s*var\(--de-color-on-accent,/, `${selector}'s numeral is off the accent ink`)
+  }
+  // The retired user colour must not come back by the side door.
+  assert.doesNotMatch(editor.annotationsCss, /--de-ann-color/, "a rule still paints the retired marker colour")
 })
 
 check("the pin's edge is an inset shadow, not a border", () => {
@@ -2380,16 +2385,14 @@ check("every marker state keeps the pin's shadow, so a hover does not change it"
   }
 })
 
-check("the default marker colour is one white can sit on", () => {
-  // The seven hand-mixed hues before these were picked to sit under DARK ink.
-  // Keeping any of them after the numeral went white is the one change that
-  // would look deliberate and measure 1.4:1.
-  const retired = ["#7c5cff", "#2f80ff", "#17b0bf", "#2ea043", "#e3b341", "#ff7b39", "#f2545b"]
-  const stored = String(editor.DEFAULT_SETTINGS.markerColor).toLowerCase()
-  assert.ok(
-    !retired.includes(stored),
-    `the default marker colour is still the retired ${stored}`
-  )
+check("a stored marker colour from the old swatches is dropped on load", () => {
+  // Pins wear the chrome's indigo now. A blob written while the swatches
+  // existed must not smuggle its hex back into the live settings.
+  assert.ok(!("markerColor" in editor.DEFAULT_SETTINGS), "markerColor is a setting again")
+  window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ markerColor: "#0088FF", clearOnCopy: true }))
+  editor.resetAnnotationsForTest()
+  assert.ok(!("markerColor" in editor.annotationSettings()), "the retired colour survived the load")
+  assert.equal(editor.annotationSettings().clearOnCopy, true, "the rest of the blob was lost with it")
 })
 
 console.log("\nThe format strip")
@@ -2513,6 +2516,36 @@ check("the fold no longer offers to turn the lane on the editor", () => {
       node.textContent.includes("Annotate the editor")
     ),
     "the settings fold still offers to point the lane at the editor"
+  )
+})
+
+check("each setting's hint opens on hover of its label, with no help dot", () => {
+  seedTab()
+  const pane = sections().at(-1)
+  assert.equal(pane.querySelector(".de-ann-help"), null, "a help dot is still drawn")
+  const rows = Array.from(pane.querySelectorAll(".de-ann-setting"))
+  assert.equal(rows.length, 3, "expected three settings")
+  for (const row of rows) {
+    const label = row.querySelector(".de-ann-setting-label")
+    const toggle = row.querySelector(".de-ann-toggle")
+    const hint = label.getAttribute("data-de-tip")
+    assert.ok(hint, `${label.textContent} opens no hint on hover`)
+    assert.equal(label.querySelector("svg"), null, `${label.textContent} still carries a glyph`)
+    assert.equal(toggle.getAttribute("aria-description"), hint, `${label.textContent}'s switch does not describe itself`)
+  }
+})
+
+check("the MCP sentence is the section title's hover, not a line in the body", () => {
+  seedTab()
+  const mcp = sections().find((node) => node.querySelector(".de-mcp"))
+  assert.ok(mcp, "no MCP section")
+  assert.equal(mcp.querySelector(".de-mcp .de-ann-brief"), null, "the brief is still in the MCP body")
+  const title = mcp.querySelector(".de-section-title")
+  assert.match(title.getAttribute("data-de-tip") ?? "", /MCP settings/, "the MCP title opens no hint")
+  assert.equal(
+    mcp.querySelector(".de-section-toggle").getAttribute("aria-description"),
+    title.getAttribute("data-de-tip"),
+    "the MCP hint is silent to a screen reader"
   )
 })
 

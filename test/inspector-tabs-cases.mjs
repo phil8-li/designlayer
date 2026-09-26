@@ -121,7 +121,13 @@ for (const key of [
  */
 const serve = async (input) => {
   const path = new URL(String(input), "http://localhost").pathname
-  const payload = path.endsWith("/lint/tools") ? { tools: [] } : { libraries: [] }
+  // An agent is attached, so the Changes tab offers "Send to agent" — it
+  // withholds the button until one has connected over MCP.
+  const payload = path.endsWith("/lint/tools")
+    ? { tools: [] }
+    : path.endsWith("/mcp/status")
+      ? { url: "http://127.0.0.1:5747/mcp", listening: true, agents: 1, waiting: 1 }
+      : { libraries: [] }
   return { ok: true, status: 200, json: async () => payload }
 }
 globalThis.fetch = serve
@@ -447,7 +453,7 @@ await check("a pinned note and a recorded edit are one list, and arm the button"
     Array.from(notesPane().querySelectorAll(".de-section-title")).map((node) =>
       node.textContent.trim()
     ),
-    ["Notes and edits", "Settings"]
+    ["Notes and edits", "MCP", "Settings"]
   )
   assert.match(notesPane().textContent, /This gap is too tight/)
   assert.match(notesPane().textContent, /box-shadow/)

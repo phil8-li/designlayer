@@ -236,6 +236,20 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
 
   /* ── View: what is on screen ────────────────────────────────────────────── */
+  /*
+   * Figma's "zoom to fit" is the nearest thing it has to this, and it is the
+   * same promise: show me everything. From the live page that means opening the
+   * board of every page; on the board it means fitting the board, so a second
+   * press is never a surprise. Leaving is Escape, the Live button on a frame, or
+   * the toolbar toggle — see `src/board/`.
+   */
+  {
+    command: "view.canvas",
+    chord: { code: "Digit1", shift: true },
+    label: "Canvas view: every page on one board (again to fit)",
+    figma: "Zoom to fit (⇧1)",
+    group: "View",
+  },
   {
     command: "chrome.toggle",
     chord: { key: ".", mod: true },

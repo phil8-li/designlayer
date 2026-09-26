@@ -100,6 +100,7 @@ import { codeTab } from "./inspector/tab-code"
 import { controlsTab } from "./controls"
 import { installAppChooser } from "./app-chooser"
 import { installLayersPanel } from "./layers"
+import { macAppBanner } from "./mac-app"
 import type { EditorContext } from "../core/context"
 
 /**
@@ -181,6 +182,11 @@ export function installLeftPanel(context: EditorContext): void {
    */
   const chooser = installAppChooser(context)
   context.slots.left.append(chooser.node, strip, layersPane, codePane, controlsPane)
+  // The foot: "Open in Mac app", on a Mac with the app and outside it. After
+  // the panes rather than inside one, so it stays put under every tab and the
+  // tree scrolls above it (`panels/mac-app.ts`).
+  const banner = macAppBanner(context)
+  if (banner) context.slots.left.append(banner)
 
   /*
    * The tree mounts into its pane by being handed a context that says the pane

@@ -1,7 +1,7 @@
 {
   "_summary": [
     "Palette: the kit's cool neutrals and near-white ladder in light, its chrome washes over #171717 in dark; Figma blue replaced by the kit's indigo for selection, focus and primary fills",
-    "Shape: the kit's radius ladder with squircle corners; 14px text buttons, 16/6/10 concentric menus, 18px dialogs; circles and pills opt out to true round",
+    "Shape: the kit's radius ladder with squircle corners; buttons share the fields' 8px corner, 16/6/10 concentric menus, 18px dialogs; circles and pills opt out to true round",
     "Density kept (12px text, 24px rows); spacing snapped to the kit's 4px grid, no 10/14/18px steps; one 12px caption size replaces 11px",
     "Interaction: zero-delay inverse tooltips, instant menus with 150ms exits, dialogs scale 0.96→1, 2% press, hover only on fine pointers, indigo focus edge + halo on keyboard only",
     "Icons: 24 kit glyphs, one flat 2-unit stroke, six size roles (12–24); copy tightened to the kit's content rules"
@@ -28,17 +28,19 @@
   "inspector-changes": {
     "title": "Inspector: Changes tab",
     "changes": [
+      "Row number discs are the indigo accent (the old stored blue marker colour is retired)",
       "Note rows are 16px kit cards, concentric with their 8px mini buttons",
       "Row actions also show on keyboard focus and on touch",
       "Switches and fields take the kit focus ring and 2% press",
-      "Delete hovers to a red wash, not a solid red block"
+      "MCP address is a 24px field with the fields' corner, level with its Copy button"
     ]
   },
   "code": {
     "title": "Code tab",
     "changes": [
       "Syntax colors come from the kit's decorative hues (blue, violet, green, coral)",
-      "Code sits on the kit control surface with relaxed code leading"
+      "Code sits on the kit control surface with relaxed code leading",
+      "Copy feedback moved to a toast ('Copied JSX'); the footer line only describes the view"
     ]
   },
   "left-controls": {
@@ -59,6 +61,7 @@
     "title": "Toolbar with tooltip",
     "changes": [
       "Selected tool is an indigo fill; other icons wear full ink at rest",
+      "Theme toggle is a hollow moon (light) or sun (dark), matching the hollow marks beside it",
       "Tooltip appears instantly as an inverse ink chip (12px, 6×12 padding)",
       "Moving along the bar slides the tooltip; closing fades in 150ms",
       "Bar uses the kit's floating elevation: wide soft cast, 1px hairline, dark rim light"
@@ -76,13 +79,13 @@
     "changes": [
       "Floating card: 16px corner, overlay shadow and hairline",
       "Scales into place instead of sliding up; exits in 150ms",
-      "Close ✕ in full ink; Undo uses the shared 14px button"
+      "Close ✕ in full ink; Undo uses the shared 8px button corner"
     ]
   },
   "annotation-composer": {
     "title": "Annotation composer",
     "changes": [
-      "Composer card at 22px, concentric with its 14px buttons",
+      "Composer card at 16px, concentric with its 8px field and buttons",
       "Opens with no entrance travel; 150ms exit",
       "Primary button is kit indigo"
     ]
@@ -94,6 +97,16 @@
       "Rename and delete wear full ink; delete hovers to a red wash",
       "Filter and value fields share one corner, well and focus edge",
       "Type eyebrows use 10px caps with the kit's 0.08em tracking"
+    ]
+  },
+  "icons": {
+    "title": "Icons: the whole set at 16 and 12",
+    "changes": [
+      "Theme toggle: hollow sun and moon instead of a solid disc and crescent",
+      "Chevrons: the small 12-unit caret instead of the kit's 20-unit one",
+      "Kit glyphs scaled as a family from their 22-unit budget to the set's 20, so trash, lock, search and copy no longer tower over their neighbours",
+      "Square frames (grid, square, constrain) pulled to the 18 units the native frames use",
+      "One 2-unit stroke across kit, Lucide and native marks; 24 kit drawings kept"
     ]
   },
   "token-picker": {
@@ -116,7 +129,7 @@
   "start-screen": {
     "title": "Start screen",
     "changes": [
-      "Kit field (filled, 16px corner) and 14px buttons with a 2% press",
+      "Fields and buttons share one 12px corner; buttons press 2%",
       "Squircle corners and kit type sizes; dark only"
     ]
   },
@@ -127,6 +140,15 @@
       "Scales in from 96% instead of drifting down",
       "Close button sits concentric in the corner (10px)",
       "Title uses the kit heading weight 650"
+    ]
+  },
+  "dismiss": {
+    "title": "Dismissal: 60ms after Escape",
+    "changes": [
+      "Menus, popovers and dialogs now fade out over 150ms instead of vanishing",
+      "The real surface closes instantly, so the next Escape and click reach the editor",
+      "The fade plays on an inert copy: no backdrop, no focus, no clicks",
+      "Dialogs shrink to 98% on the exit curve, menus to 99%; reduced motion keeps only the fade"
     ]
   },
   "libraries": {

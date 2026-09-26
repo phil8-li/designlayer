@@ -221,28 +221,11 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   pointer-events: auto;
 }
 /*
- * IT OPENS INSTANTLY AND LEAVES OVER 150MS — the kit's menu grammar.
- *
- * The card opens in its final geometry with no entrance: a menu is opened
- * dozens of times an hour, and an entrance is a tax on every read. Dismissal
- * gets a short, bounded fade to 0.99, so the card does not vanish in the same
- * frame as the click that closed it.
- *
- * The fade plays on a COPY. \`panels/app-chooser.ts\` hides the real card at the
- * instant it is dismissed — a card still present would absorb the next Escape
- * and keep its rows in the tab order — and leaves an inert, aria-hidden clone
- * in its place to play this, removed when the animation ends. That is the
- * "exit on a ghost" \`css/base.ts\` names as the way to do this properly.
- * \`transform-origin\` is the edge nearest the trigger, written by \`arriveFrom\`.
+ * IT OPENS INSTANTLY AND LEAVES OVER 150MS — the kit's menu grammar. No
+ * entrance: a menu is opened dozens of times an hour. The dismissal is the
+ * kit's fade to 0.99, played on an inert copy by \`playExit\` in core/motion,
+ * because the real card must be gone the instant it is dismissed.
  */
-.de-app-menu--leaving {
-  pointer-events: none;
-  transform-origin: var(--de-arrive-origin, center top);
-  animation: de-app-menu-exit ${t.duration.exit} ${t.easeReveal} both;
-}
-@keyframes de-app-menu-exit {
-  to { opacity: 0; transform: scale(0.99); }
-}
 /*
  * ONE LINE: a name, and a figure trailing it.
  *
@@ -350,9 +333,18 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
  * is not the channel the state travels on; it is the channel that makes a
  * reader moving fast enough to need the warning stop for it. A hover step on
  * top would read as the row coming back to normal under the cursor.
+ *
+ * Nor does focus, and the selectors are spelled to make both true. This was
+ * \`.de-app-menu-row--danger:hover\` at (0,2,0), and the generic hover above is
+ * (0,3,0) with its \`:not()\`, so the lift won the plate while this rule kept
+ * the ink: \`onSemantic\` on the neutral hover — white on near-white in light
+ * (1.05:1), near-black on the dark lift (1.73:1). A row is armed by clicking
+ * it, so the pointer is on it the moment it arms, and the warning was
+ * unreadable for exactly as long as anyone could act on it. Focus had the same
+ * problem at (0,2,0) against the old bare class. Both halves now outrank both.
  */
-.de-app-menu-row--danger,
-.de-app-menu-row--danger:hover {
+.de-app-menu-row.de-app-menu-row--danger,
+.de-app-menu-row.de-app-menu-row--danger:is(:hover, :focus-visible) {
   background: ${t.color.danger};
   color: ${t.color.onSemantic};
 }
@@ -503,13 +495,4 @@ export const appChooserCss = `/* ---------- app chooser ---------- */
   word-break: break-word;
 }
 
-/* Reduced motion keeps the exit's fade and drops its scale: opacity is
-   feedback, the shrink is travel. The hover fills stay — a colour change is not
-   motion — and the base blanket already clamps their duration. */
-@media (prefers-reduced-motion: reduce) {
-  .de-app-menu--leaving { animation-name: de-app-menu-exit-fade; }
-}
-@keyframes de-app-menu-exit-fade {
-  to { opacity: 0; }
-}
 `

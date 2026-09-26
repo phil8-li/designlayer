@@ -6,8 +6,9 @@ chrome draws the kit's pictures for every role the kit has a glyph for.
 into `src/core/icons.ts`; nothing here ships at runtime.
 
 `plus` is a Lucide icon, and several of the other drawings began from Lucide
-geometry; both are covered by `LICENSE-lucide.txt` (ISC). The kit states that
-everything else is first-party to it.
+geometry; both are covered by `LICENSE-lucide.txt` (ISC). Everything else is
+first-party (© Haoyang Li) and MIT licensed with this repository; see
+`THIRD_PARTY_NOTICES.md` at the root.
 
 To add one: copy the SVG in unchanged, map an editor name to it with `kit()`
 in `tools/build-icons.mjs`, and re-run the generator.

@@ -5,7 +5,7 @@
  */
 
 import { config } from "./config"
-import type { ToastAction } from "./toast"
+import type { ToastAction, ToastMessage } from "./toast"
 import {
   elementKey,
   getState,
@@ -76,7 +76,7 @@ export interface EditorContext {
    * the reason `core/toast.ts` gives on `ToastAction`: a toast reports, and the
    * only interaction that belongs on a report is unmaking it.
    */
-  toast(message: string, kind?: "info" | "error", action?: ToastAction): void
+  toast(message: ToastMessage, kind?: "info" | "error", action?: ToastAction): void
   /** Base URL for designlayer server routes, e.g. `/__designlayer`. */
   apiBase: string
 }

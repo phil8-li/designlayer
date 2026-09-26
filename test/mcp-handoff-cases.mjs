@@ -781,6 +781,13 @@ const uiContext = ui.createContext(uiBridge, {
   left: slot(),
   right,
 })
+/*
+ * An agent is attached before the tab is built: it asks `/mcp/status` once on
+ * construction, and only offers "Send to agent" after a handshake. The stub
+ * below keeps answering the same route.
+ */
+const MCP_STATUS = { url: "http://127.0.0.1:5747/mcp", listening: true, agents: 1, waiting: 1 }
+globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => MCP_STATUS })
 const tab = ui.annotationsTab(uiContext)
 right.append(tab.node)
 
@@ -832,6 +839,9 @@ let reply = {
   message: "Delivered to your coding agent — it was waiting and has just picked this up.",
 }
 globalThis.fetch = async (url, init) => {
+  if (String(url).endsWith("/mcp/status")) {
+    return { ok: true, status: 200, json: async () => MCP_STATUS }
+  }
   posted.push({ url: String(url), body: JSON.parse(init.body) })
   return { ok: true, status: 200, json: async () => reply }
 }
@@ -858,6 +868,9 @@ Object.defineProperty(window.navigator, "clipboard", {
   value: { writeText: (text) => ((copied = text), Promise.resolve()) },
   configurable: true,
 })
+
+// Let the construction-time `/mcp/status` answer land.
+await settle()
 
 await check("the agent group has a button that hands it over, and Copy survives", () => {
   note("The shadow on this is too heavy")
@@ -1207,7 +1220,7 @@ await check("Apply to code files what the server refused", async () => {
   )
   assert.equal(filed[0].property, "opacity")
   assert.equal(filed[0].to, "0.4")
-  assert.match(toasts.at(-1) ?? "", /Changes/, "the toast has to say where the change went")
+  assert.match(JSON.stringify(toasts.at(-1) ?? ""), /Changes/, "the toast has to say where the change went")
 
   fs.rmSync(dir, { recursive: true, force: true })
 })

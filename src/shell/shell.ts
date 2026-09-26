@@ -14,6 +14,7 @@ import { focusControl, installFocusModality } from "../core/focus"
 import type { EditorSlots } from "../core/context"
 import { editorOwnsInput, getState, setState, subscribe } from "../core/store"
 import { createLauncher } from "./launcher"
+import { mountOverlayScrollbar } from "./overlay-scrollbar"
 import { mountPanelResize } from "./resize"
 
 const STYLE_ID = "designlayer-shell-style"
@@ -370,6 +371,8 @@ export function mountShell(): Shell {
   const releaseChromeFocus = restoreChromeFocus()
   const releaseFieldText = holdTextInFields()
   const releaseScrolling = markScrolling()
+  const releaseLeftBar = mountOverlayScrollbar(leftPanel, SCROLL_IDLE_MS)
+  const releaseRightBar = mountOverlayScrollbar(rightPanel, SCROLL_IDLE_MS)
 
   /**
    * Which panels exist right now. Separate from the insets below, because a
@@ -519,6 +522,8 @@ export function mountShell(): Shell {
       releaseChromeFocus()
       releaseFieldText()
       releaseScrolling()
+      releaseLeftBar()
+      releaseRightBar()
       releaseFocusModality()
       resize.destroy()
       launcher.destroy()

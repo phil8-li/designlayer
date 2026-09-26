@@ -271,9 +271,9 @@ ${HOVER} { .de-lib-field:hover { background: ${t.color.fieldHover}; } }
  *
  * It scales in place from 0.96 over \`reveal\` on \`easeReveal\` and fades in,
  * and leaves to 0.98 over \`exit\` on \`easeExit\`. Nothing slides and nothing
- * blurs. The exit can play because \`display\` and \`overlay\` ride the
- * transition as discrete properties, so the dialog stays in the top layer until
- * the fade has finished; \`@starting-style\` supplies the entrance's first frame.
+ * blurs. \`@starting-style\` supplies the entrance's first frame. The exit plays
+ * on an inert copy (\`playExit\` in core/motion), so the real dialog and its
+ * backdrop leave the top layer the instant it is dismissed.
  */
 .de-lib-signin::backdrop {
   /* The kit's static scrim, the same veil the shortcuts sheet dims with: one
@@ -299,12 +299,7 @@ ${HOVER} { .de-lib-field:hover { background: ${t.color.fieldHover}; } }
 @starting-style { .de-lib-signin[open] { opacity: 0; transform: scale(0.96); } }
 /* Not shown is not displayed. Without this a closed dialog still lays out — and
    this one is parked on \`document.body\`, so it would lay out across the app. */
-.de-lib-signin:not([open]) {
-  display: none;
-  opacity: 0; transform: scale(0.98);
-  transition: transform ${t.duration.exit} ${t.easeExit}, opacity ${t.duration.exit} ${t.easeExit},
-    display ${t.duration.exit} allow-discrete, overlay ${t.duration.exit} allow-discrete;
-}
+.de-lib-signin:not([open]) { display: none; }
 /* The credential box is autofocused on open, so the card itself only takes
    focus on the engines that ignore that — a ring there is a side effect of
    opening rather than a place anybody navigated to. Every control INSIDE keeps
@@ -412,10 +407,10 @@ ${HOVER} { .de-lib-field:hover { background: ${t.color.fieldHover}; } }
    move at all. The token path's own submit is the same button on the same
    ground, so it takes the same drop. */
 .de-lib-signin-close,
-.de-lib-signin-panel-actions > .de-button:not(.de-button--primary) { background: ${t.color.bgSunken}; }
+.de-lib-signin-panel-actions > .de-button:not(.de-button--primary, .de-button--danger) { background: ${t.color.bgSunken}; }
 ${HOVER} {
   .de-lib-signin-close:hover,
-  .de-lib-signin-panel-actions > .de-button:not(.de-button--primary):hover { background: ${t.color.fieldHover}; }
+  .de-lib-signin-panel-actions > .de-button:not(.de-button--primary, .de-button--danger):hover { background: ${t.color.fieldHover}; }
 }
 /*
  * The token path's own submit, under the box it sends.
@@ -812,11 +807,14 @@ ${HOVER} { .de-lib-expand:hover { color: ${t.color.text}; } }
 }
 .de-lib-manual-label { color: ${t.color.textDim}; font-size: ${t.type.caption}; }
 .de-lib-manual-row { display: flex; align-items: center; gap: ${t.space["2xs"]}px; }
-/* A button laid in a well: the shared pill's fill is the well's own rung in
+/* A button laid in a well: the shared button's fill is the well's own rung in
    light (both are the kit's \`--secondary\`), so it takes the panel ground
    instead and lifts off the well in both themes. */
-.de-lib-manual-row > .de-button:not(.de-button--primary) { background: ${t.color.bg}; }
-${HOVER} { .de-lib-manual-row > .de-button:not(.de-button--primary):hover { background: ${t.color.bgRaisedHover}; } }
+/* Secondary buttons only, at rest and on hover. A danger button's hover is its
+   own fill-and-ink pair at (0,2,0), and either plate here out-ranks that fill
+   while its \`onSemantic\` ink stays — about 1:1 on paper. */
+.de-lib-manual-row > .de-button:not(.de-button--primary, .de-button--danger) { background: ${t.color.bg}; }
+${HOVER} { .de-lib-manual-row > .de-button:not(.de-button--primary, .de-button--danger):hover { background: ${t.color.bgRaisedHover}; } }
 
 /* ---------- the switch ---------- */
 /*
@@ -917,7 +915,7 @@ ${HOVER} {
   .de-lib-switch::after { transition: background-color ${t.duration.hover} linear !important; }
   .de-lib-switch:active:not([disabled]) { transform: none; }
   /* The dialog keeps its fade and gives up the scale: travel goes, feedback stays. */
-  .de-lib-signin, .de-lib-signin:not([open]) { transform: none; }
+  .de-lib-signin { transform: none; }
   @starting-style { .de-lib-signin[open] { transform: none; } }
   /*
    * The blanket in \`css/base.ts\` clamps every duration to 0.01ms, which stops a

@@ -54,14 +54,13 @@ import {
 import { hasCommand, registerCommand, runCommand } from "../core/commands"
 import { arrange, arrangeRef, siblingLines } from "../core/arrange"
 import { el } from "../core/dom"
-import { smoothScroll } from "../core/motion"
+import { playExit, smoothScroll } from "../core/motion"
 import { getResolver } from "../core/resolve"
 import { annotationSettings, markersVisible, updateSettings } from "../annotations/store"
 import { createWriter } from "../core/writer"
 import { tokens } from "../core/tokens"
 import { icon } from "../core/icons"
 import type { EditorContext } from "../core/context"
-import { plural } from "../core/format"
 
 /**
  * The display an element had before ⇧⌘H hid it.
@@ -113,8 +112,8 @@ export function installShortcuts(context: EditorContext): void {
   // raw flag, which is how the two stay the same question.
   registerCommand("notes.markers.toggle", () => {
     const hidden = !markersVisible()
+    // No toast: the pins appearing or leaving is the whole report.
     updateSettings({ ...annotationSettings(), hideUntilRestart: !hidden })
-    context.toast(hidden ? "Note pins shown" : "Note pins hidden")
   })
 
   /* ── Selection ──────────────────────────────────────────────────────────── */
@@ -153,8 +152,8 @@ export function installShortcuts(context: EditorContext): void {
       if (lock) locked.add(entry.element)
       else locked.delete(entry.element)
     }
+    // No toast: the Layers row's lock glyph says it, where the layer is.
     context.setState({ locked })
-    context.toast(lock ? "Locked" : "Unlocked")
   })
 
   /**
@@ -172,19 +171,15 @@ export function installShortcuts(context: EditorContext): void {
   registerCommand("select.hide", () => {
     const selection = context.getState().selection
     if (!selection.length) return
-    let hid = 0
     for (const entry of selection) {
       const shown = getComputedStyle(entry.element).display
       const hidden = shown === "none"
-      if (!hidden) {
-        restoreDisplay.set(entry.element, shown)
-        hid += 1
-      }
+      if (!hidden) restoreDisplay.set(entry.element, shown)
       const value = hidden ? restoreDisplay.get(entry.element) ?? "block" : "none"
       writer.applyStyles(entry, [{ property: "display", value }], hidden ? "Show" : "Hide")
     }
+    // No toast: the element leaving the canvas is the report.
     context.refresh()
-    context.toast(hid ? `Hid ${plural(hid, "layer")}` : `Showed ${plural(selection.length, "layer")}`)
   })
 
   /**
@@ -538,27 +533,18 @@ function shortcutsPanel(): ShortcutsPanel {
   const hide = (): void => {
     if (!root) return
     /*
-     * IT ARRIVES BUT IT DOES NOT LINGER, and the asymmetry is deliberate.
-     *
-     * NO popover in this chrome plays an exit — the class that did was built and
-     * taken back out, and `css/base.ts` records why. This one could not have
-     * kept one regardless: it is a modal with a full-bleed backdrop, and a
-     * backdrop still painted is still a surface over the whole page. For the
-     * length of a fade it keeps taking clicks, and — the part that actually
-     * bites — it is still the front-most dismissible thing, so a second Escape
-     * would be spent closing a sheet that had already closed instead of
-     * reaching the editor behind it.
-     *
-     * A dismissal has to be complete at the instant it is asked for. The
-     * entrance is where the motion belongs in any case: a card appearing wants
-     * to be seen arriving, and a card dismissed wants to be gone.
+     * A dismissal is complete at the instant it is asked for. A modal still
+     * open for the length of a fade keeps its backdrop over the whole page,
+     * keeps taking clicks and stays the front-most thing a second Escape would
+     * reach. So the dialog closes now, and the kit's modal exit (to 0.98 over
+     * 150ms) plays on an inert copy outside the top layer, with no backdrop.
      *
      * `close()` before `remove()`, and both. Removing an open modal leaves the
      * document's top-layer bookkeeping holding a node that is no longer in it,
      * which in some engines leaves the page inert with nothing on screen to
-     * explain why — the worst possible failure for the surface a lost keyboard
-     * user just opened.
+     * explain why.
      */
+    playExit(root, "modal")
     if (typeof root.close === "function" && root.open) root.close()
     root.remove()
     root = null

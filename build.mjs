@@ -19,6 +19,8 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { patchSonner } from "./tools/sonner-plugin.mjs"
+
 const root = path.dirname(fileURLToPath(import.meta.url))
 const tsconfig = path.join(root, "tsconfig.json")
 const watch = process.argv.includes("--watch")
@@ -65,49 +67,9 @@ const dropReactDceProbe = {
   },
 }
 
-/**
- * Sonner's self-injected stylesheet, kept OUT of the host document.
- *
- * `sonner/dist/index.mjs` opens with an `__insertCSS(…)` call at module scope
- * that appends its whole stylesheet to `document.head` the moment the module is
- * evaluated. That is the right default for an app importing Sonner for itself,
- * and exactly wrong here: this editor is loaded into apps it did not write, and
- * Sonner's selectors are global and unprefixed. The injected sheet includes
- *
- *   html[dir=ltr] { --toast-icon-margin-start: -3px; … }
- *   [data-sonner-toast][data-styled=true] { padding: 16px; … }
- *
- * — so a host app that uses Sonner itself would have its own toasts silently
- * restyled by ours, and every page gets custom properties written onto its
- * `<html>` by a tool that is supposed to be looking, not touching. Confirmed on
- * the running editor before this was added: one leaked `<style>` in the host's
- * head, carrying the full sheet.
- *
- * Nothing is lost by dropping it. `core/css/toast.ts` puts the same stylesheet
- * — from the same package version, checked by `tools/build-sonner-css.mjs` —
- * inside the toaster's shadow root, which is the only place it can reach our
- * toasts and the only place it cannot reach anyone else's.
- *
- * The guard is neutered rather than the call deleted: the needle is one short
- * line instead of a 17KB string argument, and the function keeps its shape for
- * anything that might call it. Exact-once, so a Sonner release that changes
- * this stops the build rather than quietly resuming the leak.
- */
-const INSERT_CSS_GUARD = "if (!code || typeof document == 'undefined') return"
-const dropSonnerGlobalCss = {
-  name: "drop-sonner-global-css",
-  setup(build) {
-    build.onLoad({ filter: /[\\/]node_modules[\\/]sonner[\\/]dist[\\/]index\.mjs$/ }, (args) => {
-      const source = fs.readFileSync(args.path, "utf8")
-      const first = source.indexOf(INSERT_CSS_GUARD)
-      if (first === -1 || source.indexOf(INSERT_CSS_GUARD, first + INSERT_CSS_GUARD.length) !== -1) {
-        throw new Error(`sonner no longer guards __insertCSS exactly once: ${args.path}`)
-      }
-      return { contents: source.replace(INSERT_CSS_GUARD, "if (true) return"), loader: "js" }
-    })
-  },
-}
-
+// Sonner's two bundle-time patches (the stylesheet it injects into the host
+// document, and the height it measures through a transform) live in
+// `tools/sonner-plugin.mjs`, shared with the demo tools that bundle the toaster.
 
 const shared = {
   absWorkingDir: root,
@@ -144,7 +106,7 @@ const TARGETS = [
       platform: "browser",
       target: ["chrome110", "safari16"],
       // Only this target pulls React and Sonner in; the token module is data.
-      plugins: [dropReactDceProbe, dropSonnerGlobalCss],
+      plugins: [dropReactDceProbe, patchSonner],
     },
   },
   {

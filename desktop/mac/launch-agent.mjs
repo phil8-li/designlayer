@@ -10,10 +10,14 @@
 import os from "node:os"
 import path from "node:path"
 
-export const LABEL = "dev.designlayer.desk"
+import { DESK_LABEL, deskPlistPath } from "../../runtime/mac-desk.mjs"
+
+// Defined beside the launcher's check for this plist, which ships in the
+// package when this directory does not (runtime/mac-desk.mjs).
+export const LABEL = DESK_LABEL
 
 export function plistPath(home = os.homedir()) {
-  return path.join(home, "Library", "LaunchAgents", `${LABEL}.plist`)
+  return deskPlistPath(home)
 }
 
 export function logDir(home = os.homedir()) {

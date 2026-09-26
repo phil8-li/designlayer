@@ -46,6 +46,20 @@ The PWA is installed over Chrome's DevTools pipe (`--remote-debugging-pipe --ena
 - Title bar: Chrome opens a new install with the normal title bar. Click the ⌃ toggle in the title bar once to move the tabs into it (Window Controls Overlay). The strip shows a one-time hint about this.
 - The folder button opens the macOS folder picker (`osascript choose folder`) and copies the path you choose to the clipboard, so you can paste it into the start screen.
 
+## Open in Mac app
+
+An editor in an ordinary browser tab shows an **Open in Mac app** banner at the bottom of its left panel. Clicking it moves that page into the app:
+
+1. The editor POSTs its URL to `http://127.0.0.1:3454/api/open`. The body is JSON sent as `text/plain`, so the cross-origin request needs no preflight. The desk echoes CORS only to loopback origins and refuses anything that is not an http page on this Mac.
+2. The desk passes the URL to the app window over `GET /api/events` (server-sent events). If the window is closed, the desk holds the URL for up to 60 seconds and gives it to the first window that connects. A desk page open in an ordinary browser tab only gets a URL when no app window is open.
+3. The desk runs `open` on the app shim to bring the window forward, or to launch it. With the `--app-window` fallback there is no shim, so it starts that Chrome window only when none is open.
+4. The window opens the page in the tab that already shows that editor, or in a new tab. Taking the editor's socket disconnects the browser tab.
+
+The banner appears only when both of these are true:
+
+- **The app is installed.** The launcher checks for this LaunchAgent's plist when it starts (`runtime/mac-desk.mjs`), so a browser that has never seen the desk makes no requests to it. An editor started before the app was installed shows the banner after its next restart.
+- **The editor is not already in the app.** Each app tab's iframe is named `designlayer-desk:<tab id>`, and the editor checks that name. It also checks `location.ancestorOrigins`, for frames created before the desk started naming them.
+
 ## Limits and fallback
 
 - **If Santa ever blocks the shim** (for example, if Chrome stops being the compiler rule), `install.mjs` prints the decision and exits with code 2. Use `install.mjs --app-window` instead: it opens `Google Chrome --app=http://127.0.0.1:3454/ --user-data-dir=<the same profile>`, which runs Chrome itself and needs no shim.

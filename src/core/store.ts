@@ -124,6 +124,18 @@ export interface EditorState {
    * the app" and "intercept every click" cannot both answer the same question.
    */
   annotating: boolean
+  /**
+   * Canvas view: every page of the app laid out on one pan/zoom board.
+   *
+   * A view rather than a mode. The three modes answer "what does a click on the
+   * PAGE do", and in canvas view there is no page under the pointer to answer
+   * for — there is a board of frames, and the board owns the pointer. So the
+   * gate below stands the canvas lane down while it is up, the same way hidden
+   * chrome does, and leaving it lands back in whichever mode was live before.
+   *
+   * Not persisted: a reload lands on the live page, which is what the URL says.
+   */
+  canvasView: boolean
   /** Option sets keyed by `Selection.key`. */
   optionSets: Record<string, ElementOptionSet>
   dirty: boolean
@@ -153,6 +165,7 @@ const state: EditorState = {
   controlsScope: "all",
   chromeHidden: false,
   annotating: false,
+  canvasView: false,
   optionSets: {},
   dirty: false,
 }
@@ -200,9 +213,12 @@ export function primarySelection(): Selection | null {
  * that had frozen. Two reasons, one gate — which is the whole point of asking
  * a function. The painters ask it too, so a stale outline cannot be left over
  * an app the editor has stood down from.
+ *
+ * Canvas view is the third reason: the page is behind the board, so an outline
+ * or a note pin drawn over it would float over frames it does not belong to.
  */
 export function editorOwnsInput(): boolean {
-  return !state.interactive && !state.chromeHidden
+  return !state.interactive && !state.chromeHidden && !state.canvasView
 }
 
 /**

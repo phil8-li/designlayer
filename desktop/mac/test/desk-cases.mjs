@@ -1,7 +1,9 @@
 /**
  * Cases for the Mac desk: the desk server's routes and refusals, the manifest
- * Chrome's installability check reads, the LaunchAgent plist, and the
- * installer's dry run.
+ * Chrome's installability check reads, the "Open in Mac app" hand-off (the POST
+ * an editor sends, the event stream a window listens on, and what the desk page
+ * does with a page it is handed), the LaunchAgent plist and how the launcher
+ * reads it, and the installer's dry run.
  *
  * The desk server runs in-process on an ephemeral port with the start-screen
  * supervisor off, and HOME points at a temp directory so the editor registry
@@ -42,8 +44,9 @@ const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "desk-cases-"))
 const realHome = os.homedir()
 process.env.HOME = tempHome
 
-const { createDeskServer, manifest } = await import("../desk-server.mjs")
-const { buildPlist, LABEL } = await import("../launch-agent.mjs")
+const { createDeskServer, createHandoff, manifest } = await import("../desk-server.mjs")
+const { buildPlist, LABEL, plistPath } = await import("../launch-agent.mjs")
+const { DEFAULT_DESK_PORT, DESK_LABEL, deskPlistPath, deskUrlFromHost } = await import("../../../runtime/mac-desk.mjs")
 
 let passed = 0
 let failed = 0
@@ -59,7 +62,7 @@ async function check(name, fn) {
   }
 }
 
-function request(port, { method = "GET", pathname = "/", headers = {} } = {}) {
+function request(port, { method = "GET", pathname = "/", headers = {}, body } = {}) {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: "127.0.0.1", port, method, path: pathname, headers }, (res) => {
       const chunks = []
@@ -76,11 +79,50 @@ function request(port, { method = "GET", pathname = "/", headers = {} } = {}) {
       })
     })
     req.on("error", reject)
-    req.end()
+    req.end(body)
+  })
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function until(condition, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs
+  while (!(await condition())) {
+    if (Date.now() > deadline) throw new Error("timed out waiting")
+    await sleep(10)
+  }
+}
+
+/**
+ * One desk window's event stream, as the page's EventSource would hold it.
+ *
+ * Resolves once the response headers are in, which is after the route has
+ * subscribed: the handler writes its first line and subscribes in one turn.
+ */
+function stream(port, query = "") {
+  return new Promise((resolve, reject) => {
+    const events = []
+    const req = http.get({ host: "127.0.0.1", port, path: `/api/events${query}` }, (res) => {
+      let buffer = ""
+      res.setEncoding("utf8")
+      res.on("data", (chunk) => {
+        buffer += chunk
+        let end
+        while ((end = buffer.indexOf("\n\n")) >= 0) {
+          const block = buffer.slice(0, end)
+          buffer = buffer.slice(end + 2)
+          const event = /^event: (.+)$/m.exec(block)?.[1]
+          if (event) events.push({ event, data: JSON.parse(/^data: (.+)$/m.exec(block)[1]) })
+        }
+      })
+      resolve({ res, events, close: () => req.destroy() })
+    })
+    req.on("error", reject)
   })
 }
 
 let pickerCalls = 0
+const activations = []
 const desk = await createDeskServer({
   port: 0,
   supervise: false,
@@ -90,8 +132,23 @@ const desk = await createDeskServer({
     pickerCalls += 1
     return { cancelled: true }
   },
+  // Records instead of launching anything: the real one runs `open` on the app.
+  activate: (deskUrl, context) => {
+    activations.push({ deskUrl, ...context })
+    return true
+  },
 })
 const port = desk.port
+const EDITOR = "http://127.0.0.1:3466"
+/** A POST the way the editor sends it: JSON as text/plain, from its own origin. */
+const post = (payload, headers = {}) =>
+  request(port, {
+    method: "POST",
+    pathname: "/api/open",
+    headers: { origin: EDITOR, "content-type": "text/plain;charset=UTF-8", ...headers },
+    body: typeof payload === "string" ? payload : JSON.stringify(payload),
+  })
+const health = async () => (await request(port, { pathname: "/api/health" })).json
 
 console.log("desk server")
 
@@ -231,7 +288,221 @@ await check("unknown routes are 404", async () => {
   assert.equal(res.status, 404)
 })
 
+console.log("open in Mac app")
+
+await check("health says whether the app is installed and how many windows listen", async () => {
+  // HOME is a temp directory here, so there is no app shim in it.
+  assert.deepEqual((await health()).app, { installed: false, windows: 0 })
+})
+
+await check("a preflight from an editor origin allows the POST", async () => {
+  const res = await request(port, {
+    method: "OPTIONS",
+    pathname: "/api/open",
+    headers: { origin: EDITOR, "access-control-request-method": "POST", "access-control-request-headers": "content-type" },
+  })
+  assert.equal(res.status, 204)
+  assert.equal(res.headers["access-control-allow-origin"], EDITOR)
+  assert.equal(res.headers["access-control-allow-methods"], "POST")
+  assert.match(res.headers["access-control-allow-headers"], /content-type/)
+})
+
+await check("open refuses a foreign Origin before it reads the body or raises the app", async () => {
+  const res = await post({ url: `${EDITOR}/studio` }, { origin: "https://evil.example" })
+  assert.equal(res.status, 403)
+  assert.equal(res.headers["access-control-allow-origin"], undefined)
+  assert.equal(activations.length, 0)
+})
+
+await check("open refuses anything that is not a page on this Mac, in a sentence the editor can read", async () => {
+  for (const [url, sentence] of [
+    ["https://example.com/", /Only pages on this Mac/],
+    ["http://127.0.0.1.evil.test/", /Only pages on this Mac/],
+    ["file:///etc/passwd", /Only http pages/],
+    ["javascript:alert(1)", /Only http pages/],
+    [`http://127.0.0.1:${port}/`, /own page/],
+    ["not a url", /full URL/],
+  ]) {
+    const res = await post({ url })
+    assert.equal(res.status, 400, url)
+    assert.match(res.json.error, sentence, url)
+    assert.equal(res.headers["access-control-allow-origin"], EDITOR, `the editor cannot read the refusal of ${url}`)
+  }
+  const garbled = await post("{nope")
+  assert.equal(garbled.status, 400)
+  assert.match(garbled.json.error, /JSON/)
+  assert.equal(garbled.headers["access-control-allow-origin"], EDITOR)
+  assert.equal(activations.length, 0, "a refused page raised the app")
+})
+
+await check("open answers GET with the method it takes", async () => {
+  const res = await request(port, { pathname: "/api/open" })
+  assert.equal(res.status, 405)
+  assert.match(res.json.error, /accepts POST only/)
+})
+
+await check("with no window up, the page is held, the app is raised, and the first window takes it once", async () => {
+  const res = await post({ url: "http://localhost:3466/studio?tab=agents" })
+  assert.equal(res.status, 200)
+  assert.equal(res.headers["access-control-allow-origin"], EDITOR)
+  assert.equal(res.json.ok, true)
+  assert.equal(res.json.delivered, 0)
+  assert.equal(res.json.launched, true)
+  // One spelling of this machine, so the frame is same-site with the desk.
+  assert.equal(res.json.url, "http://127.0.0.1:3466/studio?tab=agents")
+  assert.deepEqual(activations, [{ deskUrl: `http://127.0.0.1:${port}`, listening: 0 }])
+  const first = await stream(port, "?window=app")
+  await until(() => first.events.length === 1)
+  assert.equal(first.events[0].event, "open-url")
+  assert.equal(first.events[0].data.url, "http://127.0.0.1:3466/studio?tab=agents")
+  const second = await stream(port, "?window=app")
+  await sleep(50)
+  assert.equal(second.events.length, 0, "a held page was handed out twice")
+  first.close()
+  second.close()
+  await until(async () => (await health()).app.windows === 0)
+})
+
+await check("a window that is up gets the page at once, and activate:false raises nothing", async () => {
+  const window = await stream(port, "?window=app")
+  const before = activations.length
+  const quiet = await post({ url: `${EDITOR}/studio`, activate: false })
+  assert.equal(quiet.json.delivered, 1)
+  assert.equal(quiet.json.launched, false)
+  assert.equal(activations.length, before)
+  await until(() => window.events.length === 1)
+  assert.equal(window.events[0].data.url, `${EDITOR}/studio`)
+  // Raising is the default, and it is told a window is already listening.
+  await post({ url: `${EDITOR}/other` })
+  assert.deepEqual(activations.at(-1), { deskUrl: `http://127.0.0.1:${port}`, listening: 1 })
+  window.close()
+  await until(async () => (await health()).app.windows === 0)
+})
+
+await check("the app's windows take a page ahead of a desk page open in a browser tab", async () => {
+  const tab = await stream(port, "?window=tab")
+  const app = await stream(port, "?window=app")
+  assert.equal((await health()).app.windows, 2)
+  const res = await post({ url: `${EDITOR}/`, activate: false })
+  assert.equal(res.json.delivered, 1)
+  await until(() => app.events.length === 1)
+  await sleep(50)
+  assert.equal(tab.events.length, 0, "the browser tab took the page as well")
+  app.close()
+  await until(async () => (await health()).app.windows === 1)
+  // With no app window left, the tab is the window there is.
+  await post({ url: `${EDITOR}/`, activate: false })
+  await until(() => tab.events.length === 1)
+  tab.close()
+})
+
+await check("a held page expires instead of ambushing a later launch", async () => {
+  const handoff = createHandoff({ maxAgeMs: 30 })
+  handoff.request("http://127.0.0.1:3466/old")
+  await sleep(60)
+  handoff.request("http://127.0.0.1:3466/new")
+  const writes = []
+  const off = handoff.subscribe({ write: (chunk) => writes.push(chunk) })
+  assert.equal(writes.length, 1)
+  assert.match(writes[0], /^event: open-url\ndata: \{.*"url":"http:\/\/127\.0\.0\.1:3466\/new"/)
+  assert.doesNotMatch(writes[0], /\/old/)
+  off()
+})
+
 await desk.close()
+
+console.log("desk page")
+
+/**
+ * The page's own script, run in jsdom against a stubbed desk: the event stream
+ * is a class that records its listener, so a case can hand the page a URL the
+ * way the server would.
+ */
+await check("a handed-over page opens in a named frame, and the next one for that editor reuses its tab", async () => {
+  const { JSDOM } = await import("jsdom")
+  const { shellPage } = await import("../shell-page.mjs")
+  const streams = []
+  const dom = new JSDOM(shellPage({ repoRoot: "/r" }), {
+    url: "http://127.0.0.1:3454/",
+    runScripts: "dangerously",
+    beforeParse(window) {
+      window.fetch = async (url) => ({
+        json: async () =>
+          String(url).includes("/api/editors")
+            ? { editors: [{ name: "shop-web", url: "http://127.0.0.1:4100", pid: 7, projectRoot: "/p" }] }
+            : { ok: true, startScreen: { ready: true, url: "http://127.0.0.1:3455" } },
+      })
+      // Anything but "browser" is an app window.
+      window.matchMedia = () => ({ matches: false })
+      // jsdom logs "not implemented" for it; the page calls it after a hand-off.
+      window.focus = () => {}
+      window.EventSource = class {
+        constructor(url) {
+          this.url = url
+          this.listeners = {}
+          streams.push(this)
+        }
+        addEventListener(type, listener) {
+          this.listeners[type] = listener
+        }
+      }
+    },
+  })
+  try {
+    const doc = dom.window.document
+    await sleep(30)
+    assert.equal(streams.length, 1)
+    assert.equal(streams[0].url, "/api/events?window=app")
+    assert.ok(doc.querySelector(".tab.offer"), "the running editor should be offered before the hand-off")
+    const hand = (url) => streams[0].listeners["open-url"]({ data: JSON.stringify({ id: 1, url }) })
+
+    hand("http://127.0.0.1:4100/studio")
+    const frame = [...doc.querySelectorAll("iframe")].find((f) => f.src === "http://127.0.0.1:4100/studio")
+    assert.ok(frame, "no frame loaded the handed-over page")
+    assert.match(frame.name, /^designlayer-desk:/, "the editor inside cannot tell it is in the app")
+    assert.equal(frame.hidden, false, "the new tab is not the one showing")
+    assert.equal(doc.querySelector('.tab[aria-selected="true"] .label').textContent, "shop-web")
+    assert.equal(doc.querySelector(".tab.offer"), null, "the editor is still offered after it opened")
+    const frames = doc.querySelectorAll("iframe").length
+
+    hand("http://127.0.0.1:4100/settings")
+    assert.equal(doc.querySelectorAll("iframe").length, frames, "the same editor got a second tab")
+    assert.equal(frame.src, "http://127.0.0.1:4100/settings")
+    const saved = JSON.parse(dom.window.localStorage.getItem("designlayer.desk.tabs.v1"))
+    assert.equal(saved.tabs.find((t) => t.url === "http://127.0.0.1:4100").src, "http://127.0.0.1:4100/settings")
+  } finally {
+    dom.window.close()
+  }
+})
+
+console.log("the launcher's view of the desk")
+
+await check("the label and the plist path have one definition", () => {
+  assert.equal(LABEL, DESK_LABEL)
+  assert.equal(plistPath("/Users/me"), deskPlistPath("/Users/me"))
+})
+
+await check("the launcher finds the desk by its plist and reads a non-default port out of it", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "desk-home-"))
+  try {
+    assert.equal(deskUrlFromHost({ home, platform: "darwin" }), null, "no plist, no desk")
+    const agent = {
+      nodePath: "/opt/homebrew/bin/node",
+      serverPath: "/r/desktop/mac/desk-server.mjs",
+      repoRoot: "/r",
+      env: { HOME: home },
+      logFile: "/r/desk.log",
+    }
+    fs.mkdirSync(path.dirname(deskPlistPath(home)), { recursive: true })
+    fs.writeFileSync(deskPlistPath(home), buildPlist(agent))
+    assert.equal(deskUrlFromHost({ home, platform: "darwin" }), `http://127.0.0.1:${DEFAULT_DESK_PORT}`)
+    fs.writeFileSync(deskPlistPath(home), buildPlist({ ...agent, port: 4999 }))
+    assert.equal(deskUrlFromHost({ home, platform: "darwin" }), "http://127.0.0.1:4999")
+    assert.equal(deskUrlFromHost({ home, platform: "linux" }), null, "only a Mac has the app")
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true })
+  }
+})
 
 console.log("launch agent plist")
 

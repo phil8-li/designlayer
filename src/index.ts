@@ -20,6 +20,8 @@ import { installTooltips } from "./core/tooltip"
 import { installCanvas } from "./canvas"
 import { installAnnotations } from "./annotations/canvas"
 import { installLintMarkers } from "./lint/markers"
+import { installBoard } from "./board"
+import { isBoardFrame } from "./board/frames"
 import { installLeftPanel } from "./panels/left"
 import { installInspector } from "./panels/inspector"
 
@@ -39,6 +41,18 @@ import { installInspector } from "./panels/inspector"
 installVendorChromeSuppression({ onRoot: mirrorVendorToasts })
 
 /*
+ * Inside one of canvas view's frames the editor does not exist.
+ *
+ * A frame is a copy of the page for the board to show, and the launcher keeps
+ * this whole bundle out of it (runtime/board-frame.mjs). This is the second
+ * line, for an editor process started before that guard: it serves this bundle
+ * fresh from dist/ inside its old wrapper, and a frame that booted it would
+ * draw a second set of panels into the picture of the page. The suppression
+ * above still runs, so the vendor's own toolbar stays hidden there too.
+ */
+const IN_BOARD_FRAME = isBoardFrame()
+
+/*
  * The toaster, mounted here rather than with the shell, for the same reason
  * the suppression above is.
  *
@@ -53,7 +67,7 @@ installVendorChromeSuppression({ onRoot: mirrorVendorToasts })
  * hiding the editor with ⌘. does not mean the editor has stopped having
  * anything to say.
  */
-installToaster()
+if (!IN_BOARD_FRAME) installToaster()
 
 
 /**
@@ -180,6 +194,17 @@ async function boot(): Promise<void> {
   // and cheaply — the layer draws nothing until an audit has actually run.
   installLintMarkers(context)
   /*
+   * The board of every page, after the lanes it stands down and before the
+   * keyboard.
+   *
+   * After, because opening it flips `canvasView`, and every painter above reads
+   * that through `editorOwnsInput()` — they have to exist to hear it. Before
+   * the shortcuts, because the board answers Escape, `=`, `-`, ⇧0 and the
+   * arrows itself while it is open, and its window-capture listener has to be
+   * registered ahead of the one that dispatches the keymap.
+   */
+  installBoard(context)
+  /*
    * LAST, and that is the whole of its ordering requirement.
    *
    * It is the editor's only keyboard listener and it dispatches through the
@@ -212,4 +237,4 @@ async function boot(): Promise<void> {
   console.info("[designlayer] Figma-style overlay ready")
 }
 
-void boot()
+if (!IN_BOARD_FRAME) void boot()

@@ -238,8 +238,6 @@ export interface AnnotationSettings {
    * setting is indistinguishable from the feature being broken.
    */
   hideUntilRestart: boolean
-  /** Marker fill. A designer annotating a red page needs a marker that is not red. */
-  markerColor: string
   /** Empty the list once its contents have been copied or sent. */
   clearOnCopy: boolean
   /**
@@ -293,22 +291,6 @@ export const DEFAULT_SETTINGS: AnnotationSettings = {
   // seeing the page.
   scope: "app",
   hideUntilRestart: false,
-  /*
-   * Agentation's own default, which is the blue — not the orange this briefly
-   * was.
-   *
-   * The orange came from reading a marker pin in a screenshot; the settings
-   * panel in the same tool shows the ring sitting on the SECOND swatch, and
-   * that one is blue. Matching the reference matters more than my reading of a
-   * pin, and blue is the better default anyway on a product page: orange is a
-   * warning colour in most design systems, and a marker that looks like an
-   * error state colours how the note is read before anyone gets to the words.
-   *
-   * It must be one OF the presets, not merely near one — a settings panel whose
-   * opening state matches none of the options it offers invites the user to fix
-   * something that is not broken.
-   */
-  markerColor: "#0088FF",
   clearOnCopy: false,
   blockPageInteractions: true,
 }

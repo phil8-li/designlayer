@@ -167,11 +167,17 @@ const MAP = {
   ListChecks: kit("list-checks"),
   Check: kit("check"),
   X: kit("x"),
-  // The kit draws these two differently — `chevron-down` as a filled outline,
-  // `chevron-right` as a 2-unit stroke — and at the flat 2 of `STROKE_FOR_SIZE`
-  // the two land at the same weight, which is why that table is flat.
-  ChevronDown: kit("chevron-down"),
-  ChevronRight: kit("chevron-right"),
+  // The dense close: remove buttons on Design system cards. The kit's `x` inks
+  // 18 of the grid and fills an 18px `.de-mini` even at the 12 rung; Lucide's
+  // inks 12, so the same rung draws a 6px mark.
+  XSmall: "X",
+  // Lucide's disclosure chevrons, not the kit's. The kit draws its chevrons at
+  // feature scale — `chevron-down` spans 20 of the grid — and at the `marker`
+  // rung every section header, select and twisty carried a 10px caret beside
+  // 12px text, which read as the loudest mark in the row. Lucide's span 12 of
+  // the grid (a 6px caret at 12px): a status mark, sized like one.
+  ChevronDown: "ChevronDown",
+  ChevronRight: "ChevronRight",
   // Show more / show less, where the thing shown is a LIST that grows downward:
   // the per-side token rows, the full container-step ladder. A double chevron
   // says "there is more of this", which a single one — already spent on section
@@ -212,31 +218,19 @@ const MAP = {
   Code: kit("code-2"),
   Sparkles: kit("sparkles"),
   Play: kit("play"),
+  // No `Info` or `?` glyph: every explainer in the chrome now opens on hover
+  // of the thing it explains, so nothing draws an info or help mark.
   /*
-   * `Info` twice, once with its ring and once without, because the ring is
-   * load-bearing on one of the three surfaces that draw it and redundant on the
-   * other two.
+   * The theme switch wears the mode it will GIVE you, which is the convention
+   * every OS switch uses: a moon offers night.
    *
-   * `Info` is the circled notice, and it is the drawing for a mark standing on
-   * its own — the lint badge pinned over the app, a rounded square plate keyed
-   * by severity, where a bare `i` would read as a stray letter.
-   *
-   * `InfoMark` is the same mark with the kit's ring dropped and the `i` scaled
-   * up to fill what took its place. It is for the two dots that ALREADY draw a
-   * circle: the settings help dot and the lint header's. They are 14px discs
-   * with a 12px glyph in them, so the ringed drawing put a second circle 1.4px
-   * inside the first and left the `i` nothing but a 2px stem to be read by. See
-   * `REDRAWN` for the geometry.
-   *
-   * Either way an `i` and not a question mark — a `?` asks the reader whether
-   * they are confused, an `i` offers a fact.
+   * Lucide's HOLLOW sun and moon, at the set's 2-unit stroke. They were native
+   * SOLID marks — a filled disc with rays, a filled crescent — and beside the
+   * hollow hooks, frames and bubble in the toolbar the theme button was the one
+   * blot in the strip, in both themes. The kit draws its sun and moon hollow
+   * too, but as fills with the weight baked in at 22 units; Lucide's are the
+   * same drawings as strokes, so they fit the ink budget without going thin.
    */
-  Info: kit("info"),
-  InfoMark: kit("info"),
-  // The theme switch wears the mode it will GIVE you, which is the convention
-  // every OS switch uses: a moon offers night. Both are NATIVE (see below), so
-  // these Lucide names are shadowed; the kit's `sun` and `moon` are not used,
-  // for the reason the toolbar block gives.
   Sun: "Sun",
   Moon: "Moon",
   /*
@@ -553,8 +547,8 @@ const roundRect = (x, y, w, h, r) => {
  * Every outline in this family is a hole rather than a stroke, because a stroke
  * would put half its width outside the path it is centred on and re-introduce
  * the half-pixel edge the whole family exists to avoid. So the outlines are
- * composed here — two rounded rects for a frame, two circles for a sun's body,
- * a disc and an overlapping disc for a moon — and every edge lands exactly
+ * composed here — two rounded rects for a frame, a rounded rect inside a
+ * rounded rect for a panel — and every edge lands exactly
  * where the number says.
  */
 const punched = (...subpaths) => [
@@ -580,14 +574,6 @@ const punched = (...subpaths) => [
 const ring = (x, y, w, h, t = 1, r = 0) =>
   punched(roundRect(x, y, w, h, r), roundRect(x + t, y + t, w - 2 * t, h - 2 * t, Math.max(r - t, 0)))
 
-/*
- * A `circleAt` lived here: a circle's outline as one closed subpath, two
- * half-arcs rather than a `<circle>`, written for the two marks that were then
- * a disc with a second disc punched out of it. Neither is drawn that way any
- * more — the sun's body is SOLID at this size and is a `ring` at full radius
- * (see the note on its glyph below), and nothing else in the set ever called
- * it. `ring` and `punched` still carry the technique for anything that needs it.
- */
 
 /**
  * Half a ring, as the hook an undo arrow turns through.
@@ -818,45 +804,6 @@ const capsule = (x1, y1, x2, y2, width) => {
       [x1 - nx, y1 - ny],
     ],
     half
-  )
-}
-
-/**
- * A crescent, as ONE closed subpath of two arcs rather than a disc with a disc
- * taken out of it.
- *
- * `punched` would be the obvious construction and it is the wrong one here, for
- * a reason that is about measurement rather than about rendering: `inkBox`
- * takes the union of every subpath it is given, so a cutter larger than the
- * body — which is what a blunt-cusped crescent needs — reports ink far outside
- * the grid and `assertFits` refuses a glyph that in fact clips nothing. Tracing
- * the lune itself means the box measured is the box painted.
- *
- * The two cusps are where the circles cross, solved rather than eyeballed. The
- * far arc is the body's, the long way round; the near arc is the cutter's, the
- * short way, bulging back into it.
- */
-const crescent = (cx, cy, r, cutX, cutY, cutR) => {
-  const [dx, dy] = [cutX - cx, cutY - cy]
-  const d = Math.hypot(dx, dy)
-  if (d >= r + cutR || d <= Math.abs(r - cutR)) {
-    throw new Error(`crescent: circles at ${d.toFixed(2)} apart do not cross`)
-  }
-  // Distance from the body's centre to the chord joining the two crossings, and
-  // half that chord's length.
-  const along = (d * d + r * r - cutR * cutR) / (2 * d)
-  const half = Math.sqrt(r * r - along * along)
-  const [ux, uy] = [dx / d, dy / d]
-  const [mx, my] = [cx + ux * along, cy + uy * along]
-  // Perpendicular to the centre line. Which cusp is which does not matter; what
-  // matters is that the arcs are then wound to agree with the choice.
-  const first = [mx - uy * half, my + ux * half]
-  const second = [mx + uy * half, my - ux * half]
-  const point = ([x, y]) => `${u(x)} ${u(y)}`
-  const [R, CR] = [u(r), u(cutR)]
-  return (
-    `M${point(first)}A${R} ${R} 0 1 1 ${point(second)}` +
-    `A${CR} ${CR} 0 0 0 ${point(first)}z`
   )
 }
 
@@ -1166,12 +1113,12 @@ const NATIVE = {
    * at 2x, so no edge can sit on a boundary — and the whole row reads soft
    * against an inspector whose marks are now hard-edged fills.
    *
-   * Four of these take a name the Lucide map already had, and four are new. The
+   * Two of these take a name the Lucide map already had, and four are new. The
    * rule deciding which is the one stated at the collision check below: a name
    * drawn from ONE surface may have its artwork replaced in place, because that
-   * changes the drawing everywhere it appears and churns no call site. `Sun`,
-   * `Moon`, `PanelLeft` and `PanelRight` are each called from exactly one
-   * control in this bar. `X`, `RotateCcw` and `RotateCw` are not — `X` closes
+   * changes the drawing everywhere it appears and churns no call site.
+   * `PanelLeft` and `PanelRight` are each called from exactly one control in
+   * this bar. `X`, `RotateCcw` and `RotateCw` are not — `X` closes
    * seven other things at `icon.marker`, which is 12px and a rung this family may
    * not be drawn at — so the toolbar's cross and its two history arrows are
    * NEW marks under names that say what the button does rather than what the
@@ -1299,78 +1246,6 @@ const NATIVE = {
   PanelLeft: [ring(2, 2, 12, 12, RULE, 2.5), bar(6, 3.5, RULE, 9)],
   PanelRight: [ring(2, 2, 12, 12, RULE, 2.5), bar(8.5, 3.5, RULE, 9)],
 
-  /*
-   * The theme switch, which wears the mode it will GIVE you.
-   *
-   * An action rather than a toggle — the chrome's colour is the most visible
-   * state on the screen, so the button reports nothing and just names the
-   * outcome — which is what makes these two safe to draw natively under their
-   * existing names: neither needs a second weight, and neither is called from
-   * anywhere but this button.
-   *
-   * The sun's body is SOLID where Lucide's is a ring. Drawn as a ring at this
-   * size it is a 1-unit wall around a small hole — one pixel and a few at the
-   * `control` rung — and the mark reads as a dense asterisk rather than as a
-   * sun. Filled, the same disc reads at every rung, which is a thing this
-   * family can do and a stroke family cannot.
-   *
-   * BOTH MARKS ARE BIGGER THAN THEY WERE, and this is the one control in the
-   * bar where the size error was visible without a measurement: the old sun
-   * inked 11 of the 16 lattice against a 12-unit panel frame and a 13-unit
-   * bubble, and a sun is mostly air, so it lost twice — once on extent and
-   * again on the mass a spoked mark carries. It runs 1..14 now, the body has
-   * grown to a 6.5-unit disc, and the ray gap is still a clear unit so the
-   * spokes read as separate at 16px rather than fusing into a collar. Extent 11
-   * to 13, mass 35 to 49.
-   *
-   * The rays stayed ONE UNIT WIDE, and a cut of this glyph that widened them to
-   * two is why that is written down. Two units is what it would take to centre
-   * the mark on 8 rather than on 7.5, since a bar of even width can straddle a
-   * lattice line and a bar of odd width cannot — but a ray two wide and two
-   * long is a square, and eight squares around a disc is a flower. The half
-   * unit is the cheaper error, and it is one the family already pays: every
-   * centred align mark in this file is built on 7.5 for exactly this reason.
-   *
-   * Eight rays on that centre, so every axis ray is a whole-numbered bar; the
-   * four diagonals run between the same two radii as the axis four, which is
-   * what stops the mark looking like a compass rose with four long arms and
-   * four short ones.
-   *
-   * The moon is one disc with a second taken out of it, and three numbers decide
-   * whether it reads as a moon or as a comma. They were swept rather than
-   * guessed — `tools/icon-lab.mjs` rasterises a candidate and reports its ink —
-   * and this is where that landed.
-   *
-   * THE CUTTER IS LARGER THAN THE BODY, 8.2 against 7, and further away than
-   * either radius would suggest. A cutter smaller than the body cuts a lune
-   * with sharp cusps and a limb that thins to nothing at both ends; at 16px
-   * those ends vanish and what is left reads as a bitten disc. These give a
-   * limb 3.8 units at its widest with cusps blunt enough to survive the rung.
-   *
-   * THE TILT IS 50 DEGREES, not 45. Forty-five is the angle that makes the
-   * lune's box exactly square, which is why it is where this started — and at
-   * that angle the crescent reads as a comma, because both horns point along
-   * the same diagonal the mark is symmetric about and neither one stands out
-   * from the body. Ten degrees steeper costs 6% of squareness (12.8 by 12.0)
-   * and buys horns that are legible as horns. The 6% is invisible; the comma
-   * was not.
-   *
-   * The centre is solved rather than composed: a lune's box is not its body's,
-   * so the body sits at (8.61, 7) to put the INK on (8, 8), which is where
-   * every other mark in the bar is centred.
-   */
-  Sun: [
-    ["circle", { cx: u(7.75), cy: u(7.75), r: u(3.25), fill: "currentColor", stroke: "none" }],
-    bar(7, 1.5, RULE, 2),
-    bar(7, 12, RULE, 2),
-    bar(1.5, 7, 2, RULE),
-    bar(12, 7, 2, RULE),
-    diagonal(3.33, 3.33, 4.745, 4.745, DIAGONAL_RULE),
-    diagonal(10.755, 10.755, 12.17, 12.17, DIAGONAL_RULE),
-    diagonal(12.17, 3.33, 10.755, 4.745, DIAGONAL_RULE),
-    diagonal(4.745, 10.755, 3.33, 12.17, DIAGONAL_RULE),
-  ],
-  Moon: [solid(crescent(8.61, 7, 7, 11.83, 3.17, 8.2))],
 }
 
 /* ── The filled counterparts, and why there are only a few ──────────────────
@@ -1440,6 +1315,25 @@ const FILLED = {
   PanelRight: [ring(2, 2, 12, 12, RULE, 2.5), sidePanel(8.5, 3.5, 4, 9, 1, "right")],
 
   /*
+   * The canvas toggle's grid, ON: four solid cells in the outline's footprint.
+   *
+   * A flood would draw the frame solid and swallow the two dividers, so the
+   * toggle would show a blank rounded square in exactly the state where it is
+   * doing its job. Four cells with the dividers left as gaps is the same
+   * picture read the other way round, at the outline's painted size (3..21).
+   */
+  Grid2x2: [
+    [
+      "path",
+      {
+        d: [2, 26 / 3].flatMap((x) => [2, 26 / 3].map((y) => roundRect(x, y, 16 / 3, 16 / 3, 1))).join(""),
+        fill: "currentColor",
+        stroke: "none",
+      },
+    ],
+  ],
+
+  /*
    * The pointer, solid — the same silhouette the outline's OUTER ring traces.
    *
    * It is on this list for a reason the other two are not. A flood cannot draw
@@ -1472,8 +1366,8 @@ const lucide = await import("lucide")
 
 /* ── Redrawing a vendored glyph in place ────────────────────────────────────
  *
- * Four edits are allowed to a vendored path, and they reach four glyphs: the
- * note bubble, the bare info mark, the down arrow and the open lock.
+ * Four edits are allowed to a vendored path, and they reach three glyphs: the
+ * note bubble, the down arrow and the open lock.
  * Everything else arrives exactly as the kit or Lucide drew it.
  *
  * REFLECTING, because the kit draws `arrow-up` and no `arrow-down`. Done to the
@@ -1492,20 +1386,9 @@ const lucide = await import("lucide")
  * mark under weight. Scaling the path leaves `stroke-width` alone, so the
  * bubble gets smaller at exactly the weight everything around it is drawn at.
  *
- * DROPPING A SHAPE, because a glyph whose outer ring is redundant is worse than
- * one drawn a size too small. `Info` is a ring with an `i` inside it, and the
- * two surfaces that explain a setting — the settings help dot and the lint
- * header's — already draw a 14px disc for it to sit in. Two concentric circles
- * 1.4px apart is what the reader sees there, with the `i` squeezed between.
- * Dropping the ring and scaling what is left about the grid centre hands the
- * ring to the disc, which was drawing one anyway, and spends the whole 14px on
- * the mark that carries the meaning.
- *
- * Kept as a SECOND name rather than applied to `Info`, because the third
- * surface that draws this glyph — the lint badge over the page — is a rounded
- * SQUARE plate keyed by severity, and a bare `i` on a red square is a letter,
- * not a notice. The ring is load-bearing there and redundant in a disc, so the
- * set carries both drawings and each surface asks for the one it needs.
+ * DROPPING A SHAPE, for a glyph whose outer ring is redundant on the surface
+ * that draws it. No glyph uses it today (the ringless info mark it was built
+ * for is gone); it stays because the recipe format is shared.
  *
  * EDITING ONE SEGMENT, by exact text, for the open lock: the kit's shackle arc
  * ends back on the body, and the open state ends it early, swung up and away.
@@ -1589,21 +1472,18 @@ const REDRAWN = {
   // The note bubble, pulled in to the size the seven native marks beside it in
   // the toolbar are drawn at. See the block above.
   MessageSquare: { scale: 0.78 },
-  /*
-   * The info mark with its ring taken off, for the two dots that already have
-   * one. See the block above for why it is a separate name from `Info`.
-   *
-   * 1.3 lands the kit's `i` — 11.3 units of ink, dot top to stem foot — on the
-   * 14.7 units the Lucide `i` was measured at before it was chosen here: 24% of
-   * the 14px disc clear at each end at the `marker` rung. The kit's `i` is
-   * taller than Lucide's was, which is why the factor dropped from 1.5.
-   *
-   * `keepRadius` leaves the dot at the kit's own radius while its position
-   * scales. The stem is a stroke, and a stroke does not scale with the path;
-   * scaling the dot alone would swell it from the kit's 1.25x the stem's width
-   * to 1.6x, a full stop over a thin line.
-   */
-  InfoMark: { drop: ([tag, attrs]) => tag === "circle" && attrs.stroke !== "none", scale: 1.3, keepRadius: true },
+  // Lucide's sun reaches the grid's edge with its rays (22 of 24); pulled in to
+  // the set's 20-unit budget so the theme button is not the largest mark in
+  // the toolbar. The moon already inks 20.
+  Sun: { scale: 0.9 },
+  // Lucide's square FRAMES ink 20, but a closed frame is the heaviest shape a
+  // glyph can be (Grid2x2 carries the most ink in the set) and reads larger
+  // than an open mark of the same box. Pulled in to the 18 the native frames
+  // (padding, panels) are authored at, so a section header's grid toggle no
+  // longer outweighs the plus and chevron beside it.
+  Grid2x2: { scale: 0.9 },
+  Square: { scale: 0.9 },
+  Constrain: { scale: 0.9 },
   // The kit's `arrow-up`, pointing down. See the note on the arrows in `MAP`.
   ArrowDown: { flip: true },
   /*
@@ -1619,6 +1499,10 @@ function redraw(name, shapes) {
   const recipe = REDRAWN[name]
   if (!recipe) return shapes
   const { mirror = false, flip = false, scale = 1, drop, keepRadius = false, edit = [] } = recipe
+  return transformShapes(applyEdits(name, shapes, drop, edit), { mirror, flip, scale, keepRadius })
+}
+
+function applyEdits(name, shapes, drop, edit) {
   if (drop) {
     shapes = shapes.filter((shape) => !drop(shape))
     if (!shapes.length) throw new Error(`redraw: ${name} dropped every shape it had`)
@@ -1630,6 +1514,11 @@ function redraw(name, shapes) {
       tag === "path" && attrs.d.includes(from) ? [tag, { ...attrs, d: attrs.d.replace(from, to) }] : [tag, attrs]
     )
   }
+  return shapes
+}
+
+/** Reflect and/or scale a glyph about the grid centre, by rewriting its geometry. */
+function transformShapes(shapes, { mirror = false, flip = false, scale = 1, keepRadius = false } = {}) {
   const mid = GRID / 2
   const move = (x, y) => [
     mid + (mirror ? -1 : 1) * (x - mid) * scale,
@@ -1647,10 +1536,49 @@ function redraw(name, shapes) {
     if (tag === "rect") {
       const [x0, y0] = move(Number(attrs.x), Number(attrs.y))
       const [x1, y1] = move(Number(attrs.x) + Number(attrs.width), Number(attrs.y) + Number(attrs.height))
-      return [tag, { ...attrs, x: Math.min(x0, x1), y: Math.min(y0, y1), width: Math.abs(x1 - x0), height: Math.abs(y1 - y0) }]
+      const radii = {}
+      for (const key of ["rx", "ry"]) if (key in attrs) radii[key] = Number(attrs[key]) * scale
+      return [tag, { ...attrs, ...radii, x: Math.min(x0, x1), y: Math.min(y0, y1), width: Math.abs(x1 - x0), height: Math.abs(y1 - y0) }]
     }
     throw new Error(`redraw: cannot transform <${tag}>`)
   })
+}
+
+/*
+ * ONE INK BUDGET FOR THE WHOLE SET (the kit's optical check, ADOPTION-GUIDE § 6:
+ * "a family that reads uneven gets one ink budget, not per-site sizes").
+ *
+ * The set is drawn from three hands, and each fills the grid to its own
+ * budget: the native lattice family inks 18 of 24 and Lucide about 20 (its
+ * circles overshoot to 22, as round marks must), but the kit draws to 22 — its
+ * frames fill 22 exactly. Side by side at one rung that made every kit glyph
+ * about 10% larger than its neighbours: a trash can and a lock towering over
+ * the eye and the grid in the same row.
+ *
+ * So the kit's drawings are scaled as a FAMILY, by the one factor that maps
+ * the kit's 22-unit budget onto this set's 20. Uniformly, not per glyph: a
+ * per-glyph ceiling would flatten the kit's own optical sizing — its cross is
+ * drawn smaller than its frames on purpose, and `test/icon-cases.mjs` holds
+ * that ratio. By rewriting geometry, as `REDRAWN` does, never by re-windowing:
+ * a stroked shape keeps its 2-unit stroke; a kit fill, whose weight is baked
+ * into its outline, gives up the same 9% of weight it gives up in size, which
+ * keeps its mass in line with its smaller neighbours.
+ *
+ * Not scaled: glyphs the kit ships from Lucide (`plus` — it sits beside
+ * Lucide's `Minus` as its drawn partner), hand-tuned `REDRAWN` scales, and the
+ * Lucide and native families, which are already drawn to this budget.
+ */
+const INK_BUDGET = 20
+const KIT_BUDGET = 22
+const KIT_FROM_LUCIDE = new Set(["plus", "square-plus", "brain-circuit"])
+
+function fitToBudget(name, shapes) {
+  const source = MAP[name]
+  if (typeof source === "string" || KIT_FROM_LUCIDE.has(source.kit) || REDRAWN[name]?.scale) {
+    return { shapes, scale: 1 }
+  }
+  const scale = INK_BUDGET / KIT_BUDGET
+  return { shapes: transformShapes(shapes, { scale }), scale }
 }
 
 /**
@@ -2042,9 +1970,9 @@ function assertFits(shapes, label) {
 /*
  * A name may be drawn HERE or vendored, never both.
  *
- * Twenty-three of the native glyphs deliberately reuse a name the map already
+ * Twenty-one of the native glyphs deliberately reuse a name the map already
  * had — the six aligns, the seven text marks, the four padding sides, the two
- * distributes, and then the toolbar's two panel toggles and its sun and moon —
+ * distributes, and then the toolbar's two panel toggles —
  * because each of those names is called from ONE surface, so replacing the
  * artwork under it changes the drawing everywhere it appears and churns no call
  * site. `ArrowUp`, `ArrowDown` and `ArrowRight` are NOT among them: those are
@@ -2074,8 +2002,11 @@ for (const name of Object.keys(FILLED)) {
 }
 
 const entries = names.map((name) => {
-  const shapes = NATIVE[name] ?? redraw(name, readGlyph(MAP[name]))
-  const origin = NATIVE[name] ? "native" : originOf(MAP[name])
+  const vendored = NATIVE[name] ? null : fitToBudget(name, redraw(name, readGlyph(MAP[name])))
+  const shapes = NATIVE[name] ?? vendored.shapes
+  const origin = NATIVE[name]
+    ? "native"
+    : `${originOf(MAP[name])}${vendored.scale < 1 ? `, fitted ×${vendored.scale.toFixed(3)}` : ""}`
   const box = inkBox(shapes, `${name} (${origin})`)
   const clearance = assertFits(shapes, `${name} (${origin})`)
   /*

@@ -15,8 +15,10 @@
  * scene graph, so a Reset is the way out of an edit you did not mean. Ours
  * cannot round-trip — the writer speaks in class edits and text edits, not in
  * "here is a new JSX tree for this node" — so a Reset would be a button that
- * undoes nothing. This view is read-only and says so, and the status line
- * reports the one action it has: the copy.
+ * undoes nothing. This view is read-only and its footer line says so. The one
+ * action it has, the copy, reports through a transient toast like every other
+ * copy in the editor (the kit's feedback channel), and its button flips to a
+ * tick for the length of the gesture.
  *
  * The file is layout only. Everything that turns an element into source lives
  * in `core/element-code.ts`, where it can be tested without a panel.
@@ -105,13 +107,19 @@ export function codeTab(editor: EditorContext): InspectorTab {
    * The button flips to a check in the same task rather than waiting on the
    * promise, because the flip is feedback for the gesture and a two-frame lag
    * reads as a dead button. If the write is then refused, the rejection lands
-   * a microtask later and the status corrects itself out loud.
+   * a microtask later: the tick goes back and an error toast says what to do.
+   * The success toast waits for the write to resolve, so a refusal never
+   * follows a "Copied" it contradicts.
    */
   copyButton.addEventListener("click", () => {
     if (!generated) return
     let refused = false
+    const label = CODE_VIEWS.find((option) => option.id === view)?.label ?? "code"
     try {
-      void navigator.clipboard.writeText(generated).catch(() => reportRefused())
+      void navigator.clipboard.writeText(generated).then(
+        () => editor.toast(`Copied ${label}`),
+        () => reportRefused()
+      )
     } catch {
       refused = true
     }
@@ -129,8 +137,7 @@ export function codeTab(editor: EditorContext): InspectorTab {
     ]),
   ])
 
-  function setStatus(text: string, tone: "" | "success" | "error" = ""): void {
-    status.className = tone ? `de-code-status de-code-status--${tone}` : "de-code-status"
+  function setStatus(text: string): void {
     status.textContent = text
   }
 
@@ -141,18 +148,16 @@ export function codeTab(editor: EditorContext): InspectorTab {
 
   function showCopied(): void {
     setCopyLabel(true)
-    setStatus("Copied to clipboard", "success")
     if (copiedTimer) clearTimeout(copiedTimer)
     copiedTimer = setTimeout(() => {
       copiedTimer = 0
       setCopyLabel(false)
-      setStatus(IDLE_STATUS)
     }, COPIED_FOR) as unknown as number
   }
 
   function reportRefused(): void {
     setCopyLabel(false)
-    setStatus("The browser blocked clipboard access. Allow it for this site, then copy again", "error")
+    editor.toast("Clipboard access blocked. Allow it for this site, then copy again", "error")
   }
 
   function render(): void {

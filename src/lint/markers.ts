@@ -41,9 +41,7 @@
  */
 
 import { el, isCanvasElement } from "../core/dom"
-import { icon } from "../core/icons"
 import { editorOwnsInput } from "../core/store"
-import { tokens } from "../core/tokens"
 import type { EditorContext } from "../core/context"
 import type { LayerElement } from "../core/types"
 import { markerLayer, onMarkerLayerChange, setMarkerLayer } from "../annotations/store"
@@ -591,24 +589,9 @@ export function installLintMarkers(context: EditorContext): void {
       style: "pointer-events:auto",
     })
     /*
-     * `Info`, and it is the nearest thing this icon set has to a warning mark.
-     *
-     * The set is generated from one stroke family and ships no triangle-alert
-     * and no exclamation at all; the only two candidates are `Info`, a circled
-     * notice, and `Ban`, a circle with a slash. `Ban` was rejected because it
-     * means "not allowed" everywhere else a reader has met it, and sitting on
-     * an element it reads as a claim about the ELEMENT being disabled rather
-     * than about the stylesheet behind it. `Info` says "there is something to
-     * read here", which is what a badge over someone else's page can honestly
-     * claim. See the report for the request to add a real alert glyph.
-     *
-     * `Info` and NOT the ringless `InfoMark` the two help dots moved to. That
-     * one exists because a 14px disc was already drawing the circle for it;
-     * this plate is a rounded SQUARE keyed by severity, so the ring is the only
-     * circle in the mark, and dropping it would leave a bare `i` on a red
-     * square — a letter to decode rather than a notice.
+     * No glyph: the plate's severity colour and corner are the mark, and its
+     * `title` (written in the repaint below) shows what was found on hover.
      */
-    badge.append(icon("Info", tokens.icon.marker))
 
     badge.addEventListener("click", (event) => {
       // The badge belongs to the editor, not to the page beneath it: a click

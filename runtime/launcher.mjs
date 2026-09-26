@@ -25,8 +25,14 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { browserPrelude } from "../config.mjs"
 import { wrapCompanion } from "../server/companions.mjs"
+import {
+  guardBoardFrames,
+  stripFrameBlockingHeaders,
+  stripFrameBlockingResponseHeaders,
+} from "./board-frame.mjs"
 import { chooserUrlFromEnv, isLoopbackOrigin } from "./chooser-url.mjs"
 import { urlHost } from "./dev-server.mjs"
+import { deskUrlFromHost } from "./mac-desk.mjs"
 import { openBrowser } from "./open-browser.mjs"
 import { patchOverlay } from "./vendor-patch.mjs"
 
@@ -507,6 +513,9 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
     // never advertises a URL nothing is serving.
     mcpPort: null,
     chooserUrl: chooserUrlFromEnv(),
+    // A Mac app installed after this launch shows up at the next one, the same
+    // bargain the chooser URL makes.
+    deskUrl: deskUrlFromHost(),
   }
   let patchedOverlay
 
@@ -517,9 +526,13 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
   fs.createReadStream = function createPatchedOverlayReadStream(filePath, ...args) {
     if (path.resolve(String(filePath)) === vendor.overlay) {
       patchedOverlay ??= patchOverlay(fs.readFileSync(vendor.overlay, "utf8"), config)
+      // Guarded as one unit: a canvas-mode frame loads the same page, and any
+      // part of the editor booting there would take the vendor's single socket.
       return Readable.from([
-        `${browserPrelude(config, runtime)}\n${patchedOverlay}\n;\n${readChromeBundle()}` +
-          `\n;\n${readCompanionBundles(config)}`,
+        guardBoardFrames(
+          `${browserPrelude(config, runtime)}\n${patchedOverlay}\n;\n${readChromeBundle()}` +
+            `\n;\n${readCompanionBundles(config)}`
+        ),
       ])
     }
 
@@ -591,6 +604,11 @@ export async function launch(config, { appPort, host, open, verbose = false, onR
     if (headers?.["content-length"] && headers["transfer-encoding"]) {
       delete headers["transfer-encoding"]
     }
+    // Canvas mode frames the host's own pages; a host that forbids framing
+    // would leave every board frame blank. Both header sources are relaxed —
+    // the object handed here and anything set earlier with `setHeader`.
+    stripFrameBlockingHeaders(this.req, headers)
+    if (!this.headersSent) stripFrameBlockingResponseHeaders(this)
 
     return originalWriteHead.call(this, statusCode, ...args)
   }

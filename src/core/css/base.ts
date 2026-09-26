@@ -63,7 +63,18 @@ const VENDOR_CHROME = [
  * turned off before it is built instead — see `onboardingDismissal` in
  * config.mjs.
  */
-export const vendorChromeCss = `${VENDOR_CHROME.join(",\n")} { display: none !important; }\n`
+export const vendorChromeCss = `${VENDOR_CHROME.join(",\n")} { display: none !important; }
+/*
+ * The two vendor surfaces that DO stay on screen — its drag preview and drop
+ * indicator, which we call into — repainted in the chrome's accent instead of
+ * the vendor's own blue. Custom properties inherit across the shadow boundary,
+ * so the palette roles resolve in here exactly as they do in the document.
+ */
+.drag-preview { border-color: ${t.color.accent} !important; }
+.drop-indicator,
+.drop-indicator::before,
+.drop-indicator::after { background: ${t.color.accent} !important; }
+`
 
 /*
  * Where the palette is DECLARED, and why it is not on the editor root alone.
@@ -517,7 +528,7 @@ html.designlayer-inspecting svg {
  */
 .de-launcher,
 .de-ann-marker, .de-ann-marker::before,
-.de-ann-index, .de-ann-help,
+.de-ann-index,
 .de-ann-toggle, .de-ann-toggle::after,
 .de-lib-switch, .de-lib-switch::after,
 .de-instance-switch, .de-instance-switch::after,
@@ -541,17 +552,14 @@ html.designlayer-inspecting svg {
  * silently incomplete.
  */
 .de-lint-dot,
-.de-lint-info,
 .de-opt-chip,
 .de-pad-cell::before,
 .de-ann-hint,
 .de-layer-drop,
+.de-mcp-state,
 /* The insert line: a 2px rule under a 4px radius is a pill. Its outline
    variant is a box around an empty container, and keeps the squircle. */
-.de-insert-indicator:not(.de-insert-indicator--outline),
-/* The shared text button: \`radius["2xl"]\` on a 24px row is past half its
-   height, so it is a pill (see \`css/toolbar.ts\`). */
-.de-button {
+.de-insert-indicator:not(.de-insert-indicator--outline) {
   corner-shape: round;
 }
 /*
@@ -716,30 +724,19 @@ html.designlayer-inspecting svg {
   transform-origin: var(--de-arrive-origin, center);
 }
 /*
- * THERE IS NO MATCHING EXIT, AND THAT IS A FINDING RATHER THAN AN OMISSION.
- *
- * One was built and taken back out. An exit needs the node to outlive the
+ * THE MATCHING EXIT IS NOT A CLASS. An exit needs the node to outlive the
  * dismissal that removed it, and every dismissible surface in this chrome has a
  * contract that says the opposite: the shortcuts sheet and the layer menu are
  * on the Escape stack, where a surface still present absorbs the next
- * dismissal; the options window owes its opener the focus back; the annotation
- * composer is asserted gone the moment a note is saved. Deferring the removal
- * broke twelve cases across four surfaces, and in two of them it was a real
- * input hazard rather than a test being strict.
+ * dismissal; a modal's backdrop keeps taking clicks; the annotation composer is
+ * asserted gone the moment a note is saved. Deferring the removal once broke
+ * twelve cases across four surfaces.
  *
- * A \`.de-arrive--fade\` rule and its \`de-arrive-fade\` keyframe sat here for a
- * while afterwards, unreferenced, as a signpost. A rule nobody applies is still
- * bytes in every editor's stylesheet and a name a sweep has to rule on twice,
- * so the signpost is these words and the CSS has gone.
- *
- * Done properly, an exit means removing the node at once and playing the
- * animation on a ghost in a pointer-inert layer — so that "closed" and "still
- * painted" stop being the same question. That is a layer this chrome does not
- * have, and inventing one to fade four cards is a poor trade.
- *
- * So: everything arrives, nothing lingers. Which is the right half to keep — an
- * appearance is news and wants to be seen happening; a dismissal is the user
- * having finished with something and wanting it gone.
+ * So the node is removed at once and the exit plays on a ghost: \`playExit\` in
+ * \`core/motion.ts\` clones the surface into an inert, aria-hidden, pointer-dead
+ * copy pinned over its old box and fades it with the kit's dismissal — to 0.99
+ * for a menu or popover, to 0.98 on \`easeExit\` for a dialog, 150ms either
+ * way. "Closed" and "still painted" stop being the same question.
  */
 
 /*

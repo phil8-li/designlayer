@@ -357,9 +357,10 @@ check("DW-07 a resize queues width and height for source", () => {
   const values = JSON.stringify(queued[0].operation.updates)
   assert.ok(values.includes("140px"), values)
   assert.ok(values.includes("70px"), values)
-  // Both properties translate, so nothing was lost and the toast says so.
+  // Both properties translate, so nothing was lost and nothing is said: a
+  // successful direct edit does not raise a toast.
   assert.deepEqual(previewOnlyChanges(), [])
-  assert.deepEqual(toasts, [{ message: "Resize", kind: "info" }])
+  assert.deepEqual(toasts, [])
 })
 
 check("DW-08 a resize undoes to the inline strings it started from", () => {

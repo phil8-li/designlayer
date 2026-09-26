@@ -98,7 +98,7 @@ const bundled = await build({
       export { tokens } from "./src/core/tokens"
       // Copy is a chord rather than a square now, so the only way to ask
       // whether the bar still offers it is to ask the registry the key reads.
-      export { hasCommand, runCommand } from "./src/core/commands"
+      export { hasCommand, runCommand, registerCommand } from "./src/core/commands"
       export { recordPreviewOnly, previewOnlyChanges, clearPreviewOnly } from "./src/core/change-prompt"
     `,
     resolveDir: PACKAGE_DIR,
@@ -206,10 +206,12 @@ check("the tool cluster is gone entirely — Scale, Text, Move and Hand alike", 
   // `Notes` is not: a tool changes what a canvas gesture MEANS, and this one
   // changes nothing but how the chrome is inked. It is in the list rather than
   // filtered out of the query so a genuine tool radio reappearing still fails.
+  // `Canvas view` is pressable and is not a tool: it changes what is on screen
+  // (the page, or a board of every page), not what a click on the page means.
   const pressable = Array.from(toolbar.querySelectorAll(".de-tool[aria-pressed]"))
   assert.deepEqual(
     pressable.map((button) => button.getAttribute("aria-label")).sort(),
-    ["Inspect", "Notes", "Show or hide inspector", "Show or hide left panel"],
+    ["Canvas view", "Inspect", "Notes", "Show or hide inspector", "Show or hide left panel"],
     "a tool radio survives"
   )
   // …and the bar is not simply empty, so this is not asserting nothing.
@@ -314,7 +316,7 @@ check("no toolbar button opens a menu any more", () => {
 console.log("\nSurviving controls")
 
 /*
- * Eight glyphs, in the order they are read.
+ * Nine glyphs, in the order they are read.
  *
  * The order is asserted as well as the membership because it is the only thing
  * holding eight identical squares together: what a click does, then what to do
@@ -329,7 +331,7 @@ console.log("\nSurviving controls")
  * drawing mirrored, so they have to be adjacent and in the order the screen is
  * in; a sun between the right panel and the way out parted the pair.
  */
-check("the eight icons of the bar, in reading order", () => {
+check("the nine icons of the bar, in reading order", () => {
   assert.ok(mode())
   // Beside the mode switch, not with the panel toggles: it answers the same
   // question the switch answers — what does a click do — and a bar that filed
@@ -363,6 +365,7 @@ check("the eight icons of the bar, in reading order", () => {
     [
       "Inspect",
       "Notes",
+      "Canvas view",
       "Undo",
       "Redo",
       "Switch to light mode",
@@ -892,7 +895,7 @@ if (realStorage) Object.defineProperty(window, "localStorage", realStorage)
 check("a browser that blocks storage still gets a whole bar, and a working toggle", () => {
   assert.equal(
     blocked.bar.querySelectorAll("button").length,
-    8,
+    9,
     "the bar did not survive a localStorage that throws"
   )
   const button = blocked.bar.querySelector('[aria-label="Switch to light mode"]')
@@ -1080,12 +1083,21 @@ check("a pressed panel toggle takes no chip, and still answers the pointer", () 
   )
   const hover = block('\\.de-toolbar \\.de-tool--quiet\\[aria-pressed="true"\\]:hover')
   assert.ok(hover.includes(`background: ${editor.tokens.color.bgHoverQuiet};`), hover)
+  // The ink too. The accent hover rule it overrides sets `onAccent`, and a
+  // plate-only override keeps that white on the neutral plate — invisible on
+  // paper, and indistinguishable from `text` in dark, which is how it shipped.
+  assert.ok(
+    hover.includes(`color: ${editor.tokens.color.text};`),
+    `the pressed toggle's hover must restate its ink, or it keeps the accent hover's white: ${hover}`
+  )
   // And it is the panel toggles wearing it, not the modes: a quiet mode would
   // be a claim about the next click with nothing on screen reporting it.
   const quietLabels = Array.from(toolbar.querySelectorAll(".de-tool--quiet")).map((button) =>
     button.getAttribute("aria-label")
   )
-  assert.deepEqual(quietLabels.sort(), ["Show or hide inspector", "Show or hide left panel"])
+  // Canvas view wears it for the panels' reason: pressing it swaps the page for
+  // a board of frames, which is its own report.
+  assert.deepEqual(quietLabels.sort(), ["Canvas view", "Show or hide inspector", "Show or hide left panel"])
 })
 
 // ── Standing down, as one object ───────────────────────────────────────────
@@ -1498,7 +1510,7 @@ console.log("\nTooltips")
 
 check("every icon-only toolbar button has both a tip and an aria-label", () => {
   const iconOnly = buttons().filter((button) => button.textContent.trim() === "")
-  assert.equal(iconOnly.length, 8, "the whole bar is icon-only now, the mode switch included")
+  assert.equal(iconOnly.length, 9, "the whole bar is icon-only now, the mode switch included")
   for (const button of iconOnly) {
     const tip = button.getAttribute("data-de-tip")
     const label = button.getAttribute("aria-label")
@@ -1765,6 +1777,7 @@ check("the strip is one group, and the mode leads it", () => {
   assert.deepEqual(run, [
     "Inspect",
     "Notes",
+    "Canvas view",
     "Undo",
     "Redo",
     "Switch to light mode",
@@ -1984,13 +1997,55 @@ check("deleting a note is what takes it off the handover", () => {
    * off takes, and the one that must not report a success it did not get.
    */
   pressCopy()
-  assert.match(copyLane.toasts.at(-1).message, /blocked clipboard access/)
+  assert.match(copyLane.toasts.at(-1).message, /Clipboard access blocked/)
   assert.equal(copyLane.toasts.at(-1).kind, "error")
 
   copyLane.module.removeAnnotation(note.id)
   pressCopy()
   assert.match(copyLane.toasts.at(-1).message, /Nothing to copy/)
   copyLane.module.clearAnnotations()
+})
+
+/*
+ * Canvas view is a toggle the BOARD answers, not the bar.
+ *
+ * The button runs the board's command by name, so it cannot drift from ⇧1, and
+ * a bar mounted before the board has installed is a no-op rather than a crash.
+ * Hovering it asks the board to start loading the current page's frame, and
+ * the pressed state is read from the store, which only the board writes.
+ */
+check("the canvas toggle runs the board's commands and reports canvasView", () => {
+  const button = toolbar.querySelector('[data-de-control="canvas"]')
+  assert.ok(button, "no canvas toggle in the bar")
+  assert.equal(button.getAttribute("aria-label"), "Canvas view")
+  assert.match(button.getAttribute("data-de-tip") ?? "", /1/, "the tip should carry ⇧1")
+  const calls = []
+  const offToggle = editor.registerCommand("view.canvas.toggle", () => calls.push("toggle"))
+  const offPrewarm = editor.registerCommand("view.canvas.prewarm", () => calls.push("prewarm"))
+  try {
+    button.dispatchEvent(new window.Event("pointerenter"))
+    button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }))
+    assert.deepEqual(calls, ["prewarm", "toggle"])
+    editor.setState({ canvasView: true })
+    assert.equal(button.getAttribute("aria-pressed"), "true")
+    editor.setState({ canvasView: false })
+    assert.equal(button.getAttribute("aria-pressed"), "false")
+  } finally {
+    offToggle()
+    offPrewarm()
+  }
+})
+
+// The page is behind the board in canvas view, so every canvas-lane gate has to
+// read "not ours" for as long as it is up — an outline painted over the page
+// would float over frames it does not belong to.
+check("canvas view stands the canvas lane down, and leaving it hands it back", () => {
+  editor.setState({ interactive: false, annotating: false, chromeHidden: false, canvasView: false })
+  assert.equal(editor.editorOwnsInput(), true)
+  editor.setState({ canvasView: true })
+  assert.equal(editor.editorOwnsInput(), false)
+  editor.setState({ canvasView: false })
+  assert.equal(editor.editorOwnsInput(), true)
 })
 
 // ── The chooser, and the bar that does not offer it ────────────────────────
@@ -2099,6 +2154,7 @@ check("a chooser behind the bar changes neither the group count nor the order", 
   assert.deepEqual(run, [
     "Inspect",
     "Notes",
+    "Canvas view",
     "Undo",
     "Redo",
     "Switch to light mode",

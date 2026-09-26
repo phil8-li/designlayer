@@ -86,7 +86,5 @@ export const codeCss = `/* ---------- code tab ---------- */
   border-top: 1px solid ${t.color.border};
 }
 .de-code-status { font-size: ${t.type.body}; color: ${t.color.textDim}; }
-.de-code-status--success { color: ${t.color.success}; }
-.de-code-status--error { color: ${t.color.danger}; }
 .de-code-actions { display: inline-flex; align-items: center; gap: ${t.space["2xs"]}px; }
 `
