@@ -203,6 +203,16 @@ await check("every manifest icon is served as a real PNG of the stated size", as
   }
 })
 
+await check("the tab icon is the start screen's favicon, served as SVG", async () => {
+  // make-icons.mjs copies runtime/favicon.svg here; an edit to only one of them would drift.
+  const favicon = fs.readFileSync(path.join(MAC, "..", "..", "runtime", "favicon.svg"), "utf8")
+  assert.equal(fs.readFileSync(path.join(MAC, "icons", "mark.svg"), "utf8"), favicon)
+  const res = await request(port, { pathname: "/icons/mark.svg" })
+  assert.equal(res.status, 200)
+  assert.equal(res.headers["content-type"], "image/svg+xml")
+  assert.equal(res.body.toString("utf8"), favicon)
+})
+
 await check("service worker and offline page are served", async () => {
   const sw = await request(port, { pathname: "/sw.js" })
   assert.equal(sw.status, 200)

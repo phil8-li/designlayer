@@ -19,7 +19,7 @@ node desktop/mac/install.mjs --uninstall --yes # remove the LaunchAgent, the app
 
 Running the installer again is safe. It rewrites the plist, restarts the desk, and keeps the existing app registration. If the app is open, the installer and `--uninstall` quit it first: they stop only the Chrome instance whose command line names the app's own profile, never your browser.
 
-Tests: `node desktop/mac/test/desk-cases.mjs`. Icons: `node desktop/mac/make-icons.mjs` renders `icons/mark.svg` to PNG in a headless Playwright Chromium.
+Tests: `node desktop/mac/test/desk-cases.mjs`. Icons: `icons/app-icon.svg` is the Dock icon and `runtime/favicon.svg` the tab icon. `node desktop/mac/make-icons.mjs` renders the first to the manifest's PNGs in a headless Playwright Chromium and copies the second to `icons/mark.svg`. An installed app keeps the icon it was installed with: delete `~/Applications/Chrome Apps.localized/DesignLayer.app` and run the installer again to reinstall it with the new one.
 
 ## Why this is within policy
 

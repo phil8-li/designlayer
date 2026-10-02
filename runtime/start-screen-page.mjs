@@ -14,7 +14,15 @@
  * closed by never building markup from a string.
  */
 
+import fs from "node:fs"
+
 import { startScreenStyle } from "./start-screen-style.mjs"
+
+/**
+ * The tab icon, inline for the same reason as the style: the page fetches
+ * nothing. The Mac desk serves the same file as desktop/mac/icons/mark.svg.
+ */
+const FAVICON = `data:image/svg+xml;base64,${fs.readFileSync(new URL("./favicon.svg", import.meta.url)).toString("base64")}`
 
 /** How long the waiting state stays silent before it says what to check. */
 const SLOW_MS = 90_000
@@ -832,6 +840,7 @@ export function startScreenPage() {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Open an app · designlayer</title>
+<link rel="icon" type="image/svg+xml" href="${FAVICON}">
 <style>${startScreenStyle()}</style>
 </head>
 <body>

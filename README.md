@@ -1,3 +1,5 @@
+<img src="desktop/mac/icons/icon-512.png" alt="DesignLayer icon" width="128" height="128">
+
 # DesignLayer
 
 A visual editor for a running React or Angular dev server. It proxies your app,

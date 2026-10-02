@@ -1532,6 +1532,14 @@ await check("losing contact stops the screen promising progress", async () => {
   }
 })
 
+await check("the tab shows DesignLayer's icon, inline like the style", async () => {
+  // The page fetches nothing but its own JSON routes, so the icon rides in the head.
+  const link = /<link rel="icon" type="image\/svg\+xml" href="data:image\/svg\+xml;base64,([A-Za-z0-9+/=]+)">/.exec(startScreenPage())
+  assert.ok(link, "no inline SVG icon in the head")
+  const favicon = fs.readFileSync(new URL("../runtime/favicon.svg", import.meta.url), "utf8")
+  assert.equal(Buffer.from(link[1], "base64").toString("utf8"), favicon)
+})
+
 app.close()
 for (const dir of temporary) fs.rmSync(dir, { recursive: true, force: true })
 
